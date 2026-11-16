@@ -18,6 +18,7 @@ public final class JudgementEngine {
     private final Map<String, TrendAggregator> trendsByTag = new HashMap<>();
     private final JudgementListener listener;
     private final AlarmCorrelator correlator;
+    private final int recoverSamples;
     private final AtomicLong eventKeys = new AtomicLong(1);
     private final AtomicLong alarmKeys = new AtomicLong(1);
     private long unknownTagCount;
@@ -30,6 +31,7 @@ public final class JudgementEngine {
     public JudgementEngine(Collection<SensorDef> sensors, JudgementListener listener, Options options) {
         this.listener = listener;
         this.correlator = new AlarmCorrelator(listener, alarmKeys::getAndIncrement, options.autoCloseAlarms());
+        this.recoverSamples = options.recoverSamples();
         for (SensorDef def : sensors) {
             judgesByTag.put(def.tag(), new SensorJudge(def, options.recoverSamples()));
             trendsByTag.put(def.tag(), new TrendAggregator(def.sensorId()));
@@ -82,6 +84,26 @@ public final class JudgementEngine {
                 listener.onTrend(p);
             }
         }
+    }
+
+    /**
+     * 기준값·센서 정보를 바꾼다 (기준값 저장 뒤). 진행 중 판정과 경보는 그대로 둔다.
+     * 새 센서는 추가하고, 목록에 없는 센서는 더 이상 받지 않는다.
+     */
+    public void updateDefinitions(Collection<SensorDef> sensors) {
+        java.util.Set<String> keep = new java.util.HashSet<>();
+        for (SensorDef def : sensors) {
+            keep.add(def.tag());
+            SensorJudge judge = judgesByTag.get(def.tag());
+            if (judge != null) {
+                judge.updateDef(def);
+            } else {
+                judgesByTag.put(def.tag(), new SensorJudge(def, recoverSamples));
+                trendsByTag.put(def.tag(), new TrendAggregator(def.sensorId()));
+            }
+        }
+        judgesByTag.keySet().retainAll(keep);
+        trendsByTag.keySet().retainAll(keep);
     }
 
     /** 사람이 경보를 닫았을 때 엔진에도 알린다 (실시간) */

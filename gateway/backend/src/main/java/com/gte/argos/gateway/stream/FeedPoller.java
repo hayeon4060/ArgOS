@@ -164,6 +164,19 @@ public class FeedPoller {
                 long processId = eq == null ? -1 : eq.processId();
                 hub.publish("command.result", id, view, s -> s.scope().canProcess(processId, masterCache.get()));
             }
+            case "THRESHOLD_CHANGED" -> {
+                // 마스터의 "지금 기준값" 이 바뀌었으니 캐시를 비우고 그 공정을 보는 화면에 알린다
+                masterCache.invalidate();
+                long equipmentId = num(d.get("equipmentId"));
+                CentralDto.Equipment eq = masterCache.get().equipment(equipmentId);
+                long processId = eq == null ? -1 : eq.processId();
+                Map<String, Object> view = new LinkedHashMap<>();
+                view.put("equipmentId", equipmentId);
+                view.put("processId", eq == null ? null : eq.processId());
+                view.put("season", d.get("season"));
+                view.put("at", item.at());
+                hub.publish("threshold.changed", id, view, s -> s.scope().canProcess(processId, masterCache.get()));
+            }
             case "RESET" -> {
                 time.invalidate();
                 masterCache.invalidate();

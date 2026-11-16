@@ -37,7 +37,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | B3 | `GET /processes/{id}/layout` | 전체 | `version` 은 1 고정, `floorplan` 은 null (파일 없음) |
 | B3 | `GET /processes/{id}/status` | 전체 | 센서마다 `lowWarn`·`lowAlarm` 추가 (전류는 아래쪽 기준도 있음) |
 | B4 | `GET /equipment/{id}` | 전체 | 센서 게이지 `max` 는 경보 기준 × 1.3 |
-| B4 | `GET /equipment/{id}/events?date=&type=` | 전체 | ALARM(시작·해제), ACTION(조치 이력). THRESHOLD 는 아직 |
+| B4 | `GET /equipment/{id}/events?date=&type=` | 전체 | ALARM(시작·해제), ACTION(조치 이력). THRESHOLD 는 아직 (변경 이력은 `/thresholds/history`) |
 | B4 | `GET /sensors/series?ids=&from=&to=&step=&compare=yesterday` | 전체 | 최근 1시간은 5초, 그 이상은 1분·10분 |
 | B1 | `GET /alarms?siteId·factoryId·processId&date=&from=&to=&status=&minLevel=&page=&size=` | 전체 | 줄마다 `checklist`(진행), `assignee`, `actionMinutes`, `valueStillOver` 추가 |
 | B1 | `GET /alarms/hourly?siteId·factoryId&date=` | 본사·공장 | |
@@ -68,14 +68,49 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 ### SSE (`GET /stream`)
 
 `sensor.value`(그 공정을 볼 때만) · `level.changed` · `alarm.created` · `alarm.updated` · `checklist.updated` ·
-`command.result` · `reset` · `ping`(15초). 모양은 명세서와 같고, 다음이 다릅니다.
+`command.result` · `threshold.changed` · `reset` · `ping`(15초). 모양은 명세서와 같고, 다음이 다릅니다.
 
 - `alarm.updated` 에 `level`, `hazard`, `valueStillOver` 를 함께 보냄 (값이 기준 아래로 30초 유지되면 `valueStillOver: false` → 종료 버튼 켜기)
+- `threshold.changed` `{ equipmentId, processId, season, at }`: 명세서에 없던 이벤트. 기준값이 바뀌면 B3·B4 게이지 기준을 다시 불러오면 됨
 - `reset`: 시연 리셋·중앙 재시작 때. 화면은 전부 다시 불러오면 됨
 - `Last-Event-ID` 로 놓친 이벤트 다시 받기는 아직 없음
 - `thermal.frame`, `fire.*`, `chat.message` 는 아직 없음
 
+### 기준값 관리 (D2)
+
+권한: 본사·공장 관리자 (공장 관리자는 담당 공장 설비만).
+
+| API | 비고 |
+| --- | --- |
+| `GET /equipment/tree?factoryId=` | 공정 › 설비 › 센서 트리 |
+| `GET /equipment/{id}/thresholds` | 센서별 계절(`ALL`·`SUMMER`·`WINTER`…) 기준, `legal`(CO 법정 30ppm), `activeSeason`, `version`. 지속 조건은 초(`warnHoldSec`·`alarmHoldSec`) |
+| `POST /thresholds/simulate` `{ sensorId, warn, alarm, lowWarn, lowAlarm, warnHoldSec, alarmHoldSec, days }` | 지난 N일(기본 7) 1분 추이로 "지금 기준 vs 바꾼 기준" 발생 건수 비교 (`current`·`proposed`·`diff`·`hits`) |
+| `PUT /equipment/{id}/thresholds` `{ season, version, reason, sensors: [...] }` | 사유 필수. 바로 판정에 반영(`appliedNow: true`, 진행 중 판정은 유지). 오류 `REASON_REQUIRED`, 409 `THRESHOLD_CONFLICT`(다른 사람이 먼저 저장), `WARN_NOT_BELOW_ALARM`, `LOOSER_THAN_LEGAL`. 이용 로그 `THRESHOLD` |
+| `GET /thresholds/history?equipmentId=&sensorId=&from=&to=` | 변경 전·후, 변경자 이름 (최초 값은 "초기 설정") |
+| `GET /sensors/{id}` · `PUT /sensors/{id}` `{ sampleSec, active }` | 센서 수집 주기·사용 여부 |
+
+- 화면은 초, 중앙 DB 는 샘플 수로 저장합니다. 샘플 = 초 ÷ 수집 주기(올림, 최소 1).
+- 기준값은 "지금 계절" 행이 우선, 없으면 `ALL`. 계절은 시연 시계 날짜 기준 (11월 = 가을).
+
+### 통계 · 이력 (D1)
+
+권한: 본사·공장 관리자. 모든 API 가 같은 조건을 받습니다:
+`from`·`to`(필수, `2026-11-10` 형식, 끝 날짜 포함) · `factoryId` · `processId` · `sensorType`(CURRENT·TEMP·CO·IR) · `level`(WARN·ALARM) · `shift`(DAY 07~19시 · NIGHT).
+센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 1년.
+
+| API | 비고 |
+| --- | --- |
+| `GET /stats/summary` | `alarmCount`·`dangerCount`(경보 단계)·`avgActionMinutes`(종료된 것만)·`checklistDoneRate`(%) 마다 `{ value, diff }`. diff 는 바로 앞 같은 길이 기간 대비 |
+| `GET /stats/trend?unit=HOUR·DAY·WEEK` | `points[{ key, warn, alarm, day, night }]`, 빈 구간도 0 으로 채움. unit 을 비우면 1일→HOUR, 62일 이하→DAY, 그 이상→WEEK |
+| `GET /stats/by-process` | 공정별 `CURRENT·TEMP·CO·IR·total`, 많은 순 |
+| `GET /stats/heatmap` | `cells[{ dow(월=1), hour, count }]`(0건 칸 생략), `max` |
+| `GET /stats/alarms?sort=raisedAt,desc·actionMinutes,desc&page=&size=` | 이력 표. 줄 모양은 `/alarms` 와 같음 (명세서의 `/alarms` 필터 추가 대신 별도 주소) |
+| `GET /stats/export?format=csv` | 지금 조건 그대로 CSV (UTF-8 BOM, 엑셀에서 바로 열림). **`format=xlsx` 도 지금은 CSV 로 줍니다.** 5만 건 초과는 400 `EXPORT_TOO_LARGE`. 이용 로그 `EXPORT` |
+
+- 월간 보고서 PDF (`/reports/monthly`) 는 아직 없습니다.
+- 계산은 연계 서버에서 합니다: 기간 경보를 중앙에서 500건씩 받아 거른 뒤 셉니다 (시연 데이터 규모 기준).
+
 ## 아직 없는 것
 
-화재(fire_incident), 통계(`/stats/*`), 점검·OCR(`/inspections/*`), 기준값 관리(`/thresholds/*`),
+화재(fire_incident), 월간 보고서 PDF, xlsx 내보내기, 점검·OCR(`/inspections/*`),
 사용자 관리(`/users/*`), 이용 로그(`/logs`), 채팅, 공장 관리(배치 저장), 실제 FCM 전송.

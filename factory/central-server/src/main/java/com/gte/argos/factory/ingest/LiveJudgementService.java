@@ -112,13 +112,18 @@ public class LiveJudgementService {
         log.info("시연 리셋: 시계 {} 부터 다시 시작", clock.nowOffset());
     }
 
-    /** 센서·기준값을 바꾼 뒤 엔진을 다시 만들 때 */
+    /** 센서·기준값을 바꾼 뒤 엔진에 반영한다. 진행 중 판정·경보는 그대로 이어진다 */
     public synchronized void reloadDefinitions() {
-        if (listener != null) {
-            listener.flush();
+        if (engine == null) {
+            return; // 다음 값이 들어올 때 새 기준으로 만들어진다
         }
-        engine = null;
-        listener = null;
+        List<SensorDef> sensors = sensorLoader.loadActive();
+        Map<String, Long> ids = new HashMap<>();
+        for (SensorDef s : sensors) {
+            ids.put(s.tag(), s.sensorId());
+        }
+        sensorIdByTag = ids;
+        engine.updateDefinitions(sensors);
     }
 
     private JudgementEngine engine() {

@@ -23,7 +23,7 @@ final class SensorJudge {
     /** 이벤트를 열기 전까지 쌓아 두는 샘플 수 상한 (메모리 보호) */
     private static final int BACKLOG_LIMIT = 2_000;
 
-    private final SensorDef def;
+    private SensorDef def;
     private final int recoverSamples;
     private final Duration maxGap;
 
@@ -51,6 +51,11 @@ final class SensorJudge {
 
     SensorDef def() {
         return def;
+    }
+
+    /** 기준값만 바꾼다. 연속 카운트와 진행 중 이벤트는 그대로 이어진다 */
+    void updateDef(SensorDef newDef) {
+        this.def = newDef;
     }
 
     boolean hasOpenEvent() {

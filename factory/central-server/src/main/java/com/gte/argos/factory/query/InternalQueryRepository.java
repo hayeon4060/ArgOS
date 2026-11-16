@@ -34,7 +34,7 @@ public class InternalQueryRepository {
             LEFT JOIN LATERAL (
                 SELECT * FROM sensor_threshold th
                 WHERE th.sensor_id = s.sensor_id AND th.valid_to IS NULL
-                ORDER BY (th.season = 'ALL') DESC, th.valid_from DESC
+                ORDER BY (th.season = :season) DESC, (th.season = 'ALL') DESC, th.valid_from DESC
                 LIMIT 1
             ) t ON TRUE
             """;
@@ -91,7 +91,7 @@ public class InternalQueryRepository {
     public List<Sensor> sensors() {
         return jdbc.query("SELECT s.*, t.threshold_id, t.warn_value, t.alarm_value, t.low_warn, t.low_alarm, "
                 + "t.warn_samples, t.alarm_samples, t.season, t.basis, t.note, t.valid_from "
-                + "FROM sensor s " + THRESHOLD_LATERAL + " ORDER BY s.sensor_id", (rs, i) -> {
+                + "FROM sensor s " + THRESHOLD_LATERAL + " ORDER BY s.sensor_id", season(), (rs, i) -> {
             Long thresholdId = rs.getObject("threshold_id", Long.class);
             Threshold th = thresholdId == null ? null : new Threshold(thresholdId,
                     rs.getObject("warn_value", Double.class), rs.getObject("alarm_value", Double.class),
@@ -134,7 +134,7 @@ public class InternalQueryRepository {
                 """ + THRESHOLD_LATERAL + """
                 WHERE s.is_active
                 ORDER BY s.sensor_id
-                """, (rs, i) -> new SensorRow(rs.getLong("sensor_id"), rs.getString("tag"), rs.getString("sensor_type"),
+                """, season(), (rs, i) -> new SensorRow(rs.getLong("sensor_id"), rs.getString("tag"), rs.getString("sensor_type"),
                 rs.getString("unit"), rs.getLong("equipment_id"), rs.getLong("process_id"), rs.getLong("factory_id"),
                 rs.getLong("plant_id"), rs.getObject("warn_value", Double.class), rs.getObject("alarm_value", Double.class),
                 rs.getObject("low_warn", Double.class), rs.getObject("low_alarm", Double.class)));
@@ -336,6 +336,10 @@ public class InternalQueryRepository {
     // ---------------------------------------------------------------
     // 공통
     // ---------------------------------------------------------------
+
+    private MapSqlParameterSource season() {
+        return new MapSqlParameterSource("season", com.gte.argos.factory.common.time.Seasons.current(clock));
+    }
 
     private Event event(ResultSet rs) throws SQLException {
         return new Event(rs.getLong("event_id"), rs.getLong("sensor_id"), rs.getString("tag"),

@@ -110,8 +110,20 @@ com.gte.argos.factory
 배기팬은 `fan_rpm` 이 바뀝니다. 진행은 피드 `COMMAND_RESULT`(SENT → DONE · FAILED). 센서값은 바꾸지 않습니다 (값 회복은 봇에 직접 명령).
 오류: `COMMAND_NOT_ALLOWED`, `NOT_A_FAN`, `RPM_OUT_OF_RANGE`, `EQUIPMENT_STOPPED`, `ALREADY_STOPPED`, `ALREADY_RUNNING`.
 
+기준값 (연계 서버 → 중앙)
+
+| API | 설명 |
+| --- | --- |
+| `GET /internal/equipment/{id}/thresholds` | 센서별 계절 기준(`seasons`), `legal`, `activeSeason`, `version`(지금 기준 threshold_id 중 최댓값) |
+| `PUT /internal/equipment/{id}/thresholds` `{ season, version, reason, userId, sensors: [{ sensorId, warn, alarm, lowWarn, lowAlarm, warnSamples, alarmSamples }] }` | 이전 행은 `valid_to` 로 닫고 새 행 추가(basis `PROPOSED`), 판정 엔진에 바로 반영(진행 중 판정 유지). 피드 `THRESHOLD_CHANGED`. 오류 `REASON_REQUIRED`, 409 `THRESHOLD_CONFLICT`, `SENSOR_NOT_IN_EQUIPMENT`, `WARN_NOT_BELOW_ALARM`, `LOOSER_THAN_LEGAL` |
+| `POST /internal/thresholds/simulate` | 지난 N일 1분 추이(최소·최대)로 지금·제안 기준 발생 건수 비교 |
+| `GET /internal/thresholds/history?equipmentId=&sensorId=&from=&to=` | 변경 전·후 |
+| `PUT /internal/sensors/{id}` `{ sampleSec, active }` | 센서 수집 주기·사용 여부 |
+
+기준값은 시연 시계 날짜의 계절 행이 우선이고, 없으면 `ALL` 행을 씁니다 (`Seasons`).
+
 피드 항목 `type`: `SENSOR_VALUES`(`values: [[sensorId, ts, value], ...]`), `EVENT_OPENED`, `EVENT_ESCALATED`,
-`EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `RESET`.
+`EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `THRESHOLD_CHANGED`, `RESET`.
 `bootId` 가 바뀌면 중앙 서버가 다시 켜진 것이므로 `after=0` 부터, `gap=true` 면 `status`·`alarms` 를 다시 조회합니다.
 
 ## 아직 안 한 것

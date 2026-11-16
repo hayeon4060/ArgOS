@@ -151,6 +151,51 @@ public class CentralClient {
                 new ParameterizedTypeReference<Envelope<CommandResult>>() { });
     }
 
+    // 기준값 ------------------------------------------------------------
+
+    public Map<String, Object> equipmentThresholds(long equipmentId) {
+        return get(u -> u.path("/api/v1/internal/equipment/{id}/thresholds").build(equipmentId),
+                new ParameterizedTypeReference<Envelope<Map<String, Object>>>() { });
+    }
+
+    public Map<String, Object> saveThresholds(long equipmentId, Map<String, Object> body) {
+        return send("PUT", "/api/v1/internal/equipment/" + equipmentId + "/thresholds", body,
+                new ParameterizedTypeReference<Envelope<Map<String, Object>>>() { });
+    }
+
+    public Map<String, Object> simulateThreshold(Map<String, Object> body) {
+        return post("/api/v1/internal/thresholds/simulate", body,
+                new ParameterizedTypeReference<Envelope<Map<String, Object>>>() { });
+    }
+
+    public List<Map<String, Object>> thresholdHistory(Long equipmentId, Long sensorId, String season,
+                                                      OffsetDateTime from, OffsetDateTime to) {
+        return get(u -> {
+            u.path("/api/v1/internal/thresholds/history");
+            if (equipmentId != null) {
+                u.queryParam("equipmentId", equipmentId);
+            }
+            if (sensorId != null) {
+                u.queryParam("sensorId", sensorId);
+            }
+            if (season != null && !season.isBlank()) {
+                u.queryParam("season", season);
+            }
+            if (from != null) {
+                u.queryParam("from", param(from));
+            }
+            if (to != null) {
+                u.queryParam("to", param(to));
+            }
+            return u.build();
+        }, new ParameterizedTypeReference<Envelope<List<Map<String, Object>>>>() { });
+    }
+
+    public Map<String, Object> updateSensor(long sensorId, Map<String, Object> body) {
+        return send("PUT", "/api/v1/internal/sensors/" + sensorId, body,
+                new ParameterizedTypeReference<Envelope<Map<String, Object>>>() { });
+    }
+
     public FeedPage feed(long after, int limit) {
         return get(u -> u.path("/api/v1/internal/feed").queryParam("after", after).queryParam("limit", limit).build(),
                 new ParameterizedTypeReference<Envelope<FeedPage>>() { });
@@ -177,6 +222,18 @@ public class CentralClient {
     private <T> T post(String path, Object body, ParameterizedTypeReference<Envelope<T>> type) {
         try {
             Envelope<T> env = rest.post().uri(path).body(body).retrieve().body(type);
+            return unwrap(env);
+        } catch (RestClientResponseException e) {
+            throw translate(e);
+        } catch (ResourceAccessException e) {
+            throw upstream();
+        }
+    }
+
+    private <T> T send(String method, String path, Object body, ParameterizedTypeReference<Envelope<T>> type) {
+        try {
+            Envelope<T> env = rest.method(org.springframework.http.HttpMethod.valueOf(method)).uri(path).body(body)
+                    .retrieve().body(type);
             return unwrap(env);
         } catch (RestClientResponseException e) {
             throw translate(e);
