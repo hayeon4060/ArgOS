@@ -192,7 +192,7 @@ async function onConfirm() {
 
         <!-- 오른쪽: 항목 + 메모 + 단추 -->
         <section>
-          <ChecklistItemsView :items="checklist.items" />
+          <ChecklistItemsView :items="checklist.items" :report-memo="checklist.reportMemo ?? ''" />
 
           <div v-if="!reported" class="m-actions sub">
             <button type="button" class="btn" :disabled="!alert.canAct || remindLeft > 0" @click="onRemind">

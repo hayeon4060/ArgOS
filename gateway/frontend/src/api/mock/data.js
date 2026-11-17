@@ -7,7 +7,7 @@
  *   나머지 공장·공정은 늘 정상
  */
 import { maxLevel, sensorsNow } from './processData'
-import { activeChecklist, scenario, workerName } from './scenario'
+import { WORKERS, activeChecklist, scenario, workerName } from './scenario'
 import { LEVEL, ROLE } from '@/types/codes'
 
 const { NORMAL } = LEVEL
@@ -36,6 +36,14 @@ export const MOCK_USERS = [
     role: ROLE.PLANT_ADMIN,
     scope: { siteId: 1, factoryIds: [5], processIds: [] },
   },
+  // 공정 담당자: 담당자 앱(phone/)만. id·이름은 체크리스트 받는 사람 목록(scenario.js WORKERS)과 같음
+  ...WORKERS.map(({ id, name, loginId }) => ({
+    id,
+    loginId,
+    name,
+    role: ROLE.WORKER,
+    scope: { siteId: 1, factoryIds: [5], processIds: [12] },
+  })),
 ]
 
 /* ───────── 공통 ───────── */

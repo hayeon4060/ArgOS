@@ -58,7 +58,10 @@ const checklist = computed(() => activeChecklist())
         <button type="button" :disabled="!checklist || checklist.status === 'REPORTED'" @click="tickChecklist(99)">모두 완료</button>
       </div>
 
-      <p class="hint">처음 상황 = 주의 · 김도현 2/5 진행 중. 전송하면 5.2초마다 한 항목씩 자동 진행. 화재 해제 비밀번호 = 로그인 비밀번호</p>
+      <p class="hint">
+        처음 상황 = 주의 · 김도현 2/5 진행 중. 전송하면 5.2초마다 한 항목씩 자동 진행. 화재 해제 비밀번호 = 로그인 비밀번호<br />
+        받는 담당자가 담당자 앱(/phone/)에 로그인해 있으면 자동 진행 없이 앱에서 직접 체크
+      </p>
     </div>
 
     <button type="button" class="toggle" :aria-expanded="open" @click="open = !open">

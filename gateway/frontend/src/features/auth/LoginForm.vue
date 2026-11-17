@@ -190,7 +190,10 @@ async function onSubmit() {
     </p>
 
     <!-- 예시 데이터 모드 전용 안내 (백엔드 연결 후 사라짐) -->
-    <p v-if="showMockHint" class="mock-hint">예시 계정: hq_admin, ulsan5_admin / argos1234</p>
+    <p v-if="showMockHint" class="mock-hint">
+      예시 계정: hq_admin, ulsan5_admin / argos1234<br />
+      공정 담당자 앱: <a href="/phone/" target="_blank">/phone/</a> (u5_paint01 / argos1234)
+    </p>
   </form>
 </template>
 

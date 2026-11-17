@@ -6,7 +6,14 @@
  * - 상황이 바뀌면 emitLive() → 열려 있는 화면이 조용히 다시 불러옴 (api/live.js)
  *   실제 서버에서는 이 파일 대신 SSE 이벤트가 같은 일을 함
  * - 상황 바꾸기 도구(features/demo/DemoTool.vue, 개발 모드에서만)와 주의 확인·체크리스트 API 흉내가 아래 함수를 부름
- * - 새로고침해도 이어지게 sessionStorage 에 저장 (브라우저 탭을 닫으면 처음 상황으로)
+ * - 여러 화면이 같은 상황을 봄 (실제 서버에서는 SSE 가 하는 일)
+ *   · 개발 서버(npm run dev): 개발 서버가 상황 하나를 들고 중계 (vite.config.js mockSync)
+ *     → PC 관제 웹과 휴대폰 담당자 앱(/phone/)처럼 다른 기기끼리도 바로 같이 바뀜
+ *   · 개발 서버가 없으면: 같은 브라우저 창끼리만 (localStorage storage 이벤트)
+ *   localStorage 에도 저장해 새로고침해도 이어짐. 처음 상황으로 돌리려면 상황 바꾸기 도구 '처음 상황'
+ * - phoneUsers: 담당자 앱을 켜 둔 공정 담당자 id 목록 — 받는 사람이 앱에 있으면 체크리스트 자동 진행을 안 함
+ * - 담당자 앱이 남긴 항목별 결과·메모는 checklist.results[i] = { result, memo }, 완료 보고 한 줄은 checklist.reportMemo
+ *   (phone/src/api/myChecklists.js 가 씀. 없으면 예전처럼 '이상 없음' · 2번째 항목 현장 메모)
  *
  * 처음 상황(기본값) = 그동안 화면들이 보여 주던 상황:
  *   16:38:20 상도 건조로 배기팬 전류 CT-17 22.4 A 주의 → 16:38:31 확인 → 16:41:05 체크리스트 전송 → 김도현 2/5 진행 중
@@ -102,7 +109,7 @@ export const NO_EMERGENCY = () => ({ incident: null, fire: null, shutdown: null,
 
 function load() {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY))
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     // 예전에 저장된 값에 새 칸이 없을 수 있어 처음 값 위에 덮음
     if (saved?.state) return { ...initial(), ...saved }
   } catch {
@@ -114,18 +121,77 @@ function load() {
 /** 지금 예시 상황 (화면에서 직접 고치지 말고 아래 함수로만 바꿈) */
 export const scenario = reactive(load())
 
-// 바뀔 때마다 저장
+/** 마지막으로 저장했거나 받은 값 (같은 값을 다시 보내 화면끼리 주고받기가 끝없이 이어지지 않게) */
+let lastJson = null
+
+/** 개발 서버 중계 주소 (vite.config.js mockSync). 개발 서버가 없으면(배포 빌드·Capacitor 앱) 이 기기 안에서만 */
+const SYNC_URL = import.meta.env.DEV ? '/__mock/scenario' : null
+/** 처음에 중계 서버 값을 받기 전에는 보내지 않음 (휴대폰의 오래된 상황이 PC 의 지금 상황을 덮지 않게) */
+let synced = !SYNC_URL
+
+function send(json) {
+  fetch(SYNC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json }).catch(() => {
+    // 개발 서버가 꺼졌으면 이 기기 안에서만 계속
+  })
+}
+
+// 바뀔 때마다 저장 (+ 중계 서버로)
 watch(
   scenario,
   () => {
+    const json = JSON.stringify(toRaw(scenario))
+    if (json === lastJson) return
+    lastJson = json
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toRaw(scenario)))
+      localStorage.setItem(STORAGE_KEY, json)
     } catch {
       // 저장 못 해도 화면은 그대로 동작
     }
+    if (SYNC_URL && synced) send(json)
   },
   { deep: true },
 )
+
+/** 다른 화면이 바꾼 상황을 받아 열린 화면을 다시 불러옴 */
+function applyRemote(json) {
+  if (!json || json === lastJson) return // 내가 보낸 값이 되돌아온 것
+  try {
+    const next = JSON.parse(json)
+    if (!next?.state) return
+    stopTick() // 다른 화면이 상황을 움직이고 있으면 이 화면의 자동 진행은 멈춤
+    Object.assign(scenario, next)
+    // 받은 글자 그대로가 아니라 이 화면 기준으로 다시 만든 값: 화면마다 키 순서가 달라도 되돌려 보내지 않게
+    lastJson = JSON.stringify(toRaw(scenario))
+    emitLive('scenario.synced')
+  } catch {
+    // 깨진 값은 무시
+  }
+}
+
+/** 중계 서버와 처음 맞추기가 끝나면 풀림 (담당자 앱이 '앱 켜 둠' 표시를 이 뒤에 함) */
+export const scenarioSynced = SYNC_URL
+  ? fetch(SYNC_URL)
+      .then((r) => r.text())
+      .then((json) => {
+        synced = true
+        if (json && json !== 'null') applyRemote(json)
+        else send((lastJson = JSON.stringify(toRaw(scenario)))) // 중계 서버가 비었으면 이 화면 값으로 시작
+      })
+      .catch(() => {
+        synced = true
+      })
+  : Promise.resolve()
+
+if (SYNC_URL) {
+  // 다른 기기·창이 바꾸면 중계 서버가 바로 보내 줌 (끊기면 브라우저가 알아서 다시 연결)
+  new EventSource(`${SYNC_URL}/stream`).onmessage = (e) => applyRemote(e.data)
+} else {
+  // 개발 서버가 없으면 같은 브라우저의 다른 창끼리만 (localStorage)
+  window.addEventListener('storage', (e) => e.key === STORAGE_KEY && applyRemote(e.newValue))
+}
+
+/** 받는 담당자가 담당자 앱을 켜 두었는지 (그러면 사람이 직접 체크) — 앱이 phoneUsers 에 표시 (phone/src/api/myChecklists.js) */
+const inPhoneApp = (userId) => scenario.phoneUsers?.includes(userId) ?? false
 
 /** 예시 시계의 지금 시각 'HH:mm:ss' */
 export function scenarioNow() {
@@ -229,12 +295,14 @@ export function sendChecklist({ items, assigneeId, sentBy }) {
     remindCount: 0,
     lastRemindMs: 0,
     reassigned: [],
+    results: [], // 담당자 앱 항목별 { result, memo }
     reportedAt: null,
+    reportMemo: null,
     confirmedAt: null,
     result: null,
   }
   emitLive('checklist.updated')
-  startAutoTick()
+  if (!inPhoneApp(assigneeId)) startAutoTick()
   return scenario.checklist
 }
 

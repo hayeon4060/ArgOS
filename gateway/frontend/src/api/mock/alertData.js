@@ -168,10 +168,12 @@ export function checklistView(checklistId) {
       seq: i + 1,
       content,
       doneAt: c.doneTimes[i] ? todayAt(c.doneTimes[i]) : null,
-      result: c.doneTimes[i] ? '이상 없음' : null,
-      memo: i === memoIndex ? c.memo.text : null,
+      // 담당자 앱이 남긴 결과·메모가 있으면 그 값 (phone/src/api/myChecklists.js)
+      result: c.doneTimes[i] ? (c.results?.[i]?.result ?? '이상 없음') : null,
+      memo: c.results?.[i] ? c.results[i].memo : i === memoIndex ? c.memo.text : null,
     })),
     reportedAt: c.reportedAt && todayAt(c.reportedAt),
+    reportMemo: c.reportMemo ?? null, // 완료 보고 한 줄 (명세서 GET 응답에 없음, POST report 의 memo)
     confirmedAt: c.confirmedAt && todayAt(c.confirmedAt),
     // 서버 지금 시각 (명세서에 없음): '경과 시간'을 서버 시계 기준으로 세려고. 예시 데이터는 예시 시계
     serverTime: todayAt(scenarioNow()),

@@ -2,19 +2,22 @@
   체크리스트 항목 진행 보기 (설계안 mChecklist() 오른쪽, 화면설계서 C3 ③④) — PC 에서는 읽기만
   - 끝난 항목: 초록 바탕 + 체크(튀며 나타남 .35초) + 완료 시각
   - 지금 하는 항목: 파란 테두리가 숨쉬듯(1.6초) + '진행 중'
-  - 아래: 현장 메모 (앱에서 남긴 메모)
+  - 끝난 항목 결과가 '이상 없음'이 아니면(조치함 · 부품 교체 예정 · 추가 점검 필요) 주황 글자로
+  - 아래: 현장 메모 (담당자 앱에서 항목마다 남긴 메모 + 완료 보고 한 줄)
 -->
 <script setup>
 import { computed } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 
 const props = defineProps({
-  /** GET /checklists/{id} 의 items: [{ id, content, doneAt, memo }] */
+  /** GET /checklists/{id} 의 items: [{ id, seq, content, doneAt, result, memo }] */
   items: { type: Array, required: true },
+  /** 완료 보고 때 남긴 한 줄 (없으면 빈 값) */
+  reportMemo: { type: String, default: '' },
 })
 
 const current = computed(() => props.items.findIndex((i) => !i.doneAt))
-const memo = computed(() => props.items.find((i) => i.memo))
+const memos = computed(() => props.items.filter((i) => i.memo))
 const hm = (iso) => iso?.slice(11, 19) ?? ''
 </script>
 
@@ -23,15 +26,17 @@ const hm = (iso) => iso?.slice(11, 19) ?? ''
     <div v-for="(item, i) in items" :key="item.id" class="ck" :class="{ dn: item.doneAt, cur: i === current }">
       <span class="bx"><AppIcon v-if="item.doneAt" name="ok" :size="14" /></span>
       <span class="text">{{ item.content }}</span>
+      <span v-if="item.doneAt && item.result && item.result !== '이상 없음'" class="res">{{ item.result }}</span>
       <span class="tm mono">{{ item.doneAt ? hm(item.doneAt) : i === current ? '진행 중' : '' }}</span>
     </div>
 
     <div class="memo">
       <b>현장 메모</b>
-      <template v-if="memo">
-        <span class="mono at">{{ hm(memo.doneAt) }}</span><br />{{ memo.memo }}
-      </template>
-      <template v-else><br /><span class="none">아직 남긴 메모가 없습니다.</span></template>
+      <p v-for="m in memos" :key="m.id">
+        <span class="mono at">{{ m.seq }}번 · {{ hm(m.doneAt) }}</span><br />{{ m.memo }}
+      </p>
+      <p v-if="reportMemo"><span class="mono at">완료 보고</span><br />{{ reportMemo }}</p>
+      <template v-if="!memos.length && !reportMemo"><br /><span class="none">아직 남긴 메모가 없습니다.</span></template>
     </div>
   </div>
 </template>
@@ -84,6 +89,16 @@ const hm = (iso) => iso?.slice(11, 19) ?? ''
 .tm {
   font-size: 12px;
   color: var(--color-text-weak);
+}
+
+.res {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-level-warn-text);
+}
+
+.memo p {
+  margin-top: 6px;
 }
 
 .ck.dn {
