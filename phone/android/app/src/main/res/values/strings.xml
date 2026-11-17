@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ArgOS 담당자</string>
+    <string name="title_activity_main">ArgOS 담당자</string>
+    <string name="package_name">com.gte.argos.worker</string>
+    <string name="custom_url_scheme">com.gte.argos.worker</string>
+</resources>
