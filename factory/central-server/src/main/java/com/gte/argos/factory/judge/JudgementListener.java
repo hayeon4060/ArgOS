@@ -10,6 +10,10 @@ import java.util.List;
  */
 public interface JudgementListener {
 
+    /** 등록된 센서 값 하나가 들어옴 (판정 전). 알림이 열린 동안의 센서 값(alarm_sensor_sample) 저장에 쓴다 */
+    default void onReading(long sensorId, Instant ts, double value) {
+    }
+
     /** 1분 추이 한 칸이 끝남 */
     default void onTrend(TrendPoint point) {
     }

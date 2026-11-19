@@ -16,9 +16,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 센서 값 보관 기간 관리.
  *
  * <pre>
- * - 1시간마다 (시작 1분 뒤 처음) 시연 시계 기준 (오늘 0시 - N일, 기본 7일)보다 오래된 값을 지운다
+ * - 1시간마다 (시작 1분 뒤 처음) 시연 시계 기준 (오늘 0시 - N일, 기본 365일)보다 오래된 값을 지운다
  *   · sensor_trend         : 그래프용 1분 추이 (정상값 포함 전부)
  *   · sensor_event_sample  : 경보 구간 원본 샘플
+ *   · alarm_sensor_sample  : 알림 동안 관제 단위 센서 5초 값
  * - 지우지 않는 것: alarm, sensor_event (통계·이력·월간 보고서), file_asset (경보 시작 이미지), sensor_daily (일 집계)
  * - 지우기 전에 지울 날짜의 일 집계(sensor_daily)를 먼저 만든다
  * - 시연 시계 기준인 이유: 실제 시각으로 지우면 7일치 시연 데이터(11/09~)의 앞쪽이 지워진다
@@ -56,7 +57,7 @@ public class RetentionService {
     /** 지금 바로 지운다. 지운 행 수를 돌려준다 */
     @Transactional
     public Result purge() {
-        OffsetDateTime cutoff = cutoff(clock.now(), retention.days(), clock.zone()).atZone(clock.zone()).toOffsetDateTime();
+        OffsetDateTime cutoff = cutoff(clock.now(), retention.effectiveDays(), clock.zone()).atZone(clock.zone()).toOffsetDateTime();
         java.sql.Date oldest = jdbc.queryForObject("SELECT MIN((ts AT TIME ZONE ?)::date) FROM sensor_trend WHERE ts < ?",
                 java.sql.Date.class, clock.zone().getId(), cutoff);
         if (oldest != null) {
@@ -64,9 +65,10 @@ public class RetentionService {
         }
         int trend = jdbc.update("DELETE FROM sensor_trend WHERE ts < ?", cutoff);
         int samples = jdbc.update("DELETE FROM sensor_event_sample WHERE ts < ?", cutoff);
+        samples += jdbc.update("DELETE FROM alarm_sensor_sample WHERE ts < ?", cutoff);
         if (trend > 0 || samples > 0) {
             log.info("보관 기간({}일) 지난 센서 값 삭제: 1분 추이 {}행, 경보 샘플 {}행 ({} 이전)",
-                    retention.days(), trend, samples, cutoff);
+                    retention.effectiveDays(), trend, samples, cutoff);
         }
         return new Result(cutoff, trend, samples);
     }

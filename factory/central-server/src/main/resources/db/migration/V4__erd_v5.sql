@@ -33,7 +33,7 @@ ALTER TABLE sensor_trend ALTER COLUMN n SET DEFAULT 0;
 ALTER TABLE sensor_trend ADD COLUMN lost_n SMALLINT NOT NULL DEFAULT 0;
 
 -- ---------------------------------------------------------------
--- sensor_daily: 센서 일 집계 (1분 추이를 하루로). 1분 추이는 7일 뒤 지워지지만 일 집계는 남는다
+-- sensor_daily: 센서 일 집계 (1분 추이를 하루로). 1분 추이는 1년 보관, 일 집계는 계속 남는다
 -- ---------------------------------------------------------------
 CREATE TABLE sensor_daily (
     sensor_id  BIGINT NOT NULL REFERENCES sensor (sensor_id),
@@ -116,7 +116,7 @@ UPDATE alarm
  WHERE status = 'CLOSED';
 
 -- ---------------------------------------------------------------
--- equipment_command: FAN_HZ(주파수) · FAN_STOP, 발행 사유, 만료 시각, 결과 상세
+-- equipment_command: FAN_HZ(주파수) · FAN_STOP, 보낸 쪽(source), 수동 승인, 만료 시각, 결과 상세
 -- SHUTDOWN · RESTART 는 v5 에 없지만 경보 셧다운·재가동 시연에 쓰므로 남긴다
 -- ---------------------------------------------------------------
 ALTER TABLE equipment_command DROP CONSTRAINT IF EXISTS equipment_command_command_check;
@@ -132,9 +132,42 @@ UPDATE equipment_command SET result = 'FAILED' WHERE result = 'FAIL';
 ALTER TABLE equipment_command ADD CONSTRAINT equipment_command_command_check
     CHECK (command IN ('FAN_HZ', 'FAN_STOP', 'SHUTDOWN', 'RESTART'));
 ALTER TABLE equipment_command ADD CONSTRAINT equipment_command_result_check
-    CHECK (result IN ('PENDING', 'DONE', 'FAILED', 'REJECTED', 'EXPIRED', 'DUPLICATE', 'CANCELLED'));
-ALTER TABLE equipment_command ADD COLUMN "trigger" VARCHAR(10) NOT NULL DEFAULT 'APPROVED'
-    CHECK ("trigger" IN ('APPROVED', 'RECOVERY'));
+    CHECK (result IN ('AWAITING', 'PENDING', 'DONE', 'FAILED', 'REJECTED', 'EXPIRED', 'DUPLICATE', 'CANCELLED', 'DENIED'));
+-- 보낸 쪽: USER 사람이 화면에서 / AUTO 가스 알림 때 서버 자동 제어 / RECOVERY 알림 종료 때 40Hz 복귀
+ALTER TABLE equipment_command ADD COLUMN source VARCHAR(8) NOT NULL DEFAULT 'USER'
+    CHECK (source IN ('USER', 'AUTO', 'RECOVERY'));
+ALTER TABLE equipment_command ADD COLUMN approved_by BIGINT;       -- 수동 승인 (AWAITING → PENDING · DENIED)
+ALTER TABLE equipment_command ADD COLUMN approved_at TIMESTAMPTZ;
+ALTER TABLE equipment_command ALTER COLUMN requested_by DROP NOT NULL; -- AUTO · RECOVERY 는 요청자 없음
 ALTER TABLE equipment_command ADD COLUMN expires_at    TIMESTAMPTZ;
 ALTER TABLE equipment_command ADD COLUMN result_detail JSONB;
 CREATE INDEX ix_equipment_command_pending ON equipment_command (equipment_id) WHERE result = 'PENDING';
+
+-- ---------------------------------------------------------------
+-- equipment.fan_auto: 배기팬 자동 제어 스위치 (배기팬만 값, 나머지 NULL). 지금 있는 배기팬은 자동으로 시작
+-- ---------------------------------------------------------------
+ALTER TABLE equipment ADD COLUMN fan_auto BOOLEAN;
+UPDATE equipment SET fan_auto = TRUE WHERE equipment_type = 'FAN';
+
+-- ---------------------------------------------------------------
+-- alarm_sensor_sample: 알림이 열려 있는 동안 그 관제 단위 센서 전부(IR 제외)의 5초 값 (알림 상세 그래프 · 센서값 CSV)
+-- ---------------------------------------------------------------
+CREATE TABLE alarm_sensor_sample (
+    alarm_id   BIGINT      NOT NULL REFERENCES alarm (alarm_id) ON DELETE CASCADE,
+    sensor_id  BIGINT      NOT NULL REFERENCES sensor (sensor_id),
+    ts         TIMESTAMPTZ NOT NULL,
+    value      DOUBLE PRECISION,
+    PRIMARY KEY (alarm_id, sensor_id, ts)
+);
+
+-- 이미 있는 알림은 원인 이벤트 샘플을 옮겨 둔다 (다른 센서 값은 없음)
+INSERT INTO alarm_sensor_sample (alarm_id, sensor_id, ts, value)
+SELECT ae.alarm_id, e.sensor_id, s.ts, s.value
+FROM alarm_event ae
+JOIN sensor_event e ON e.event_id = ae.event_id
+JOIN sensor_event_sample s ON s.event_id = e.event_id
+JOIN sensor se ON se.sensor_id = e.sensor_id AND se.sensor_type <> 'IR'
+ON CONFLICT DO NOTHING;
+
+-- 알림 이력: 유형 + 기간
+CREATE INDEX ix_alarm_hazard_raised ON alarm (hazard, raised_at DESC);

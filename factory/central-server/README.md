@@ -179,3 +179,27 @@ com.gte.argos.factory
 - 설비 명령을 봇(미니 PC)에 실제로 전달 (Redis 설계 후)
 - 화재 판정 (화재 시나리오 데이터가 오면)
 - 서버 재시작 때 진행 중이던 실시간 이벤트 이어 받기 (지금은 리셋으로 정리)
+
+## 2026-11-19 최신 DDL 반영 (배기팬 자동 제어 · 통계·이력)
+
+`V4__erd_v5.sql` 에 더한 것 (`db/argos_ddl.sql`, `docs/erd/argos_ddl_v5_postgresql.sql` 기준):
+
+| 대상 | 내용 |
+| --- | --- |
+| `equipment_command` | `trigger` 대신 `source`(USER · AUTO · RECOVERY), `approved_by`·`approved_at`, 결과 `AWAITING`·`DENIED` 추가. 셧다운 시연용 SHUTDOWN · RESTART 는 남김 |
+| `equipment.fan_auto` | 배기팬 자동 제어 스위치. 지금 배기팬 3대는 true |
+| `alarm_sensor_sample` | 알림이 열려 있는 동안 관제 단위 센서 전부(IR 제외)의 5초 값. 기존 알림은 원인 이벤트 샘플을 옮겨 둠 |
+| `alarm (hazard, raised_at)` 인덱스 | 알림 이력 유형 거르기 |
+
+- 배기팬 자동 제어 `FanAutoService`: 실시간 가스 알림 주의 45Hz · 경보 60Hz (`fan_auto` 인 팬, 이미 그 이상이면 안 보냄). 7일치 가져오기에서는 보내지 않음
+- 명령 `result_detail` 에 `beforeRpm` (바꾸기 전 회전수). 피드 `COMMAND_RESULT` 에 `alarmId`·`source`
+- 수동 승인(AWAITING → PENDING · DENIED)은 칸만 있고 흐름은 없음 (웹에 승인 버튼 없음, 수동이면 안내만)
+- 보관: 1분 추이 · 이벤트 샘플 · 알림 센서 샘플 **1년** (`argos.retention.keep-days`, `ARGOS_RETENTION_KEEP_DAYS`, 기본 365). 예전 `days`(7) 는 안 씀
+
+| API | 내용 |
+| --- | --- |
+| `GET /api/v1/internal/alarms?hazard=` | 유형 조건 |
+| `GET /api/v1/internal/alarms/{id}` 등 알림 응답 | `fanAuto` 추가 (가스 알림만) |
+| `GET /api/v1/internal/alarms/{id}/series` | 알림 상세 그래프. 30분 이하 5초(`alarm_sensor_sample`), 넘으면 1분 평균 |
+| `PATCH`(또는 `POST`) `/api/v1/internal/equipment/{id}/settings` | `{ active?, fanAuto? }` 바로 저장, 배치 판 번호 안 올림. 배기팬 없으면 400 `NO_FAN` |
+| `GET /api/v1/internal/master` 의 `equipment[].fanAuto` | 배기팬 자기 값, 배기팬이 달린 건조로는 그 팬 값, 나머지 null |

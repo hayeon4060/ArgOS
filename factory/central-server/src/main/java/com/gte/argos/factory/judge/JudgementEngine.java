@@ -46,6 +46,7 @@ public final class JudgementEngine {
             return;
         }
 
+        listener.onReading(judge.def().sensorId(), reading.ts(), reading.value());
         TrendPoint finished = trendsByTag.get(reading.tag()).accept(reading.ts(), reading.value());
         if (finished != null) {
             listener.onTrend(finished);

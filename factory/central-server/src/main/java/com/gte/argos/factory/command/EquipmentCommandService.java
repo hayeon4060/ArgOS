@@ -31,7 +31,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 명령   FAN_HZ   배기팬 주파수 변경 (value = 목표 Hz, 20 ~ 60. 40 이 평상시). 회전수 = Hz × 30 (40Hz = 1200rpm)
  *        FAN_STOP 배기팬 정지
  *        SHUTDOWN · RESTART  설비 셧다운·재가동 (v5 에는 없지만 경보 셧다운 시연에 씀)
- * 사유   APPROVED 사용자 승인 / RECOVERY 경보 종료 때 서버가 40Hz 로 되돌림
+ * 보낸 쪽(source)  USER 사람이 화면에서 / AUTO 가스 알림 때 서버 자동 제어(FanAutoService) / RECOVERY 경보 종료 때 40Hz 복귀
  * 결과   PENDING → DONE | FAILED | EXPIRED(만료 시각 지남) | CANCELLED(셧다운으로 취소)
  *        DUPLICATE: 같은 설비에 같은 명령·값이 아직 PENDING 이면 실행하지 않고 기록만
  *
@@ -53,7 +53,7 @@ public class EquipmentCommandService {
 
     /** 허용된 명령만 받는다 */
     public static final List<String> ALLOWED = List.of(FAN_HZ, FAN_STOP, SHUTDOWN, RESTART);
-    public static final List<String> TRIGGERS = List.of("APPROVED", "RECOVERY");
+    public static final List<String> SOURCES = List.of("USER", "AUTO", "RECOVERY");
     public static final int HZ_MIN = 20;
     public static final int HZ_MAX = 60;
     /** 평상시 주파수. 경보가 끝나면 여기로 되돌린다 */
@@ -82,20 +82,20 @@ public class EquipmentCommandService {
         this.json = json;
     }
 
-    /** 사용자가 승인한 명령 */
+    /** 사람이 화면에서 보낸 명령 */
     @Transactional
     public CommandResult request(long equipmentId, String command, Double value, Long alarmId, Long userId) {
-        return request(equipmentId, command, value, alarmId, userId, "APPROVED");
+        return request(equipmentId, command, value, alarmId, userId, "USER");
     }
 
     @Transactional
     public CommandResult request(long equipmentId, String command, Double value, Long alarmId, Long userId,
-                                 String trigger) {
+                                 String source) {
         if (command == null || !ALLOWED.contains(command)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "COMMAND_NOT_ALLOWED", "허용되지 않은 명령입니다.");
         }
-        if (!TRIGGERS.contains(trigger)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "trigger 는 APPROVED · RECOVERY 중 하나입니다.");
+        if (!SOURCES.contains(source)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "source 는 USER · AUTO · RECOVERY 중 하나입니다.");
         }
         List<EquipmentRow> rows = jdbc.query(
                 "SELECT equipment_id, equipment_type, run_state, fan_rpm FROM equipment WHERE equipment_id = ? AND is_active",
@@ -127,12 +127,17 @@ public class EquipmentCommandService {
         OffsetDateTime now = clock.nowOffset();
         OffsetDateTime expiresAt = now.plus(EXPIRES_IN);
         if (isDuplicate(equipmentId, command, v, now)) {
-            Long id = insert(equipmentId, alarmId, command, v, trigger, "DUPLICATE", userId, now, expiresAt);
+            Long id = insert(equipmentId, alarmId, command, v, source, "DUPLICATE", userId, now, expiresAt);
             jdbc.update("UPDATE equipment_command SET completed_at = ?, result_detail = ?::jsonb WHERE command_id = ?",
                     now, detail(Map.of("message", "같은 명령이 아직 처리 중")), id);
-            return new CommandResult(id, equipmentId, command, "DUPLICATE", eq.runState(), eq.fanRpm(), v, trigger);
+            return new CommandResult(id, equipmentId, command, "DUPLICATE", eq.runState(), eq.fanRpm(), v, source);
         }
-        Long commandId = insert(equipmentId, alarmId, command, v, trigger, "PENDING", userId, now, expiresAt);
+        Long commandId = insert(equipmentId, alarmId, command, v, source, "PENDING", userId, now, expiresAt);
+        if (command.startsWith("FAN_")) {
+            // 바꾸기 전 회전수 (알림 응답 fanAuto.beforeRpm)
+            jdbc.update("UPDATE equipment_command SET result_detail = ?::jsonb WHERE command_id = ?",
+                    detail(Map.of("beforeRpm", eq.fanRpm() == null ? 0 : eq.fanRpm())), commandId);
+        }
 
         String runState = eq.runState();
         if (SHUTDOWN.equals(command)) {
@@ -145,12 +150,12 @@ public class EquipmentCommandService {
         long delayMs = SHUTDOWN.equals(command) || RESTART.equals(command) ? 3_000 : 1_000;
         afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, command, v),
                 delayMs, TimeUnit.MILLISECONDS));
-        return new CommandResult(commandId, equipmentId, command, "SENT", runState, eq.fanRpm(), v, trigger);
+        return new CommandResult(commandId, equipmentId, command, "SENT", runState, eq.fanRpm(), v, source);
     }
 
     /**
-     * 경보 종료 때 배기팬을 평상시 주파수(40Hz)로 되돌린다 (trigger RECOVERY, 요청자 없음).
-     * 대상: 이 경보로 보낸 FAN_HZ 명령의 팬 + 경보 발생 뒤 같은 공정에서 사용자가 FAN_HZ 를 바꾼 팬.
+     * 경보 종료 때 배기팬을 평상시 주파수(40Hz)로 되돌린다 (source RECOVERY, 요청자 없음).
+     * 대상: 이 경보로 보낸 FAN_HZ 명령(사람·자동)의 팬 + 경보 발생 뒤 같은 공정에서 사람이 FAN_HZ 를 바꾼 팬.
      * 지금 가동 중이고 40Hz 가 아닌 팬만 보낸다. 돌려준 명령 목록.
      */
     @Transactional
@@ -161,8 +166,9 @@ public class EquipmentCommandService {
                 JOIN equipment e ON e.equipment_id = c.equipment_id
                 JOIN alarm a ON a.alarm_id = ?
                 JOIN control_unit cu ON cu.unit_id = a.unit_id
-                WHERE c.command = 'FAN_HZ' AND c."trigger" = 'APPROVED' AND c.result = 'DONE'
-                  AND (c.alarm_id = a.alarm_id OR (e.process_id = cu.process_id AND c.requested_at >= a.raised_at))
+                WHERE c.command = 'FAN_HZ' AND c.source IN ('USER', 'AUTO') AND c.result = 'DONE'
+                  AND (c.alarm_id = a.alarm_id
+                       OR (c.source = 'USER' AND e.process_id = cu.process_id AND c.requested_at >= a.raised_at))
                   AND e.equipment_type = 'FAN' AND e.is_active AND e.run_state = 'RUN'
                   AND COALESCE(e.fan_rpm, 0) <> ?
                 ORDER BY c.equipment_id
@@ -180,12 +186,12 @@ public class EquipmentCommandService {
     /** 명령 한 건 조회 */
     public CommandResult find(long commandId) {
         List<CommandResult> rows = jdbc.query("""
-                SELECT c.command_id, c.equipment_id, c.command, c.value, c."trigger", c.result, e.run_state, e.fan_rpm
+                SELECT c.command_id, c.equipment_id, c.command, c.value, c.source, c.result, e.run_state, e.fan_rpm
                 FROM equipment_command c JOIN equipment e ON e.equipment_id = c.equipment_id
                 WHERE c.command_id = ?
                 """, (rs, i) -> new CommandResult(rs.getLong("command_id"), rs.getLong("equipment_id"),
                 rs.getString("command"), status(rs.getString("result")), rs.getString("run_state"),
-                rs.getObject("fan_rpm", Integer.class), rs.getObject("value", Double.class), rs.getString("trigger")),
+                rs.getObject("fan_rpm", Integer.class), rs.getObject("value", Double.class), rs.getString("source")),
                 commandId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("COMMAND_NOT_FOUND", "없는 명령입니다.");
@@ -259,13 +265,13 @@ public class EquipmentCommandService {
         return n != null && n > 0;
     }
 
-    private Long insert(long equipmentId, Long alarmId, String command, Double value, String trigger, String result,
+    private Long insert(long equipmentId, Long alarmId, String command, Double value, String source, String result,
                         Long userId, OffsetDateTime now, OffsetDateTime expiresAt) {
         return jdbc.queryForObject("""
                 INSERT INTO equipment_command
-                    (equipment_id, alarm_id, command, value, "trigger", result, requested_by, requested_at, expires_at)
+                    (equipment_id, alarm_id, command, value, source, result, requested_by, requested_at, expires_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING command_id
-                """, Long.class, equipmentId, alarmId, command, value, trigger, result, userId, now, expiresAt);
+                """, Long.class, equipmentId, alarmId, command, value, source, result, userId, now, expiresAt);
     }
 
     /** 셧다운하면 그 설비에 아직 처리 중인 팬 명령은 취소 */
@@ -284,7 +290,8 @@ public class EquipmentCommandService {
 
     private void finish(long commandId, String result, OffsetDateTime at, Map<String, Object> detail) {
         jdbc.update("""
-                UPDATE equipment_command SET result = ?, completed_at = ?, result_detail = ?::jsonb
+                UPDATE equipment_command SET result = ?, completed_at = ?,
+                       result_detail = COALESCE(result_detail, '{}'::jsonb) || ?::jsonb
                 WHERE command_id = ? AND result = 'PENDING'
                 """, result, at, detail(detail), commandId);
     }
@@ -306,6 +313,10 @@ public class EquipmentCommandService {
         data.put("status", status);
         data.put("runState", runState);
         data.put("fanRpm", fanRpm);
+        Map<String, Object> row = jdbc.queryForMap("SELECT alarm_id, source FROM equipment_command WHERE command_id = ?",
+                commandId);
+        data.put("alarmId", row.get("alarm_id"));
+        data.put("source", row.get("source"));
         feed.append("COMMAND_RESULT", at, data);
     }
 
@@ -347,9 +358,9 @@ public class EquipmentCommandService {
     /**
      * @param status  SENT | DONE | FAILED | EXPIRED | CANCELLED | DUPLICATE
      * @param value   FAN_HZ 의 목표 주파수 (그 밖은 null)
-     * @param trigger APPROVED | RECOVERY
+     * @param source  USER | AUTO | RECOVERY
      */
     public record CommandResult(long commandId, long equipmentId, String command, String status, String runState,
-                                Integer fanRpm, Double value, String trigger) {
+                                Integer fanRpm, Double value, String source) {
     }
 }

@@ -199,7 +199,21 @@ class JudgementEngineTest {
         return (int) ((ts.getEpochSecond() - T0.getEpochSecond()) / 5);
     }
 
+    @Test
+    void 등록된_센서_값은_판정_전에_모두_onReading_으로_전달된다() {
+        feed("TE-305", 140, 3);
+        feed("XX-999", 1, 2);
+        assertThat(rec.readings).isEqualTo(3);
+    }
+
     private static final class Recorder implements JudgementListener {
+        int readings;
+
+        @Override
+        public void onReading(long sensorId, Instant ts, double value) {
+            readings++;
+        }
+
         final List<String> log = new ArrayList<>();
         final List<TrendPoint> trends = new ArrayList<>();
         final List<Boolean> lowSide = new ArrayList<>();

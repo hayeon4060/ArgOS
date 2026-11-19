@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * - 종료는 경보에 묶인 이벤트가 모두 끝났을 때만 된다 (값이 기준 아래로 30초 유지). 아니면 409 VALUE_STILL_OVER
  * - 종료하면 판정 엔진에도 알려, 그 관제 단위의 다음 이상은 새 경보가 된다
  * - 종료 사유(close_reason): 조치 중(ACTING)에 닫으면 ACTION_DONE, 아니면 MANUAL
- * - 종료하면 경보 중 주파수를 바꾼 배기팬을 40Hz 로 되돌린다 (명령 trigger RECOVERY)
+ * - 종료하면 경보 중 주파수를 바꾼 배기팬을 40Hz 로 되돌린다 (명령 source RECOVERY)
  * </pre>
  */
 @Service

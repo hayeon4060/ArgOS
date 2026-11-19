@@ -1,5 +1,6 @@
 package com.gte.argos.factory.ingest;
 
+import com.gte.argos.factory.command.FanAutoService;
 import com.gte.argos.factory.common.time.DemoClock;
 import com.gte.argos.factory.judge.JudgementEngine;
 import com.gte.argos.factory.judge.SensorDef;
@@ -44,14 +45,16 @@ public class LiveJudgementService {
     private final LiveState state;
     private final LiveFeed feed;
     private final SensorDailyService daily;
+    private final FanAutoService fanAuto;
 
     private JudgementEngine engine;
     private FeedingListener listener;
     private Map<String, Long> sensorIdByTag = Map.of();
 
     public LiveJudgementService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock,
-                                LiveState state, LiveFeed feed, SensorDailyService daily) {
+                                LiveState state, LiveFeed feed, SensorDailyService daily, FanAutoService fanAuto) {
         this.jdbc = jdbc;
+        this.fanAuto = fanAuto;
         this.daily = daily;
         this.sensorLoader = sensorLoader;
         this.clock = clock;
@@ -78,6 +81,9 @@ public class LiveJudgementService {
             accepted++;
         }
         listener.flush();
+        for (FeedingListener.GasAlarm g : listener.drainGasAlarms()) {
+            fanAuto.onGasAlarm(g.alarmId(), g.unitId(), g.stage());
+        }
         if (!values.isEmpty()) {
             feed.append("SENSOR_VALUES", clock.nowOffset(), Map.of("values", values));
         }
@@ -92,6 +98,7 @@ public class LiveJudgementService {
     /** 사람이 경보를 닫았을 때. 이후 그 단위의 새 이벤트는 새 경보가 된다 */
     public synchronized void closeAlarm(long unitId) {
         engine().closeAlarm(unitId);
+        listener.alarmClosed(unitId);
     }
 
     /**

@@ -160,6 +160,9 @@ public class MasterAdminService {
             if (u.containsKey("active")) {
                 jdbc.update("UPDATE equipment SET is_active = ? WHERE equipment_id = ?", Boolean.TRUE.equals(u.get("active")), id);
             }
+            if (u.containsKey("fanAuto") && u.get("fanAuto") != null) {
+                setFanAuto(id, Boolean.TRUE.equals(u.get("fanAuto")));
+            }
             if (u.containsKey("managerIds")) {
                 managers.add(Map.of("equipmentId", id, "managerIds", u.get("managerIds"),
                         "primaryManagerId", u.getOrDefault("primaryManagerId", "")));
@@ -235,6 +238,66 @@ public class MasterAdminService {
         out.put("changedCount", changed);
         out.put("managers", managers);
         return out;
+    }
+
+    /**
+     * 설비 설정 바로 저장 (equipment-settings-api.md). 배치 판 번호(layout_version)는 올리지 않는다.
+     *
+     * @param active  사용 상태 (null 이면 그대로)
+     * @param fanAuto 배기팬 자동 제어 (null 이면 그대로). 배기팬이 없는 설비면 400 NO_FAN
+     */
+    @Transactional
+    public Map<String, Object> saveSettings(long equipmentId, Boolean active, Boolean fanAuto) {
+        Long processId = jdbc.query("SELECT process_id FROM equipment WHERE equipment_id = ?",
+                rs -> rs.next() ? rs.getLong(1) : null, equipmentId);
+        if (processId == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "EQUIPMENT_NOT_FOUND", "없는 설비입니다.");
+        }
+        if (fanAuto != null) {
+            setFanAuto(equipmentId, fanAuto);
+        }
+        if (active != null) {
+            jdbc.update("UPDATE equipment SET is_active = ? WHERE equipment_id = ?", active, equipmentId);
+            live.reloadDefinitions();
+        }
+        masterChanged("EQUIPMENT", processId);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("equipmentId", equipmentId);
+        out.put("active", jdbc.queryForObject("SELECT is_active FROM equipment WHERE equipment_id = ?", Boolean.class, equipmentId));
+        out.put("fanAuto", fanAutoOf(equipmentId));
+        return out;
+    }
+
+    /** 배기팬 자체 또는 그 설비(관제 단위 대표 설비)에 달린 배기팬들 */
+    List<Long> fansOf(long equipmentId) {
+        return jdbc.queryForList("""
+                SELECT e.equipment_id FROM equipment e WHERE e.equipment_id = ? AND e.equipment_type = 'FAN'
+                UNION
+                SELECT f.equipment_id FROM control_unit cu
+                JOIN control_unit_sensor cus ON cus.unit_id = cu.unit_id
+                JOIN sensor s ON s.sensor_id = cus.sensor_id
+                JOIN equipment f ON f.equipment_id = s.equipment_id AND f.equipment_type = 'FAN'
+                WHERE cu.equipment_id = ?
+                """, Long.class, equipmentId, equipmentId);
+    }
+
+    private void setFanAuto(long equipmentId, boolean fanAuto) {
+        List<Long> fans = fansOf(equipmentId);
+        if (fans.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "NO_FAN", "배기팬이 없는 설비입니다.");
+        }
+        for (Long fan : fans) {
+            jdbc.update("UPDATE equipment SET fan_auto = ? WHERE equipment_id = ?", fanAuto, fan);
+        }
+    }
+
+    private Boolean fanAutoOf(long equipmentId) {
+        List<Long> fans = fansOf(equipmentId);
+        if (fans.isEmpty()) {
+            return null;
+        }
+        return jdbc.queryForObject("SELECT bool_and(fan_auto) FROM equipment WHERE equipment_id IN ("
+                + String.join(",", fans.stream().map(String::valueOf).toList()) + ")", Boolean.class);
     }
 
     public record LayoutRequest(Integer version, Map<String, Object> equipment, Map<String, Object> sensors) {

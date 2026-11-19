@@ -39,7 +39,8 @@ public final class InternalDto {
 
     public record Equipment(long id, long processId, String code, String name, String type, String shape,
                             Double posX, Double posY, Double posZ, Double sizeW, Double sizeD, Double sizeH,
-                            boolean active, String runState, Integer fanRpm) {
+                            boolean active, String runState, Integer fanRpm, Boolean fanAuto) {
+        // fanAuto: 배기팬 자동 제어. 배기팬은 자기 값, 배기팬이 달린 관제 단위 대표 설비(건조로)는 그 팬 값, 나머지 null
     }
 
     public record Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
@@ -120,7 +121,32 @@ public final class InternalDto {
                         long factoryId, long plantId, int stage, String hazard, String status,
                         OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
                         Long closedBy, OffsetDateTime closedAt, Long thermalFileId, String closeReason,
-                        boolean valueStillOver, List<Event> events) {
+                        boolean valueStillOver, List<Event> events, FanAuto fanAuto) {
+    }
+
+    /**
+     * 가스 알림의 배기팬 자동 제어 결과 (fan-auto-api.md 2장). 가스 알림이 아니거나 배기팬이 없으면 null.
+     *
+     * @param equipmentId    배기팬이 달린 설비 (관제 단위 대표 설비 = 화면의 설비)
+     * @param fanEquipmentId 배기팬 설비
+     * @param mode           AUTO | MANUAL (명령이 있으면 AUTO, 없으면 지금 스위치 값)
+     * @param status         SENT | APPLIED | FAILED | SKIPPED
+     */
+    public record FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+    }
+
+    /**
+     * 알림 상세 그래프 (stats-history-api.md 2장 series).
+     * from = 원인 센서가 처음 기준을 넘은 시각, to = 해제 시각(열려 있으면 지금).
+     * 30분 이하면 5초 값(alarm_sensor_sample), 넘으면 1분 평균(sensor_trend).
+     */
+    public record AlarmSeries(OffsetDateTime from, OffsetDateTime to, int intervalSec, List<AlarmSensorSeries> sensors) {
+    }
+
+    /** points = [[시각, 값], ...]. warn·alarm 은 알림이 났을 때 적용 중이던 기준값 */
+    public record AlarmSensorSeries(long sensorId, String tag, String type, String unit, Double warn, Double alarm,
+                                    Double lowWarn, Double lowAlarm, boolean trigger, List<Object[]> points) {
     }
 
     public record Page<T>(List<T> items, int page, int size, long total) {
