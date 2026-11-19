@@ -77,6 +77,68 @@ public final class JudgementEngine {
         }
     }
 
+    /** 밖(VMS)에서 판정한 센서의 진행 중 이벤트: 태그 → 상태 */
+    private final Map<String, ExternalEvent> externalByTag = new HashMap<>();
+
+    /**
+     * 밖에서 단계를 판정해 보내는 센서 (열화상 IR-301: VMS 가 판정). 엔진은 다시 판정하지 않고 받은 단계로
+     * 이벤트·경보를 만든다. 값은 1분 추이에 그대로 들어간다.
+     * <pre>
+     * 정상 → 2·3 : 이벤트 시작 (rule = IR)      2 → 3 : 단계 올림
+     * 2·3 → 1    : 이벤트 끝 (VMS 가 복귀 조건 20초를 이미 채운 뒤 보냄)
+     * 3 → 2      : 무시 (VMS 는 3 에서 바로 1 로 돌아옴)
+     * </pre>
+     */
+    public void acceptExternal(SensorReading reading, Stage stage) {
+        SensorJudge judge = judgesByTag.get(reading.tag());
+        if (judge == null) {
+            unknownTagCount++;
+            return;
+        }
+        SensorDef def = judge.def();
+        listener.onReading(def.sensorId(), reading.ts(), reading.value());
+        TrendPoint finished = trendsByTag.get(reading.tag()).accept(reading.ts(), reading.value());
+        if (finished != null) {
+            listener.onTrend(finished);
+        }
+        JudgementListener.Sample sample = new JudgementListener.Sample(reading.ts(), reading.value());
+        ExternalEvent open = externalByTag.get(reading.tag());
+        if (open == null) {
+            if (stage == Stage.NORMAL) {
+                return;
+            }
+            long key = eventKeys.getAndIncrement();
+            externalByTag.put(reading.tag(), new ExternalEvent(key, stage, reading.value()));
+            listener.onEventOpened(key, def.sensorId(), def.rule().thresholdId(), stage, reading.ts(), reading.ts(),
+                    false, "IR", java.util.List.of(sample));
+            correlator.onEventOpened(def, key, stage, false, reading.ts());
+            return;
+        }
+        listener.onEventSample(open.key, sample);
+        open.peak = Math.max(open.peak, reading.value());
+        if (stage == Stage.NORMAL) {
+            externalByTag.remove(reading.tag());
+            listener.onEventClosed(open.key, reading.ts(), open.peak);
+            correlator.onEventClosed(def, open.key, reading.ts());
+        } else if (stage.code() > open.stage.code()) {
+            open.stage = stage;
+            listener.onEventEscalated(open.key, stage, reading.ts());
+            correlator.onEventEscalated(def, open.key, stage, reading.ts());
+        }
+    }
+
+    private static final class ExternalEvent {
+        final long key;
+        Stage stage;
+        double peak;
+
+        ExternalEvent(long key, Stage stage, double peak) {
+            this.key = key;
+            this.stage = stage;
+            this.peak = peak;
+        }
+    }
+
     /** 모으던 1분 추이를 모두 내보낸다 (데이터 끝, 서버 종료 때). 진행 중 이벤트는 그대로 둔다 */
     public void flushTrends() {
         for (TrendAggregator agg : trendsByTag.values()) {
@@ -114,6 +176,10 @@ public final class JudgementEngine {
 
     /** 이 태그 센서의 진행 중 이벤트 단계. 없으면 NORMAL */
     public Stage currentStage(String tag) {
+        ExternalEvent ext = externalByTag.get(tag);
+        if (ext != null) {
+            return ext.stage;
+        }
         SensorJudge judge = judgesByTag.get(tag);
         return judge != null && judge.hasOpenEvent() ? judge.openStage() : Stage.NORMAL;
     }

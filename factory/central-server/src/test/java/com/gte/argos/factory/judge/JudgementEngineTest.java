@@ -206,6 +206,40 @@ class JudgementEngineTest {
         assertThat(rec.readings).isEqualTo(3);
     }
 
+    @Test
+    void 밖에서_판정한_열화상_단계로_이벤트와_화재_경보를_만든다() {
+        SensorDef ir = new SensorDef(331, "IR-301", "IR", 5,
+                new ThresholdRule(16, 50.0, 60.0, null, null, 24, 6),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(ir), rec, JudgementEngine.Options.live());
+        external(46.1, Stage.NORMAL);
+        external(64.9, Stage.ALARM);      // 1 → 3 바로 (2단계 진입은 따로 안 옴)
+        external(66.0, Stage.ALARM);
+        external(48.0, Stage.NORMAL);     // VMS 가 복귀 조건을 채운 뒤 1
+        assertThat(rec.rules).containsExactly("IR");
+        assertThat(String.join(" | ", rec.log)).contains("event+ 331 ALARM").contains("alarm+ unit=5 ALARM FIRE")
+                .contains("event- end=3 peak=66.0");
+        assertThat(rec.readings).isEqualTo(4);
+    }
+
+    @Test
+    void 밖에서_판정한_단계가_2에서_3으로_오르면_올림() {
+        SensorDef ir = new SensorDef(331, "IR-301", "IR", 5,
+                new ThresholdRule(16, 50.0, 60.0, null, null, 24, 6),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(ir), rec, JudgementEngine.Options.live());
+        external(55, Stage.WARN);
+        external(61, Stage.ALARM);
+        external(59, Stage.WARN);         // 3 → 2 는 무시
+        assertThat(engine.currentStage("IR-301")).isEqualTo(Stage.ALARM);
+        assertThat(String.join(" | ", rec.log)).contains("event^ ALARM");
+    }
+
+    private void external(double value, Stage stage) {
+        engine.acceptExternal(new SensorReading("IR-301", T0.plusSeconds(5L * tick), value), stage);
+        tick++;
+    }
+
     private static final class Recorder implements JudgementListener {
         int readings;
 

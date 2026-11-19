@@ -228,9 +228,19 @@ public class ChatService {
             card.put("title", sensor + Codes.stageName(a.stage()) + " 기준 초과");
             CentralDto.Equipment eq = a.equipmentId() == null ? null : masterCache.get().equipment(a.equipmentId());
             card.put("equipmentName", eq == null ? a.unitName() : eq.name());
+            card.put("level", Codes.level(a.stage()));
+            card.put("hazard", a.hazard());
+            card.put("sensorTag", e == null ? null : e.tag());
+            card.put("value", e == null ? null : e.peak());
+            card.put("unit", e == null ? null : e.unit());
         } catch (RuntimeException ex) {
             card.put("title", "알림 #" + alarmId);
             card.put("equipmentName", null);
+            card.put("level", null);
+            card.put("hazard", null);
+            card.put("sensorTag", null);
+            card.put("value", null);
+            card.put("unit", null);
         }
         return card;
     }

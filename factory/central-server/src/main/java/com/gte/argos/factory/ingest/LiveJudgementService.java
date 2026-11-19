@@ -90,6 +90,29 @@ public class LiveJudgementService {
         return accepted;
     }
 
+    /**
+     * 밖에서 단계를 판정한 값 하나 (VMS 열화상). 판정 엔진은 받은 단계로 이벤트·경보만 만든다.
+     *
+     * @return 판정에 넣었으면 true (시연 시작 전 값·모르는 태그면 false)
+     */
+    @Transactional
+    public synchronized boolean ingestExternal(SensorReading r, Stage stage) {
+        if (r.ts().isBefore(clock.simStart())) {
+            return false;
+        }
+        JudgementEngine e = engine();
+        Long sensorId = sensorIdByTag.get(r.tag());
+        if (sensorId == null) {
+            return false;
+        }
+        state.record(sensorId, r.ts(), r.value());
+        e.acceptExternal(r, stage);
+        listener.flush();
+        feed.append("SENSOR_VALUES", clock.nowOffset(),
+                Map.of("values", List.<Object[]>of(new Object[] {sensorId, odt(r.ts()), r.value()})));
+        return true;
+    }
+
     /** 이 센서의 지금 단계 (진행 중 이벤트 기준) */
     public synchronized Stage currentStage(String tag) {
         return engine().currentStage(tag);

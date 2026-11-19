@@ -313,6 +313,7 @@ public class ThresholdService {
         out.put("proposed", Map.of("warnCount", p.warn(), "alarmCount", p.alarm()));
         out.put("diff", (p.warn() + p.alarm()) - (c.warn() + c.alarm()));
         out.put("hits", p.hits());
+        out.put("peaks", p.peaks());
         out.put("days", Math.max(1, Math.min(31, days)));
         return out;
     }
@@ -323,6 +324,10 @@ public class ThresholdService {
         int warnCount = 0;
         int alarmCount = 0;
         List<OffsetDateTime> hits = new ArrayList<>();
+        List<Map<String, Object>> peaks = new ArrayList<>();
+        OffsetDateTime peakAt = null;
+        double peakValue = 0;
+        int peakStage = 0;
         int run = 0;
         int alarmRun = 0;
         int bestAlarmRun = 0;
@@ -337,10 +342,14 @@ public class ThresholdService {
                     if (bestAlarmRun >= alarmMin) {
                         alarmCount++;
                         hits.add(runStart);
+                        peaks.add(peak(peakAt, peakValue));
                     } else if (run >= warnMin) {
                         warnCount++;
                         hits.add(runStart);
+                        peaks.add(peak(peakAt, peakValue));
                     }
+                    peakAt = null;
+                    peakStage = 0;
                 }
                 run = 0;
                 alarmRun = 0;
@@ -352,6 +361,14 @@ public class ThresholdService {
                     runStart = m.ts();
                 }
                 run++;
+                // 그래프에 찍을 점: 이 구간에서 단계가 가장 높은 분의 기준을 넘은 쪽 값 (같으면 더 벗어난 값)
+                boolean high = rule.classify(m.max()) != Stage.NORMAL;
+                double v = high ? m.max() : m.min();
+                if (stage.code() > peakStage || (stage.code() == peakStage && (high ? v > peakValue : v < peakValue))) {
+                    peakStage = stage.code();
+                    peakValue = v;
+                    peakAt = m.ts();
+                }
                 alarmRun = stage == Stage.ALARM ? alarmRun + 1 : 0;
                 bestAlarmRun = Math.max(bestAlarmRun, alarmRun);
             }
@@ -359,7 +376,14 @@ public class ThresholdService {
                 prev = m.ts();
             }
         }
-        return new Count(warnCount, alarmCount, hits);
+        return new Count(warnCount, alarmCount, hits, peaks);
+    }
+
+    private static Map<String, Object> peak(OffsetDateTime at, double value) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("at", at);
+        m.put("value", Math.round(value * 100) / 100.0);
+        return m;
     }
 
     // ---------------------------------------------------------------
@@ -452,6 +476,10 @@ public class ThresholdService {
     record Minute(OffsetDateTime ts, double min, double max) {
     }
 
-    record Count(int warn, int alarm, List<OffsetDateTime> hits) {
+    /** peaks: 알림 하나마다 그래프에 찍을 점 { at, value } (hits 와 같은 순서) */
+    record Count(int warn, int alarm, List<OffsetDateTime> hits, List<Map<String, Object>> peaks) {
+        Count(int warn, int alarm, List<OffsetDateTime> hits) {
+            this(warn, alarm, hits, List.of());
+        }
     }
 }

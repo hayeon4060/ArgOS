@@ -27,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class AuthController {
     private final AuthService service;
+    private final com.gte.argos.gateway.user.UserService users;
 
-    public AuthController(AuthService service) {
+    public AuthController(AuthService service, com.gte.argos.gateway.user.UserService users) {
         this.service = service;
+        this.users = users;
     }
 
     public record LoginRequest(@NotBlank String loginId, @NotBlank String password,
@@ -90,7 +92,20 @@ public class AuthController {
 
     @GetMapping("/me")
     public Map<String, Object> me(@AuthenticationPrincipal Jwt jwt) {
-        return success(service.me(Long.parseLong(jwt.getSubject())));
+        long userId = Long.parseLong(jwt.getSubject());
+        AuthService.MeView me = service.me(userId);
+        // MeView 그대로 + 담당 범위 문구 (backend-notes 14장, 2026-11-19)
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", me.id());
+        data.put("loginId", me.loginId());
+        data.put("name", me.name());
+        data.put("phone", me.phone());
+        data.put("role", me.role());
+        data.put("scope", me.scope());
+        data.put("scopeText", users.scopeTextOf(userId));
+        data.put("pwResetRequired", me.pwResetRequired());
+        data.put("lastLoginAt", me.lastLoginAt());
+        return success(data);
     }
 
     @PutMapping("/me/password")

@@ -201,7 +201,7 @@ public class FireService {
                 : m.sensorsOfProcess(f.processId()).stream().filter(x -> "IR".equals(x.type())).findFirst().orElse(null);
         thermal.put("cameraTag", camera == null ? null : camera.tag());
         thermal.put("streamUrl", camera == null ? null : camera.streamUrl());
-        thermal.put("imageUrl", a == null || a.thermalFileId() == null ? null : "/files/" + a.thermalFileId());
+        thermal.put("imageUrl", a == null ? null : com.gte.argos.gateway.thermal.ThermalService.imageUrl(a.thermalFileId()));
         thermal.put("max", f.maxTemp());
         thermal.put("min", null);
         thermal.put("avg", null);
@@ -214,6 +214,58 @@ public class FireService {
         v.put("hqNotifiedAt", f.hqNotifiedAt());
         v.put("unlock", unlock(f.unlockFailCount()));
         v.put("actions", actions(f));
+        v.put("values", values(f, a, m));
+        v.put("serverTime", time.now());
+        return v;
+    }
+
+    /**
+     * 감지 근거 숫자 3칸 { thermalMax, temp, co }. 열화상 최고는 화재 기록 값, 온도·CO 는 그 관제 단위 센서의 지금 값
+     * (경보 원인 이벤트가 있으면 그 최고값). 센서가 없으면 null
+     */
+    private Map<String, Object> values(Fire f, Alarm a, MasterCache.Snapshot m) {
+        Double temp = null;
+        Double co = null;
+        Double ir = f.maxTemp();
+        java.util.Set<Long> unitSensors = new java.util.HashSet<>();
+        if (a != null && m.unit(a.unitId()) != null) {
+            m.unit(a.unitId()).members().forEach(x -> unitSensors.add(x.sensorId()));
+        }
+        if (f.processId() != null) {
+            try {
+                for (CentralDto.SensorStatus s : central.status(f.processId()).sensors()) {
+                    if (!unitSensors.isEmpty() && !unitSensors.contains(s.sensorId()) || s.value() == null) {
+                        continue;
+                    }
+                    switch (s.type()) {
+                        case "TE" -> temp = temp == null ? s.value() : Math.max(temp, s.value());
+                        case "AT" -> co = co == null ? s.value() : Math.max(co, s.value());
+                        case "IR" -> ir = ir == null ? s.value() : ir;
+                        default -> { }
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.debug("화재 근거 값 조회 실패: {}", e.getMessage());
+            }
+        }
+        if (a != null) {
+            for (Event e : a.events()) {
+                if (e.peak() == null) {
+                    continue;
+                }
+                if ("TE".equals(e.type())) {
+                    temp = temp == null ? e.peak() : Math.max(temp, e.peak());
+                } else if ("AT".equals(e.type())) {
+                    co = co == null ? e.peak() : Math.max(co, e.peak());
+                } else if ("IR".equals(e.type())) {
+                    ir = ir == null ? e.peak() : Math.max(ir, e.peak());
+                }
+            }
+        }
+        Map<String, Object> v = new LinkedHashMap<>();
+        v.put("thermalMax", ir);
+        v.put("temp", temp);
+        v.put("co", co);
         return v;
     }
 
@@ -424,8 +476,12 @@ public class FireService {
     private List<Map<String, Object>> actions(Fire f) {
         List<ChecklistRepository.Action> acts = checklists.actions(f.alarmId());
         List<Map<String, Object>> out = new ArrayList<>();
-        out.add(step("DETECTED", f.detectedAt(), true, null));
-        out.add(step("BROADCAST", f.broadcastStartedAt(), f.broadcastStartedAt() != null, null));
+        boolean active = !"CLEARED".equals(f.status());
+        out.add(step("DETECTED", f.detectedAt(), true, "열화상 화재 감지", false));
+        boolean broadcasting = f.broadcastStartedAt() != null && f.broadcastEndedAt() == null;
+        out.add(step("BROADCAST", f.broadcastStartedAt(), f.broadcastStartedAt() != null,
+                broadcasting ? "공장 경고 방송 송출 중" : f.broadcastStartedAt() == null ? "공장 경고 방송 전" : "공장 경고 방송 종료",
+                broadcasting));
         ChecklistRepository.Action shut = null;
         Set<Long> evacuated = new java.util.HashSet<>();
         for (ChecklistRepository.Action ac : acts) {
@@ -437,21 +493,22 @@ public class FireService {
             }
         }
         out.add(step("SHUTDOWN", shut == null ? null : shut.doneAt(), shut != null,
-                shut == null ? "설비 셧다운 전" : ChecklistRepository.actionText(shut)));
+                shut == null ? "설비 셧다운 전" : ChecklistRepository.actionText(shut), false));
         int total = f.processId() == null ? 0 : checklists.workers(f.processId()).size();
-        out.add(step("EVACUATED", null, total > 0 && evacuated.size() >= total,
-                "공정 담당자 대피 확인 " + evacuated.size() + "/" + total));
+        boolean allOut = total > 0 && evacuated.size() >= total;
+        out.add(step("EVACUATED", null, allOut,
+                "공정 담당자 대피 확인 " + evacuated.size() + "/" + total, active && !allOut));
         return out;
     }
 
-    private static Map<String, Object> step(String step, OffsetDateTime at, boolean done, String text) {
+    /** running: 지금 진행 중인 조치 ('송출 중' 칩) */
+    private static Map<String, Object> step(String step, OffsetDateTime at, boolean done, String text, boolean running) {
         Map<String, Object> s = new LinkedHashMap<>();
         s.put("step", step);
         s.put("at", at);
         s.put("done", done);
-        if (text != null) {
-            s.put("text", text);
-        }
+        s.put("text", text);
+        s.put("running", running);
         return s;
     }
 

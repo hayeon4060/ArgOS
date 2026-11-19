@@ -98,6 +98,17 @@ public class UserService {
         return out;
     }
 
+    /** 내 정보(GET /me)의 담당 범위 문구. 사용자가 없으면 null */
+    @Transactional(readOnly = true)
+    public String scopeTextOf(long userId) {
+        UserRow u = repo.find(userId);
+        if (u == null) {
+            return null;
+        }
+        MasterCache.Snapshot m = master.get();
+        return UserRules.scopeText(u.role(), UserRules.scopeOf(u, m), m);
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> detail(long id) {
         UserScope actor = admin();

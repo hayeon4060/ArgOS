@@ -259,7 +259,7 @@ public class AlarmService {
         out.put("rule", rule);
         out.put("sensors", sensors);
         // 열화상 그림(VMS)은 아직 없어서 IR 센서 값으로 요약 (imageUrl 은 null → 화면이 단계별 예시 그림 사용)
-        out.put("thermal", thermal.forAlarm(a.processId(), eq == null ? null : eq.id(), status, time.now()));
+        out.put("thermal", withImage(thermal.forAlarm(a.processId(), eq == null ? null : eq.id(), status, time.now()), a));
         out.put("trend", trend);
         out.put("causeCandidates", template == null ? List.of() : List.of(template.cause()));
         out.put("templateId", template == null ? null : template.id());
@@ -346,7 +346,7 @@ public class AlarmService {
         out.put("reasonDetail", String.join(" · ", details));
         out.put("cameraId", cameraId);
         // 열화상 그림(VMS)은 아직 없어서 IR 센서 값으로 요약 (imageUrl 은 null → 화면이 단계별 예시 그림 사용)
-        out.put("thermal", thermal.forAlarm(a.processId(), mainEq == null ? null : mainEq.id(), status, time.now()));
+        out.put("thermal", withImage(thermal.forAlarm(a.processId(), mainEq == null ? null : mainEq.id(), status, time.now()), a));
         out.put("shutdown", shutdownView(actions, m.equipmentOf(a.processId()), eqStatus));
         out.put("sensors", sensors);
         out.put("equipment", equipment);
@@ -423,7 +423,7 @@ public class AlarmService {
                 a.equipmentId(), central.status(a.processId()), now);
         if (th != null) {
             Map<String, Object> t = new LinkedHashMap<>();
-            t.put("imageUrl", th.get("imageUrl"));
+            t.put("imageUrl", a.thermalFileId() != null ? ThermalService.imageUrl(a.thermalFileId()) : th.get("imageUrl"));
             t.put("capturedAt", a.raisedAt());
             t.put("max", th.get("max"));
             t.put("avg", th.get("avg"));
@@ -484,6 +484,14 @@ public class AlarmService {
             out.put("shutdown", sd == null ? null : Map.of("steps", sd.get("steps")));
         }
         return out;
+    }
+
+    /** 경보에 VMS 열화상 사진이 붙어 있으면 imageUrl 을 채운다 */
+    private static Map<String, Object> withImage(Map<String, Object> thermal, Alarm a) {
+        if (thermal != null && a.thermalFileId() != null) {
+            thermal.put("imageUrl", ThermalService.imageUrl(a.thermalFileId()));
+        }
+        return thermal;
     }
 
     /** GAS → '가스 ', FIRE → '화재 ', 없으면 빈 글자 */
