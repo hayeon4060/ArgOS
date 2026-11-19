@@ -196,6 +196,11 @@ public class FireService {
         Event ir = a == null ? null : irEvent(a);
         Map<String, Object> thermal = new LinkedHashMap<>();
         thermal.put("cameraId", ir == null ? null : ir.sensorId());
+        // VMS 실시간 영상 주소 (ERD V6 sensor.stream_url). 3단계면 화면이 이 주소로 바로 연결
+        CentralDto.Sensor camera = ir != null ? m.sensor(ir.sensorId())
+                : m.sensorsOfProcess(f.processId()).stream().filter(x -> "IR".equals(x.type())).findFirst().orElse(null);
+        thermal.put("cameraTag", camera == null ? null : camera.tag());
+        thermal.put("streamUrl", camera == null ? null : camera.streamUrl());
         thermal.put("imageUrl", a == null || a.thermalFileId() == null ? null : "/files/" + a.thermalFileId());
         thermal.put("max", f.maxTemp());
         thermal.put("min", null);

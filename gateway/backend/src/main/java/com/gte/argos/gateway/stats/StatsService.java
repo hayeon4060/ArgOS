@@ -251,6 +251,9 @@ public class StatsService {
         return new Export(base + ".csv", sb.toString().getBytes(StandardCharsets.UTF_8), "text/csv; charset=UTF-8");
     }
 
+    /** 한 번에 조회할 수 있는 기간 (from ~ to, 양 끝 포함). 2026-11-19 1년 → 30일 */
+    static final int MAX_DAYS = 30;
+
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     static String hazardName(String hazard) {
@@ -294,10 +297,9 @@ public class StatsService {
         } else if (c.factoryId() != null) {
             currentUser.checkFactory(scope, c.factoryId());
         }
-        // TODO(백엔드, 2026-11-19): 조회 기간 최대 1년 → 30일로 변경 요청. 366 → 30, 메시지 "한 번에 30일까지 조회할 수 있습니다."
         //   프론트는 이미 30일로 막음. 자세한 건 docs/api/stats-history-30days.md
-        if (c.days() > 366) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "RANGE_TOO_LARGE", "한 번에 1년까지 조회할 수 있습니다.");
+        if (c.days() > MAX_DAYS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "RANGE_TOO_LARGE", "한 번에 30일까지 조회할 수 있습니다.");
         }
         return scope;
     }

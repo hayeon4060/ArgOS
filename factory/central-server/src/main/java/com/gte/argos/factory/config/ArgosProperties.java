@@ -34,7 +34,7 @@ public record ArgosProperties(
     public record Retention(
             @DefaultValue("true") boolean enabled,
             @DefaultValue("7") int days,
-            @DefaultValue("365") int keepDays) {
+            @DefaultValue("31") int keepDays) {
         /** 실제로 쓰는 보관 일수 (keepDays). days 는 예전 설정 이름 */
         public int effectiveDays() {
             return keepDays > 0 ? keepDays : days;

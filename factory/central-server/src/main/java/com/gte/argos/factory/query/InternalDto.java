@@ -43,8 +43,9 @@ public final class InternalDto {
         // fanAuto: 배기팬 자동 제어. 배기팬은 자기 값, 배기팬이 달린 관제 단위 대표 설비(건조로)는 그 팬 값, 나머지 null
     }
 
+    /** streamUrl: VMS 실시간 영상 주소 (열화상만, 없으면 null) */
     public record Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
-                         int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+                         int sampleSec, Double setpoint, boolean active, Threshold threshold, String streamUrl) {
     }
 
     /** 지금 적용 중인 기준값 */

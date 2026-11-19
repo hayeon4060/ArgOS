@@ -156,7 +156,7 @@ com.gte.argos.factory
 `EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `THRESHOLD_CHANGED`, `MASTER_CHANGED`, `RESET`.
 `bootId` 가 바뀌면 중앙 서버가 다시 켜진 것이므로 `after=0` 부터, `gap=true` 면 `status`·`alarms` 를 다시 조회합니다.
 
-## 테이블 명세서 v5 반영 (`V4__erd_v5.sql`)
+## ERD V6 반영 (`V4__erd_v6.sql`)
 
 `docs/erd/ArgOS_테이블명세서_v5.xlsx` 기준. 판정은 지금처럼 중앙 서버가 합니다 (v5 의 Node-RED 엣지·Kafka 는 범위 밖). 컬럼·허용 값만 맞췄습니다.
 
@@ -168,7 +168,6 @@ com.gte.argos.factory
 | `sensor_daily` | 새 테이블. 1분 추이를 하루로 집계(샘플 수 가중 평균·최소·최대·n·lost_n). 10분마다 어제·오늘, 7일치 가져오기 뒤 전체, 1분 추이를 지우기 전에 그 날짜를 집계. 일 집계는 지우지 않음. 리셋하면 11/16 이후를 지우고 11/16 을 다시 집계 |
 | `alarm` | `close_reason` (`AUTO_RECOVERED`·`ACTION_DONE`·`MANUAL`). API 경보에 `closeReason` |
 | `equipment_command` | 명령 `FAN_HZ`·`FAN_STOP`, 결과 7가지, `trigger`(`APPROVED`·`RECOVERY`), `expires_at`, `result_detail`. 예전 행은 `FAN_RPM` → `FAN_HZ`(rpm÷30), `OK` → `DONE`, `FAIL` → `FAILED` |
-| `file_asset` | 종류에 `VIDEO` |
 
 명세서와 다르게 둔 것: 컬럼 길이(코드 varchar(20) 등 지금이 더 김), `sensor_trend.n`·`sample_sec` 은 int, `SHUTDOWN`·`RESTART` 명령.
 
@@ -182,7 +181,7 @@ com.gte.argos.factory
 
 ## 2026-11-19 최신 DDL 반영 (배기팬 자동 제어 · 통계·이력)
 
-`V4__erd_v5.sql` 에 더한 것 (`db/argos_ddl.sql`, `docs/erd/argos_ddl_v5_postgresql.sql` 기준):
+`V4__erd_v6.sql` 에 더한 것 (`db/ArgOS ERD V6.sql`, 기본값·허용 값은 `docs/erd/argos_ddl_v5_postgresql.sql`):
 
 | 대상 | 내용 |
 | --- | --- |
@@ -194,7 +193,8 @@ com.gte.argos.factory
 - 배기팬 자동 제어 `FanAutoService`: 실시간 가스 알림 주의 45Hz · 경보 60Hz (`fan_auto` 인 팬, 이미 그 이상이면 안 보냄). 7일치 가져오기에서는 보내지 않음
 - 명령 `result_detail` 에 `beforeRpm` (바꾸기 전 회전수). 피드 `COMMAND_RESULT` 에 `alarmId`·`source`
 - 수동 승인(AWAITING → PENDING · DENIED)은 칸만 있고 흐름은 없음 (웹에 승인 버튼 없음, 수동이면 안내만)
-- 보관: 1분 추이 · 이벤트 샘플 · 알림 센서 샘플 **1년** (`argos.retention.keep-days`, `ARGOS_RETENTION_KEEP_DAYS`, 기본 365). 예전 `days`(7) 는 안 씀
+- 보관: 1분 추이 · 이벤트 샘플 · 알림 센서 샘플 **31일** (`argos.retention.keep-days`, `ARGOS_RETENTION_KEEP_DAYS`, 기본 31. 통계·이력 조회가 30일까지라서). 예전 `days`(7) 는 안 씀. 경보·이벤트·명령 이력은 지우지 않음
+- V6: `sensor.stream_url` (VMS 실시간 영상 주소, `PUT /internal/sensors/{id}` `{ streamUrl }` 로 넣음, master 의 `sensors[].streamUrl`). 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음)
 
 | API | 내용 |
 | --- | --- |

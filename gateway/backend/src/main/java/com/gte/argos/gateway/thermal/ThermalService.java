@@ -74,6 +74,7 @@ public class ThermalService {
         out.put("cameraId", cameraId);
         out.put("tag", ir.tag());
         out.put("imageUrl", null);
+        out.put("streamUrl", ir.streamUrl());
         out.put("capturedAt", now == null ? null : now.valueAt());
         out.put("level", Codes.level(stage));
         out.put("max", inView && now != null ? now.value() : null);
@@ -122,6 +123,7 @@ public class ThermalService {
         out.put("cameraId", ir.id());
         out.put("cameraTag", ir.tag());
         out.put("imageUrl", null);
+        out.put("streamUrl", ir.streamUrl());
         out.put("level", Codes.level(stage));
         out.put("max", max);
         out.put("avg", avg != null ? avg : max);

@@ -251,6 +251,10 @@ public class ThresholdService {
     /** 수집 주기 · 사용 여부 */
     @Transactional
     public Map<String, Object> updateSensor(long sensorId, Integer sampleSec, Boolean active) {
+        return updateSensor(sensorId, sampleSec, active, null);
+    }
+
+    public Map<String, Object> updateSensor(long sensorId, Integer sampleSec, Boolean active, String streamUrl) {
         if (sampleSec != null && (sampleSec < 1 || sampleSec > 3600)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "수집 주기는 1 ~ 3600초입니다.");
         }
@@ -261,13 +265,20 @@ public class ThresholdService {
         if (n == 0) {
             throw ApiException.notFound("SENSOR_NOT_FOUND", "없는 센서입니다.");
         }
+        if (streamUrl != null) {
+            jdbc.update("UPDATE sensor SET stream_url = ? WHERE sensor_id = ?", streamUrl.isBlank() ? null : streamUrl.trim(),
+                    sensorId);
+            // 연계 서버 마스터 캐시를 바로 비우게 한다
+            feed.append("MASTER_CHANGED", clock.nowOffset(), Map.of("what", "SENSOR", "id", sensorId));
+        }
         live.reloadDefinitions();
-        return jdbc.queryForObject("SELECT sensor_id, sample_sec, is_active FROM sensor WHERE sensor_id = ?",
+        return jdbc.queryForObject("SELECT sensor_id, sample_sec, is_active, stream_url FROM sensor WHERE sensor_id = ?",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", rs.getLong("sensor_id"));
                     m.put("sampleSec", rs.getInt("sample_sec"));
                     m.put("active", rs.getBoolean("is_active"));
+                    m.put("streamUrl", rs.getString("stream_url"));
                     return m;
                 }, sensorId);
     }

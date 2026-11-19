@@ -110,7 +110,8 @@ public class InternalQueryRepository {
                     rs.getString("basis"), rs.getString("note"), odt(rs, "valid_from"));
             return new Sensor(rs.getLong("sensor_id"), rs.getString("tag"), rs.getLong("equipment_id"),
                     rs.getString("sensor_type"), rs.getString("unit"), rs.getString("connection"),
-                    rs.getInt("sample_sec"), rs.getObject("setpoint", Double.class), rs.getBoolean("is_active"), th);
+                    rs.getInt("sample_sec"), rs.getObject("setpoint", Double.class), rs.getBoolean("is_active"), th,
+                    rs.getString("stream_url"));
         });
     }
 

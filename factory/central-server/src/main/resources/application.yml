@@ -39,9 +39,9 @@ argos:
   retention:
     enabled: ${ARGOS_RETENTION_ENABLED:true}
     days: ${ARGOS_RETENTION_DAYS:7}
-    # (2026-11-19 ERD v5) 위 days 대신 이 값을 쓴다: 1분 추이·이벤트 샘플·알림 센서 샘플 모두 1년 보관
-    # (통계·이력에서 1년 안의 지난 알림 그래프를 그림). 이벤트·경보·명령 이력은 지우지 않는다
-    keep-days: ${ARGOS_RETENTION_KEEP_DAYS:365}
+    # (2026-11-19 ERD V6) 위 days 대신 이 값을 쓴다: 1분 추이·이벤트 샘플·알림 센서 샘플 31일 보관
+    # (통계·이력은 한 번에 30일까지 조회, docs/api/stats-history-30days.md). 이벤트·경보·명령 이력은 지우지 않는다
+    keep-days: ${ARGOS_RETENTION_KEEP_DAYS:31}
 
 management:
   endpoints:

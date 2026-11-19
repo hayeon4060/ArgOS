@@ -45,8 +45,14 @@ public final class CentralDto {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    /** streamUrl: VMS 실시간 영상 주소 (열화상만) */
     public record Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
-                         int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+                         int sampleSec, Double setpoint, boolean active, Threshold threshold, String streamUrl) {
+
+        public Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
+                      int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+            this(id, tag, equipmentId, type, unit, connection, sampleSec, setpoint, active, threshold, null);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

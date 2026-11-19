@@ -108,7 +108,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 
 권한: 본사·공장 관리자. 모든 API 가 같은 조건을 받습니다:
 `from`·`to`(필수, `2026-11-10` 형식, 끝 날짜 포함) · `factoryId` · `processId` · `sensorType`(CURRENT·TEMP·CO·IR) · `level`(WARN·ALARM) · `shift`(DAY 07~19시 · NIGHT).
-센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 1년.
+센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 30일 (2026-11-19 변경, 넘으면 400 `RANGE_TOO_LARGE` "한 번에 30일까지 조회할 수 있습니다.").
 
 | API | 비고 |
 | --- | --- |
@@ -267,11 +267,11 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` | CLOVA OCR |
 | `ARGOS_FILES_DIR` | 올린 파일 저장 위치 (기본 `./data/files`) |
 
-### 테이블 명세서 v5 반영 (`V6__erd_v5.sql`)
+### ERD V6 반영 (`V6__erd_v6.sql`, 기본값·허용 값은 v5 DDL)
 
 - `chat_read`: `last_msg_id` → `last_read_msg_id`, `read_at` → `updated_at`
 - `chat_message.body`: TEXT (길이는 API 에서 1,000자)
-- `file_asset`: 종류에 `THERMAL`·`VIDEO`, `sensor_id`·`captured_at` 추가
+- `file_asset`: 종류에 `THERMAL`, `sensor_id`·`captured_at` 추가 (V6: 영상은 저장하지 않음)
 - 로그인 쪽 V1 테이블(`login_history.user_id` NULL 허용, `activity_log.summary` TEXT 등)은 그대로
 - 중앙 서버 쪽 변경(경보 종료 사유, 이벤트 규칙 `HI`/`LO`, 설비 명령 `FAN_HZ` 등)은 `factory/central-server/README.md` 참고
 
@@ -346,3 +346,10 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 - `timeline[]`: `{ at, step, by, text }`, step = RAISED · ACK · CHECKLIST · REPORTED · SHUTDOWN · CLOSED (그 밖의 조치는 그 이름 그대로)
 - `checklist`: 주의일 때 `{ assignee, doneCount, totalCount, items: [{ seq, content, doneAt, result, memo }] }`, 경보면 null
 - `shutdown`: 경보일 때 `{ steps: [{ label, at }] }`, 주의면 null
+
+### ERD V6 · 조회 기간 30일 (2026-11-19)
+
+- 열화상 VMS 실시간 영상 주소 `streamUrl` (중앙 `sensor.stream_url`): `GET /thermal/{cameraId}/latest`, 알림 상세·경보 창의 `thermal`, `GET /fires/{id}` 의 `thermal` (`cameraTag` 도 같이). 값이 없으면 null
+  - 주소 넣기: 중앙 `PUT /api/v1/internal/sensors/{sensorId}` `{ "streamUrl": "http://..." }` (빈 글자면 지움)
+- 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음, `file_asset` 종류에 VIDEO 없음)
+- `/stats/*` 조회 기간 최대 30일

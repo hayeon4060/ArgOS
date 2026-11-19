@@ -1,13 +1,7 @@
--- 테이블 명세서 v5 (docs/erd/ArgOS_테이블명세서_v5.xlsx) 반영
--- 판정은 지금처럼 중앙 서버가 한다 (v5 의 Node-RED 엣지·Kafka 는 범위 밖). 컬럼·허용 값만 v5 에 맞춘다.
+-- ERD V6 반영 (db/ArgOS ERD V6.sql). 기본값·허용 값·초기 데이터는 v5 DDL(docs/erd/argos_ddl_v5_postgresql.sql) 을 따른다.
+-- V6 에서 v5 와 달라진 것: sensor.stream_url 추가(video_url 대신), sensor_event.video_file_id 없음 (영상은 저장하지 않음)
+-- 판정은 지금처럼 중앙 서버가 한다 (Node-RED 엣지·Kafka 는 범위 밖). 컬럼·허용 값만 맞춘다.
 -- 기존 행은 지금 동작이 바뀌지 않게 옮긴다 (기준값 지속 횟수·복귀 여유 등).
-
--- ---------------------------------------------------------------
--- file_asset: 열화상 영상(VIDEO) 추가
--- ---------------------------------------------------------------
-ALTER TABLE file_asset DROP CONSTRAINT IF EXISTS file_asset_kind_check;
-ALTER TABLE file_asset ADD CONSTRAINT file_asset_kind_check
-    CHECK (kind IN ('THERMAL', 'VIDEO', 'DOC_SCAN', 'FLOORPLAN', 'REPORT'));
 
 -- ---------------------------------------------------------------
 -- sensor_threshold: 복귀 횟수·복귀 여유·평균 시간·즉시 3단계 값
@@ -33,7 +27,7 @@ ALTER TABLE sensor_trend ALTER COLUMN n SET DEFAULT 0;
 ALTER TABLE sensor_trend ADD COLUMN lost_n SMALLINT NOT NULL DEFAULT 0;
 
 -- ---------------------------------------------------------------
--- sensor_daily: 센서 일 집계 (1분 추이를 하루로). 1분 추이는 1년 보관, 일 집계는 계속 남는다
+-- sensor_daily: 센서 일 집계 (1분 추이를 하루로). 1분 추이는 31일 보관, 일 집계는 계속 남는다
 -- ---------------------------------------------------------------
 CREATE TABLE sensor_daily (
     sensor_id  BIGINT NOT NULL REFERENCES sensor (sensor_id),
@@ -54,13 +48,12 @@ FROM sensor_trend
 GROUP BY sensor_id, (ts AT TIME ZONE 'Asia/Seoul')::date;
 
 -- ---------------------------------------------------------------
--- sensor_event: 중복 방지 키, 최고 단계, 판정 규칙(HI/LO/AVG/IMMEDIATE/IR), 열화상 정보, PLC 기록 결과
+-- sensor_event: 중복 방지 키, 최고 단계, 판정 규칙(HI/LO/AVG/IMMEDIATE/IR), 열화상 ROI·사진, PLC 기록 결과
 -- ---------------------------------------------------------------
 ALTER TABLE sensor_event ADD COLUMN edge_key      VARCHAR(40);
 ALTER TABLE sensor_event ADD COLUMN max_stage     SMALLINT;
 ALTER TABLE sensor_event ADD COLUMN roi           JSONB;
 ALTER TABLE sensor_event ADD COLUMN image_file_id BIGINT REFERENCES file_asset (file_id);
-ALTER TABLE sensor_event ADD COLUMN video_file_id BIGINT REFERENCES file_asset (file_id);
 ALTER TABLE sensor_event ADD COLUMN plc_ok        BOOLEAN;
 
 UPDATE sensor_event SET max_stage = stage;
@@ -171,3 +164,8 @@ ON CONFLICT DO NOTHING;
 
 -- 알림 이력: 유형 + 기간
 CREATE INDEX ix_alarm_hazard_raised ON alarm (hazard, raised_at DESC);
+
+-- ---------------------------------------------------------------
+-- sensor.stream_url: VMS 실시간 영상 주소 (열화상 IR). 3단계면 대시보드가 이 주소로 바로 연결한다 (중앙은 영상을 중계·저장하지 않음)
+-- ---------------------------------------------------------------
+ALTER TABLE sensor ADD COLUMN stream_url VARCHAR(300);
