@@ -5,6 +5,7 @@ import com.gte.argos.factory.common.api.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +39,24 @@ public class EquipmentCommandController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<CommandResult> request(@PathVariable long equipmentId, @RequestBody @Valid CommandRequest body) {
         return ApiResponse.ok(service.request(equipmentId, body.command(), body.value(), body.alarmId(), body.userId()));
+    }
+
+    /** 수동 배기팬 승인 대기 명령 승인 { userId } */
+    @PostMapping("/commands/{commandId}/approve")
+    public ApiResponse<CommandResult> approve(@PathVariable long commandId,
+                                              @RequestBody(required = false) Map<String, Object> body) {
+        return ApiResponse.ok(service.approve(commandId, user(body)));
+    }
+
+    /** 승인 대기 명령 거절 { userId } */
+    @PostMapping("/commands/{commandId}/deny")
+    public ApiResponse<CommandResult> deny(@PathVariable long commandId,
+                                           @RequestBody(required = false) Map<String, Object> body) {
+        return ApiResponse.ok(service.deny(commandId, user(body)));
+    }
+
+    private static Long user(Map<String, Object> body) {
+        return body == null || body.get("userId") == null ? null : ((Number) body.get("userId")).longValue();
     }
 
     @GetMapping("/commands/{commandId}")

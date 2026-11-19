@@ -33,6 +33,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *        SHUTDOWN · RESTART  설비 셧다운·재가동 (v5 에는 없지만 경보 셧다운 시연에 씀)
  * 보낸 쪽(source)  USER 사람이 화면에서 / AUTO 가스 알림 때 서버 자동 제어(FanAutoService) / RECOVERY 경보 종료 때 40Hz 복귀
  * 결과   PENDING → DONE | FAILED | EXPIRED(만료 시각 지남) | CANCELLED(셧다운으로 취소)
+ *        AWAITING(수동 배기팬: 담당자 승인 대기) → 승인하면 PENDING 으로 실행 | 거절 DENIED | 알림 종료 CANCELLED
  *        DUPLICATE: 같은 설비에 같은 명령·값이 아직 PENDING 이면 실행하지 않고 기록만
  *
  * 연계 서버 → POST /internal/equipment/{id}/commands → 허용 목록·상태 검사 → equipment_command 기록 (PENDING)
@@ -183,6 +184,98 @@ public class EquipmentCommandService {
         return out;
     }
 
+    /**
+     * 수동(fan_auto = false) 배기팬: 가스 알림 때 바로 보내지 않고 승인 대기(AWAITING)로 남긴다.
+     * 같은 알림·팬에 승인 대기가 이미 있으면 목표 주파수만 올린다 (주의 → 경보). 돌려준 명령 id
+     */
+    @Transactional
+    public long await(long fanId, double hz, long alarmId, Integer beforeRpm) {
+        OffsetDateTime now = clock.nowOffset();
+        List<Long> open = jdbc.queryForList("""
+                SELECT command_id FROM equipment_command
+                WHERE equipment_id = ? AND alarm_id = ? AND result = 'AWAITING' ORDER BY command_id DESC LIMIT 1
+                """, Long.class, fanId, alarmId);
+        long id;
+        if (!open.isEmpty()) {
+            id = open.get(0);
+            jdbc.update("UPDATE equipment_command SET value = GREATEST(value, ?) WHERE command_id = ?", hz, id);
+        } else {
+            id = insert(fanId, alarmId, FAN_HZ, hz, "AUTO", "AWAITING", null, now, null);
+            jdbc.update("UPDATE equipment_command SET result_detail = ?::jsonb WHERE command_id = ?",
+                    detail(Map.of("beforeRpm", beforeRpm == null ? 0 : beforeRpm)), id);
+        }
+        publishCurrent(id, fanId, FAN_HZ, hz, "AWAITING", now);
+        return id;
+    }
+
+    /** 승인 대기 명령 승인 → 실행 (PENDING, 1초 뒤 완료). 승인 대기가 아니면 409 COMMAND_NOT_AWAITING */
+    @Transactional
+    public CommandResult approve(long commandId, Long userId) {
+        Map<String, Object> c = awaiting(commandId);
+        long equipmentId = ((Number) c.get("equipment_id")).longValue();
+        Double value = c.get("value") == null ? null : ((Number) c.get("value")).doubleValue();
+        String runState = jdbc.queryForObject("SELECT run_state FROM equipment WHERE equipment_id = ?", String.class,
+                equipmentId);
+        if (!"RUN".equals(runState)) {
+            throw ApiException.conflict("EQUIPMENT_STOPPED", "셧다운된 설비입니다.");
+        }
+        OffsetDateTime now = clock.nowOffset();
+        jdbc.update("""
+                UPDATE equipment_command SET result = 'PENDING', approved_by = ?, approved_at = ?, expires_at = ?
+                WHERE command_id = ? AND result = 'AWAITING'
+                """, userId, now, now.plus(EXPIRES_IN), commandId);
+        publishCurrent(commandId, equipmentId, FAN_HZ, value, "SENT", now);
+        afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, FAN_HZ, value),
+                1_000, TimeUnit.MILLISECONDS));
+        return find(commandId);
+    }
+
+    /** 승인 대기 명령 거절 (DENIED). 승인 대기가 아니면 409 */
+    @Transactional
+    public CommandResult deny(long commandId, Long userId) {
+        Map<String, Object> c = awaiting(commandId);
+        long equipmentId = ((Number) c.get("equipment_id")).longValue();
+        Double value = c.get("value") == null ? null : ((Number) c.get("value")).doubleValue();
+        OffsetDateTime now = clock.nowOffset();
+        jdbc.update("""
+                UPDATE equipment_command SET result = 'DENIED', approved_by = ?, approved_at = ?, completed_at = ?,
+                       result_detail = COALESCE(result_detail, '{}'::jsonb) || '{"message": "담당자가 거절"}'::jsonb
+                WHERE command_id = ? AND result = 'AWAITING'
+                """, userId, now, now, commandId);
+        publishCurrent(commandId, equipmentId, FAN_HZ, value, "DENIED", now);
+        return find(commandId);
+    }
+
+    /** 알림이 끝나면 그 알림의 승인 대기 명령은 취소 */
+    @Transactional
+    public void cancelAwaiting(long alarmId) {
+        OffsetDateTime now = clock.nowOffset();
+        for (Map<String, Object> c : jdbc.queryForList(
+                "SELECT command_id, equipment_id, value FROM equipment_command WHERE alarm_id = ? AND result = 'AWAITING'",
+                alarmId)) {
+            long id = ((Number) c.get("command_id")).longValue();
+            jdbc.update("""
+                    UPDATE equipment_command SET result = 'CANCELLED', completed_at = ?,
+                           result_detail = COALESCE(result_detail, '{}'::jsonb) || '{"message": "알림 종료로 취소"}'::jsonb
+                    WHERE command_id = ?
+                    """, now, id);
+            publishCurrent(id, ((Number) c.get("equipment_id")).longValue(), FAN_HZ,
+                    c.get("value") == null ? null : ((Number) c.get("value")).doubleValue(), "CANCELLED", now);
+        }
+    }
+
+    private Map<String, Object> awaiting(long commandId) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT equipment_id, value, result FROM equipment_command WHERE command_id = ?", commandId);
+        if (rows.isEmpty()) {
+            throw ApiException.notFound("COMMAND_NOT_FOUND", "없는 명령입니다.");
+        }
+        if (!"AWAITING".equals(rows.get(0).get("result"))) {
+            throw ApiException.conflict("COMMAND_NOT_AWAITING", "승인 대기 중인 명령이 아닙니다.");
+        }
+        return rows.get(0);
+    }
+
     /** 명령 한 건 조회 */
     public CommandResult find(long commandId) {
         List<CommandResult> rows = jdbc.query("""
@@ -313,10 +406,12 @@ public class EquipmentCommandService {
         data.put("status", status);
         data.put("runState", runState);
         data.put("fanRpm", fanRpm);
-        Map<String, Object> row = jdbc.queryForMap("SELECT alarm_id, source FROM equipment_command WHERE command_id = ?",
-                commandId);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT alarm_id, source, approved_by FROM equipment_command WHERE command_id = ?", commandId);
         data.put("alarmId", row.get("alarm_id"));
         data.put("source", row.get("source"));
+        // 수동 승인으로 실행한 명령 (연계 서버가 '자동' 이용 로그를 남기지 않게)
+        data.put("approvedBy", row.get("approved_by"));
         feed.append("COMMAND_RESULT", at, data);
     }
 
@@ -342,7 +437,7 @@ public class EquipmentCommandService {
         }
     }
 
-    /** DB 결과 → API 상태. PENDING 은 SENT, 나머지는 그대로 */
+    /** DB 결과 → API 상태. PENDING 은 SENT, 나머지는 그대로 (AWAITING · DENIED 포함) */
     static String status(String result) {
         return "PENDING".equals(result) ? "SENT" : result;
     }

@@ -358,17 +358,20 @@ public class InternalQueryRepository {
             return byCommand;
         }
         jdbc.query("""
-                SELECT DISTINCT ON (c.alarm_id) c.alarm_id, c.equipment_id, e.name, c.value, c.result, c.requested_at,
-                       (c.result_detail ->> 'beforeRpm')::int AS before_rpm
+                SELECT DISTINCT ON (c.alarm_id) c.alarm_id, c.command_id, c.equipment_id, e.name, c.value, c.result,
+                       c.requested_at, c.approved_by, (c.result_detail ->> 'beforeRpm')::int AS before_rpm
                 FROM equipment_command c JOIN equipment e ON e.equipment_id = c.equipment_id
                 WHERE c.alarm_id IN (:ids) AND c.source = 'AUTO' AND c.command = 'FAN_HZ'
                 ORDER BY c.alarm_id, c.requested_at DESC, c.command_id DESC
                 """, new MapSqlParameterSource("ids", gas.stream().map(AlarmRow::alarmId).toList()), rs -> {
             int hz = (int) Math.round(rs.getDouble("value"));
+            String result = rs.getString("result");
+            // 승인 대기 · 거절 · 승인해서 실행한 명령은 수동 팬
+            boolean manual = "AWAITING".equals(result) || "DENIED".equals(result) || rs.getObject("approved_by") != null;
             byCommand.put(rs.getLong("alarm_id"), new InternalDto.FanAuto(null, rs.getLong("equipment_id"),
-                    rs.getString("name"), "AUTO", Math.round(hz * 100f / 60), hz * 30,
-                    rs.getObject("before_rpm", Integer.class), fanStatus(rs.getString("result")),
-                    odt(rs, "requested_at")));
+                    rs.getString("name"), manual ? "MANUAL" : "AUTO", Math.round(hz * 100f / 60), hz * 30,
+                    rs.getObject("before_rpm", Integer.class), fanStatus(result),
+                    odt(rs, "requested_at"), rs.getLong("command_id")));
         });
         List<Long> units = gas.stream().filter(r -> !byCommand.containsKey(r.alarmId()))
                 .map(AlarmRow::unitId).distinct().toList();
@@ -391,14 +394,14 @@ public class InternalQueryRepository {
             InternalDto.FanAuto f = byCommand.get(r.alarmId());
             if (f != null) {
                 result.put(r.alarmId(), new InternalDto.FanAuto(r.equipmentId(), f.fanEquipmentId(), f.fanName(),
-                        f.mode(), f.percent(), f.rpm(), f.beforeRpm(), f.status(), f.at()));
+                        f.mode(), f.percent(), f.rpm(), f.beforeRpm(), f.status(), f.at(), f.commandId()));
                 continue;
             }
             Object[] fan = unitFan.get(r.unitId());
             if (fan != null) {
                 String mode = Boolean.FALSE.equals(fan[2]) ? "MANUAL" : "AUTO";
                 result.put(r.alarmId(), new InternalDto.FanAuto(r.equipmentId(), (Long) fan[0], (String) fan[1], mode,
-                        null, null, null, "SKIPPED", null));
+                        null, null, null, "SKIPPED", null, null));
             }
         }
         return result;
@@ -473,7 +476,9 @@ public class InternalQueryRepository {
     /** equipment_command.result → fanAuto.status */
     static String fanStatus(String result) {
         return switch (result) {
-            case "PENDING", "AWAITING" -> "SENT";
+            case "PENDING" -> "SENT";
+            case "AWAITING" -> "AWAITING";
+            case "DENIED" -> "DENIED";
             case "DONE", "DUPLICATE" -> "APPLIED";
             default -> "FAILED";
         };

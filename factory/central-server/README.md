@@ -218,3 +218,11 @@ com.gte.argos.factory
 - 사진: `ARGOS_FILES_DIR`(기본 `./data/files`)/thermal/날짜/ 에 저장, `file_asset`(THERMAL) → `sensor_event.image_file_id` · `roi`, `alarm.thermal_file`
 - ② 가 유실돼도 ① 의 stage 로 이벤트·경보를 만든다 (사진만 없음). `ts` 는 시간대 없으면 한국 시각, `+09:00` 도 받음
 - 기준값 화면 '변경 시뮬레이션' 응답에 `peaks [{ at, value }]` 추가
+
+## 배기팬 수동 승인 (2026-11-19)
+
+- `fan_auto = false` 인 배기팬은 가스 알림 때 `equipment_command` 에 `result = AWAITING`(source AUTO, 요청자 없음)만 남긴다. 경보로 올라가면 같은 명령의 목표만 60 Hz 로
+- `POST /api/v1/internal/commands/{id}/approve` `{ userId }` → `approved_by`·`approved_at`, PENDING 으로 실행 (1초 뒤 DONE)
+- `POST /api/v1/internal/commands/{id}/deny` `{ userId }` → DENIED. 승인 대기가 아니면 409 `COMMAND_NOT_AWAITING`
+- 알림을 종료하면 그 알림의 승인 대기 명령은 CANCELLED
+- 피드 `COMMAND_RESULT` 에 `approvedBy`, 알림 `fanAuto` 에 `commandId`, 상태 `AWAITING`·`DENIED`

@@ -108,6 +108,7 @@ public class AlarmStatusService {
         jdbc.update("UPDATE alarm SET status = 'CLOSED', closed_by = ?, closed_at = ?, close_reason = ? WHERE alarm_id = ?",
                 userId, now, closeReason(alarm.status()), alarmId);
         live.closeAlarm(alarm.unitId());
+        commands.cancelAwaiting(alarmId);
         commands.recoverFans(alarmId);
         return changed(alarmId, "CLOSED", userId, now);
     }
