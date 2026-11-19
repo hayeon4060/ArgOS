@@ -4,7 +4,8 @@
  * - 건조로 3대 모두: 같은 공정의 건조로마다 그 설비 기준을 받아서(판 번호 포함) 같은 종류 센서에
  *   '바꾼 칸만' 같은 값을 넣어 저장 (안 바꾼 칸은 그 설비에 저장된 값 그대로)
  *   (명세서·백엔드에 '여러 설비 한 번에' API 가 없어 설비마다 부름 — backend-notes 11장)
- * - 지속 조건(초)은 그 계절 저장된 값을 그대로 보냄
+ * - 지속 조건(초)과 하한 기준(lowWarn · lowAlarm, 전류 센서)은 그 계절 저장된 값을 그대로 보냄
+ *   (화면에 하한 입력 칸이 없어도, 빼고 보내면 서버에 저장된 하한이 지워짐 — DB sensor_threshold.low_warn · low_alarm)
  * - 일부 설비만 실패하면 실패한 설비 id 와 사유를 돌려줌 (화면이 '어느 설비가 저장되지 않았는지' 알림)
  */
 import { getThresholds, saveThresholds } from '@/api/thresholds'
@@ -20,7 +21,15 @@ function bodyOf(thresholds, changedByType, season, reason) {
       // 그 설비에 저장된 값 위에 바꾼 칸만 덮어씀
       const v = { ...savedOf(s, season), ...changedByType[s.type] }
       const now = s.seasons[season]
-      return { sensorId: s.sensorId, warn: v.warn, alarm: v.alarm, warnHoldSec: now.warnHoldSec, alarmHoldSec: now.alarmHoldSec }
+      return {
+        sensorId: s.sensorId,
+        warn: v.warn,
+        alarm: v.alarm,
+        lowWarn: now.lowWarn ?? null,
+        lowAlarm: now.lowAlarm ?? null,
+        warnHoldSec: now.warnHoldSec,
+        alarmHoldSec: now.alarmHoldSec,
+      }
     }),
   }
 }

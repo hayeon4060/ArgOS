@@ -214,7 +214,9 @@ watch(
       try {
         if (!weekCache.value[s.sensorId]) weekCache.value = { ...weekCache.value, [s.sensorId]: await getSensorWeek(s.sensorId) }
         const n = nextOf(s)
-        sim.value = await simulateThreshold({ sensorId: s.sensorId, warn: n.warn, alarm: n.alarm })
+        // 하한 기준(전류)은 화면에서 안 바꾸므로 저장된 값 그대로 — 빼면 서버가 하한 없이 셈
+        const saved = savedOf(s, season.value)
+        sim.value = await simulateThreshold({ sensorId: s.sensorId, warn: n.warn, alarm: n.alarm, lowWarn: saved.lowWarn ?? null, lowAlarm: saved.lowAlarm ?? null })
       } finally {
         simBusy.value = false
       }

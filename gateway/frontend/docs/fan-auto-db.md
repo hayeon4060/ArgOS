@@ -1,5 +1,7 @@
 # 배기팬 자동 제어 — DB 변경 (2026-11-19)
 
+> **2026-11-19 최종 ERD 확정 뒤 달라진 값이 있습니다** (명령 `FAN_HZ` · Hz 단위, `source` 에 `RECOVERY`, 수동 승인 등). 최종 값은 `docs/api/erd-final-frontend-check.md` 6장을 보세요.
+
 API 변경은 같은 폴더 `fan-auto-api.md`. 새 테이블은 없고, 컬럼 2개 추가 + CHECK 1개 수정입니다.
 기준값 관리를 공장 관리 창으로 옮긴 것은 DB 변경이 없습니다.
 

@@ -18,7 +18,8 @@ defineProps({
 
 const emit = defineEmits(['toggle'])
 
-const FAN_TEXT = `가스(CO) 주의 ${FAN_AUTO_PERCENT.WARN}% · 경보 ${FAN_AUTO_PERCENT.ALARM}%로 배기팬 회전수를 자동으로 올립니다.`
+// 최종 ERD: 알림이 끝나면 서버가 평소 회전수로 되돌림 (equipment_command.source = RECOVERY)
+const FAN_TEXT = `가스(CO) 주의 ${FAN_AUTO_PERCENT.WARN}% · 경보 ${FAN_AUTO_PERCENT.ALARM}%로 올리고, 알림이 끝나면 평소대로 되돌립니다.`
 </script>
 
 <template>

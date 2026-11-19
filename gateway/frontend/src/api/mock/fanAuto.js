@@ -8,13 +8,13 @@
  *   · MANUAL → status SKIPPED: 바꾸지 않음 (화면은 안내만)
  */
 import { editsOf } from './layoutData'
-import { FAN_AUTO_PERCENT, FAN_MAX_RPM } from '@/types/codes'
+import { FAN_AUTO_PERCENT, FAN_MAX_RPM, FAN_NORMAL_RPM } from '@/types/codes'
 
 /** 배기팬이 있는 설비 id → 배기팬 이름 */
 export const FAN_EQUIPMENT = { 26: '전착 건조로 배기팬', 28: '중도 부스 배기팬', 29: '중도 건조로 배기팬', 30: '상도 부스 배기팬', 31: '상도 건조로 배기팬' }
 
-/** 평소 회전수 (정격) */
-export const FAN_RATED_RPM = 1180
+/** 평소 회전수 — 최종 ERD 기준 40 Hz = 1,200 rpm (전에는 1,180 으로 적어 둠) */
+export const FAN_RATED_RPM = FAN_NORMAL_RPM
 
 /** 이 설비 배기팬이 자동인지 (배기팬이 없으면 null) */
 export function fanAutoMode(equipmentId) {

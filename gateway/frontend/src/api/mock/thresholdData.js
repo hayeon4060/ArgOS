@@ -78,8 +78,7 @@ export function equipmentThresholds(equipmentId) {
             season,
             {
               ...seasonThreshold(d, season),
-              lowWarn: null,
-              lowAlarm: null,
+              ...lowOf(d.type, usual),
               warnHoldSec: HOLD_SEC[d.type].warn,
               alarmHoldSec: HOLD_SEC[d.type].alarm,
               validFrom: `2026-${SEASON_START[season]}`,
@@ -91,6 +90,16 @@ export function equipmentThresholds(equipmentId) {
       }
     }),
   }
+}
+
+/**
+ * 하한 기준 (DB sensor_threshold.low_warn · low_alarm)
+ * - 전류만 있음: 평소 값의 90% 아래로 떨어지면 주의, 70% 아래면 경보 (벨트 끊김 · 정지) — DB 시드와 같은 규칙
+ * - 온도 · CO 는 null. 화면에는 아직 입력 칸이 없고, 저장할 때 받은 값을 그대로 돌려보냄 (saveFlow.js)
+ */
+function lowOf(type, usual) {
+  if (type !== 'CURRENT') return { lowWarn: null, lowAlarm: null }
+  return { lowWarn: Number((usual * 0.9).toFixed(1)), lowAlarm: Number((usual * 0.7).toFixed(1)) }
 }
 
 /* ───────── 7일 그래프 (설계안 series(): 30분 간격, 평소 값 근처 + 넘었던 순간 3번) ───────── */
