@@ -203,3 +203,18 @@ com.gte.argos.factory
 | `GET /api/v1/internal/alarms/{id}/series` | 알림 상세 그래프. 30분 이하 5초(`alarm_sensor_sample`), 넘으면 1분 평균 |
 | `PATCH`(또는 `POST`) `/api/v1/internal/equipment/{id}/settings` | `{ active?, fanAuto? }` 바로 저장, 배치 판 번호 안 올림. 배기팬 없으면 400 `NO_FAN` |
 | `GET /api/v1/internal/master` 의 `equipment[].fanAuto` | 배기팬 자기 값, 배기팬이 달린 건조로는 그 팬 값, 나머지 null |
+
+## VMS 열화상 받기 (2026-11-19, VMS 전송 규격 IR-301 시험용)
+
+| API | 내용 |
+| --- | --- |
+| `POST /api/v1/vms/ir` (JSON) | ① 평소 값 1초마다 `{ ts, type, serial, value, unit, quality, stage }` |
+| `POST /api/v1/vms/ir` (multipart) | ② 단계 진입: `meta`(① + `roi`) + `snapshot`(jpeg) |
+| `GET /api/v1/internal/files/{fileId}` | 저장한 사진 (연계 서버 `/thermal/images/{id}` 가 거쳐 감) |
+
+- 인증 없음 (시험용). 응답 200 이면 정상, 형식 오류는 400 `VALIDATION_FAILED`, 모르는 serial 은 404
+- 단계는 VMS 판정 그대로: 중앙은 다시 판정하지 않고 받은 단계로 이벤트(`rule = IR`)·경보(FIRE)를 만든다. 1 이 오면 이벤트 끝. 3 → 2 는 무시
+- 값은 1분 추이·실시간 현재값으로. 1초 원시값 테이블은 없다
+- 사진: `ARGOS_FILES_DIR`(기본 `./data/files`)/thermal/날짜/ 에 저장, `file_asset`(THERMAL) → `sensor_event.image_file_id` · `roi`, `alarm.thermal_file`
+- ② 가 유실돼도 ① 의 stage 로 이벤트·경보를 만든다 (사진만 없음). `ts` 는 시간대 없으면 한국 시각, `+09:00` 도 받음
+- 기준값 화면 '변경 시뮬레이션' 응답에 `peaks [{ at, value }]` 추가

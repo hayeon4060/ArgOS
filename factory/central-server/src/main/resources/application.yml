@@ -42,6 +42,8 @@ argos:
     # (2026-11-19 ERD V6) 위 days 대신 이 값을 쓴다: 1분 추이·이벤트 샘플·알림 센서 샘플 31일 보관
     # (통계·이력은 한 번에 30일까지 조회, docs/api/stats-history-30days.md). 이벤트·경보·명령 이력은 지우지 않는다
     keep-days: ${ARGOS_RETENTION_KEEP_DAYS:31}
+  # VMS 열화상 사진 등 중앙 서버가 받는 파일 저장 위치 (file_asset.path 는 이 폴더 기준 상대 경로)
+  files-dir: ${ARGOS_FILES_DIR:./data/files}
 
 management:
   endpoints:
