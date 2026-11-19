@@ -69,7 +69,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | M2 | `PATCH /checklists/{id}/items/{itemId}` | 공정 | |
 | M2 | `POST /checklists/{id}/report` | 공정 | 409 `ITEMS_NOT_DONE` |
 | M1 | `POST /me/push-token` · `DELETE /me/push-token` | 로그인 | |
-| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` | 공장 | 202, 결과는 SSE `command.result` |
+| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` 또는 `{ hz }` | 공장 | 202, 결과는 SSE `command.result`. 중앙 명령(테이블 명세서 v5): 끄기 `FAN_STOP`, 켜기 `FAN_HZ` 40, `rpm`(600~1,800) → `FAN_HZ` rpm÷30, `hz`(20~60) 그대로. 같은 명령 처리 중이면 409 `COMMAND_PENDING`, 범위 밖 400 `RPM_OUT_OF_RANGE`·`HZ_OUT_OF_RANGE`. SSE `command.result` 의 `command` 값도 `FAN_HZ`·`FAN_STOP`, `status` 에 `EXPIRED`·`CANCELLED` 추가 |
 | C4 | `POST /equipment/{id}/shutdown` `{ alarmId, reason }` | 공장 | 202 |
 | C4 | `POST /processes/{id}/shutdown` `{ alarmId, equipmentIds, reason }` | 공장 | 202, 이미 정지된 설비는 건너뜀 |
 | C4 | `POST /processes/{id}/call-workers` `{ alarmId }` | 공장 | |
@@ -108,7 +108,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 
 권한: 본사·공장 관리자. 모든 API 가 같은 조건을 받습니다:
 `from`·`to`(필수, `2026-11-10` 형식, 끝 날짜 포함) · `factoryId` · `processId` · `sensorType`(CURRENT·TEMP·CO·IR) · `level`(WARN·ALARM) · `shift`(DAY 07~19시 · NIGHT).
-센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 1년.
+센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 30일 (2026-11-19 변경, 넘으면 400 `RANGE_TOO_LARGE` "한 번에 30일까지 조회할 수 있습니다.").
 
 | API | 비고 |
 | --- | --- |
@@ -267,6 +267,14 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` | CLOVA OCR |
 | `ARGOS_FILES_DIR` | 올린 파일 저장 위치 (기본 `./data/files`) |
 
+### ERD V6 반영 (`V6__erd_v6.sql`, 기본값·허용 값은 v5 DDL)
+
+- `chat_read`: `last_msg_id` → `last_read_msg_id`, `read_at` → `updated_at`
+- `chat_message.body`: TEXT (길이는 API 에서 1,000자)
+- `file_asset`: 종류에 `THERMAL`, `sensor_id`·`captured_at` 추가 (V6: 영상은 저장하지 않음)
+- 로그인 쪽 V1 테이블(`login_history.user_id` NULL 허용, `activity_log.summary` TEXT 등)은 그대로
+- 중앙 서버 쪽 변경(경보 종료 사유, 이벤트 규칙 `HI`/`LO`, 설비 명령 `FAN_HZ` 등)은 `factory/central-server/README.md` 참고
+
 ## 아직 없는 것
 
 Kafka(엣지 → 수집 서버)·Redis(수집 서버 → 중앙 서버) 연동 (지금은 HTTP 와 1초 폴링), `thermal.frame`,
@@ -283,3 +291,65 @@ Kafka(엣지 → 수집 서버)·Redis(수집 서버 → 중앙 서버) 연동 (
 - 응답 본문 스키마는 대부분 `Map` 이라 필드 목록이 자세히 나오지 않는다. 필드 설명은 이 문서를 기준으로 본다.
 - Postman 컬렉션: `docs/postman/ArgOS-gateway.postman_collection.json` (로그인하면 토큰 자동 저장)
 - 환경 변수 `ARGOS_API_DOCS=false` 면 두 주소 모두 꺼진다.
+
+## 2026-11-19 배기팬 자동 제어 · 설비 설정 · 통계·이력 개편
+
+프론트 문서 `gateway/frontend/docs/fan-auto-api.md`, `equipment-settings-api.md`, `stats-history-api.md` 기준.
+
+### 배기팬 자동 제어 (서버가 함, 새 주소 없음)
+
+- 가스(GAS) 알림이 주의로 생기면 그 관제 단위 배기팬 **45Hz(75%, 1,350rpm)**, 경보로 생기거나 올라가면 **60Hz(100%, 1,800rpm)**. 중앙 서버가 `equipment_command` 에 `source = AUTO`, `alarm_id` 로 남김
+- `fan_auto = false`(수동)면 명령 없음. 이미 그 회전수 이상이면 보내지 않음. 화재(FIRE)는 대상 아님
+- 알림이 끝나면(사람이 종료) 그 알림 때 바꾼 팬을 **40Hz 로 되돌림** (`source = RECOVERY`). 프론트 문서는 '그대로 둠' 가정이었는데 DB 설계(RECOVERY)를 따름
+- 이용 로그 `FAN` (요청자 없음): `상도 건조로 배기팬 45Hz · 1350rpm (가스 주의 자동)`
+- 명령 결과가 바뀌면 SSE `command.result` 와 함께 `alarm.updated`(`fanAuto` 포함)
+
+### 알림 응답 `fanAuto`
+
+`GET /alarms` 의 `items[]`, `GET /alarms/{id}/detail`, `GET /alarms/{id}/response`, `GET /stats/alarms/{id}`.
+가스 알림이 아니거나 배기팬이 없으면 `null`.
+
+```json
+{ "equipmentId": 41, "fanEquipmentId": 42, "fanName": "상도 건조로 배기팬", "mode": "AUTO", "percent": 75,
+  "rpm": 1350, "beforeRpm": 1200, "status": "APPLIED", "at": "2026-11-16T09:02:59+09:00" }
+```
+
+- `status`: SENT(보냄) · APPLIED(반영) · FAILED(실패·만료·취소) · SKIPPED(명령 없음)
+- `mode`: 자동 명령이 있으면 AUTO, 없으면 지금 스위치 값 (수동이면 MANUAL + SKIPPED)
+- `fanEquipmentId` 추가 (배기팬 설비 행). `equipmentId` 는 배기팬이 달린 화면 설비(건조로)
+
+### 설비 설정 `PATCH /equipment/{equipmentId}/settings`
+
+- 요청 `{ "active": false }` 또는 `{ "fanAuto": true }` (바꾼 값만). 응답 `{ equipmentId, active, fanAuto }`
+- 건조로처럼 배기팬이 달린 설비에 `fanAuto` 를 보내면 그 배기팬들의 `fan_auto` 를 바꿈. 배기팬이 없으면 400 `NO_FAN`
+- 배치 판 번호(version)는 올리지 않음. 이용 로그 `LAYOUT` (`상도 건조로 배기팬 수동`), SSE `equipment.updated { equipmentId, processId }`
+- 권한: 기준값 저장과 같음
+- `GET /equipment/{id}/thresholds` 에 `active`, `fanAuto` 추가
+- `PUT /processes/{id}/layout` 의 `equipment.update[].fanAuto` 도 받음 (웹은 이제 안 보냄)
+
+### 통계·이력
+
+| API | 변경 |
+| --- | --- |
+| `GET /stats/alarms` | 조건 `hazard`(FIRE·GAS), `status`(ACTIVE = 해제 전 전부 · CLOSED · OPEN · ACKED · ACTING), `siteId` 추가 |
+| `GET /stats/alarms/{alarmId}` | **신규** 알림 상세 패널. 범위 밖·없는 알림은 404 `ALARM_NOT_FOUND` |
+| `GET /stats/export` | 조건 `hazard`·`status`·`siteId` 추가. CSV 열을 문서 순서로 바꿈 (알림 번호 … 조치 시간(분)) |
+| `GET /stats/heatmap` | 화면에서 안 씀. 지우지 않고 둠 |
+
+`GET /stats/alarms/{alarmId}` 응답: `id, level, status, hazard, location, factoryId, processId, equipmentId, raisedAt, closedAt,
+actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, series, thermal, timeline, checklist, shutdown`
+
+- `series`: `from`(원인 센서가 처음 기준을 넘은 시각) ~ `to`(해제 시각, 열려 있으면 지금). 30분 이하 `intervalSec: 5`(알림 동안 저장한 5초 값),
+  넘으면 60(1분 평균). `sensors[]` = 관제 단위 센서 전부(IR 제외) `{ sensorId, tag, type, unit, warn, alarm, lowWarn, lowAlarm, trigger, points: [[시각, 값]] }`.
+  `warn·alarm` 은 알림이 났을 때 적용 중이던 기준값
+- `thermal`: `{ imageUrl, capturedAt, max, avg, maxPoint, cameraTag }`. 아직 사진이 없어 `imageUrl: null` (VMS 연동 후 채움)
+- `timeline[]`: `{ at, step, by, text }`, step = RAISED · ACK · CHECKLIST · REPORTED · SHUTDOWN · CLOSED (그 밖의 조치는 그 이름 그대로)
+- `checklist`: 주의일 때 `{ assignee, doneCount, totalCount, items: [{ seq, content, doneAt, result, memo }] }`, 경보면 null
+- `shutdown`: 경보일 때 `{ steps: [{ label, at }] }`, 주의면 null
+
+### ERD V6 · 조회 기간 30일 (2026-11-19)
+
+- 열화상 VMS 실시간 영상 주소 `streamUrl` (중앙 `sensor.stream_url`): `GET /thermal/{cameraId}/latest`, 알림 상세·경보 창의 `thermal`, `GET /fires/{id}` 의 `thermal` (`cameraTag` 도 같이). 값이 없으면 null
+  - 주소 넣기: 중앙 `PUT /api/v1/internal/sensors/{sensorId}` `{ "streamUrl": "http://..." }` (빈 글자면 지움)
+- 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음, `file_asset` 종류에 VIDEO 없음)
+- `/stats/*` 조회 기간 최대 30일

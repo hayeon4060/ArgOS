@@ -126,6 +126,18 @@ public class CentralClient {
                 new ParameterizedTypeReference<Envelope<Alarm>>() { });
     }
 
+    public CentralDto.AlarmSeries alarmSeries(long alarmId) {
+        return get(u -> u.path("/api/v1/internal/alarms/{id}/series").build(alarmId),
+                new ParameterizedTypeReference<Envelope<CentralDto.AlarmSeries>>() { });
+    }
+
+    /** 설비 설정 바로 저장 { active?, fanAuto? } */
+    public Map<String, Object> equipmentSettings(long equipmentId, Map<String, Object> body) {
+        // 기본 HTTP 클라이언트(HttpURLConnection)는 PATCH 를 못 보내므로 POST 로 보낸다 (중앙은 둘 다 받음)
+        return send("POST", "/api/v1/internal/equipment/" + equipmentId + "/settings", body,
+                new ParameterizedTypeReference<Envelope<Map<String, Object>>>() { });
+    }
+
     public Alarm ackAlarm(long alarmId, Long userId) {
         return post("/api/v1/internal/alarms/" + alarmId + "/ack", actor(userId),
                 new ParameterizedTypeReference<Envelope<Alarm>>() { });

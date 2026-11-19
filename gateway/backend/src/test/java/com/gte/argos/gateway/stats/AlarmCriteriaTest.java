@@ -52,6 +52,21 @@ class AlarmCriteriaTest {
         assertThat(new AlarmCriteria(D, D, null, 13L, null, null, null).matches(alarmTemp, HQ, null)).isFalse();
     }
 
+    @Test
+    void 유형_상태_사업장으로_거른다() {
+        CentralDto.Alarm fire = alarm(3, "TE", "2026-11-16T09:10:00+09:00");
+        AlarmCriteria gas = new AlarmCriteria(D, D, null, null, null, null, null, "GAS", null, null);
+        AlarmCriteria fireOnly = new AlarmCriteria(D, D, null, null, null, null, null, "FIRE", null, null);
+        AlarmCriteria active = new AlarmCriteria(D, D, null, null, null, null, null, null, "ACTIVE", null);
+        AlarmCriteria closed = new AlarmCriteria(D, D, null, null, null, null, null, null, "CLOSED", null);
+        AlarmCriteria otherSite = new AlarmCriteria(D, D, null, null, null, null, null, null, null, 9L);
+        assertThat(gas.matches(fire, HQ, null)).isFalse();
+        assertThat(fireOnly.matches(fire, HQ, null)).isTrue();
+        assertThat(active.matches(fire, HQ, null)).isTrue();
+        assertThat(closed.matches(fire, HQ, null)).isFalse();
+        assertThat(otherSite.matches(fire, HQ, null)).isFalse();
+    }
+
     private static CentralDto.Alarm alarm(int stage, String type, String at) {
         OffsetDateTime t = OffsetDateTime.parse(at);
         CentralDto.Event e = new CentralDto.Event(1, 301, type + "-301", type, "A", 41, 12, stage, "DURATION", t, null,

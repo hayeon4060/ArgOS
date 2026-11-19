@@ -48,7 +48,7 @@ public class SensorDefinitionLoader {
         return jdbc.query("""
                 SELECT s.sensor_id, s.tag, s.sensor_type, s.sample_sec,
                        t.threshold_id, t.warn_value, t.alarm_value, t.low_warn, t.low_alarm,
-                       t.warn_samples, t.alarm_samples
+                       t.warn_samples, t.alarm_samples, t.release_samples, t.release_margin, t.immediate_value
                 FROM sensor s
                 LEFT JOIN LATERAL (
                     SELECT *
@@ -71,7 +71,10 @@ public class SensorDefinitionLoader {
                         (Double) rs.getObject("low_warn"),
                         (Double) rs.getObject("low_alarm"),
                         rs.getInt("warn_samples"),
-                        rs.getInt("alarm_samples"));
+                        rs.getInt("alarm_samples"),
+                        rs.getInt("release_samples"),
+                        rs.getDouble("release_margin"),
+                        (Double) rs.getObject("immediate_value"));
             }
             List<SensorDef.UnitMembership> units = new ArrayList<>();
             membership.getOrDefault(sensorId, Map.of())

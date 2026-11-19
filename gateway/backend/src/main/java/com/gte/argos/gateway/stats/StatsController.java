@@ -80,9 +80,18 @@ public class StatsController {
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
             @RequestParam(required = false) String shift, @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String hazard, @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long siteId,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(service.history(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift),
+        return ApiResponse.ok(service.history(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift,
+                        hazard, status, siteId),
                 sort, Math.max(0, page), Math.max(1, Math.min(500, size))));
+    }
+
+    /** 알림 상세 패널: 센서 그래프 · 열화상 · 조치 이력 · 체크리스트 / 셧다운 단계 */
+    @GetMapping("/stats/alarms/{alarmId}")
+    public ApiResponse<Map<String, Object>> alarmDetail(@org.springframework.web.bind.annotation.PathVariable long alarmId) {
+        return ApiResponse.ok(service.alarmDetail(alarmId));
     }
 
     /** CSV (기본) 또는 format=xlsx 엑셀 파일 */
@@ -92,9 +101,11 @@ public class StatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
-            @RequestParam(required = false) String shift, @RequestParam(defaultValue = "csv") String format) {
+            @RequestParam(required = false) String shift, @RequestParam(defaultValue = "csv") String format,
+            @RequestParam(required = false) String hazard, @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long siteId) {
         StatsService.Export file = service.export(
-                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift), format);
+                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift, hazard, status, siteId), format);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
                         .filename(file.fileName(), java.nio.charset.StandardCharsets.UTF_8).build().toString())

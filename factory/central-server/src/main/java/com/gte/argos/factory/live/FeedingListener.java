@@ -7,6 +7,7 @@ import com.gte.argos.factory.store.JdbcJudgementStore;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,11 +24,18 @@ public class FeedingListener implements JudgementListener {
     private final ZoneId zone;
     private final Map<Long, Long> sensorByEventKey = new HashMap<>();
     private final Map<Long, Long> unitByAlarmKey = new HashMap<>();
+    private final Map<Long, Integer> gasStageByAlarmKey = new HashMap<>();
+    private final List<GasAlarm> gasAlarms = new ArrayList<>();
 
     public FeedingListener(JdbcJudgementStore store, LiveFeed feed, ZoneId zone) {
         this.store = store;
         this.feed = feed;
         this.zone = zone;
+    }
+
+    @Override
+    public void onReading(long sensorId, Instant ts, double value) {
+        store.onReading(sensorId, ts, value);
     }
 
     @Override
@@ -37,8 +45,8 @@ public class FeedingListener implements JudgementListener {
 
     @Override
     public void onEventOpened(long eventKey, long sensorId, long thresholdId, Stage stage, Instant startedAt,
-                              Instant detectedAt, boolean lowSide, List<Sample> backlog) {
-        store.onEventOpened(eventKey, sensorId, thresholdId, stage, startedAt, detectedAt, lowSide, backlog);
+                              Instant detectedAt, boolean lowSide, String rule, List<Sample> backlog) {
+        store.onEventOpened(eventKey, sensorId, thresholdId, stage, startedAt, detectedAt, lowSide, rule, backlog);
         sensorByEventKey.put(eventKey, sensorId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("eventId", store.eventId(eventKey));
@@ -46,6 +54,7 @@ public class FeedingListener implements JudgementListener {
         data.put("stage", stage.code());
         data.put("startedAt", odt(startedAt));
         data.put("lowSide", lowSide);
+        data.put("rule", rule);
         feed.append("EVENT_OPENED", odt(detectedAt), data);
     }
 
@@ -78,6 +87,7 @@ public class FeedingListener implements JudgementListener {
     public void onAlarmOpened(long alarmKey, long unitId, Stage stage, Hazard hazard, Instant raisedAt) {
         store.onAlarmOpened(alarmKey, unitId, stage, hazard, raisedAt);
         unitByAlarmKey.put(alarmKey, unitId);
+        gasChanged(alarmKey, unitId, stage, hazard);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("alarmId", store.alarmId(alarmKey));
         data.put("unitId", unitId);
@@ -94,6 +104,7 @@ public class FeedingListener implements JudgementListener {
     @Override
     public void onAlarmUpdated(long alarmKey, Stage stage, Hazard hazard, Instant at) {
         store.onAlarmUpdated(alarmKey, stage, hazard, at);
+        gasChanged(alarmKey, unitByAlarmKey.get(alarmKey), stage, hazard);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("alarmId", store.alarmId(alarmKey));
         data.put("unitId", unitByAlarmKey.get(alarmKey));
@@ -114,6 +125,35 @@ public class FeedingListener implements JudgementListener {
 
     public void flush() {
         store.flush();
+    }
+
+    /** 사람이 경보를 닫음: 그 단위 알림의 센서 값 저장을 멈춘다 */
+    public void alarmClosed(long unitId) {
+        store.forgetUnit(unitId);
+    }
+
+    /** 이번 ingest 에서 새로 생기거나 단계가 올라간 가스 알림 (배기팬 자동 제어용). 꺼내면 비워진다 */
+    public List<GasAlarm> drainGasAlarms() {
+        List<GasAlarm> out = List.copyOf(gasAlarms);
+        gasAlarms.clear();
+        return out;
+    }
+
+    private void gasChanged(long alarmKey, Long unitId, Stage stage, Hazard hazard) {
+        if (hazard != Hazard.GAS || unitId == null) {
+            return;
+        }
+        Integer before = gasStageByAlarmKey.get(alarmKey);
+        if (before == null || stage.code() > before) {
+            gasStageByAlarmKey.put(alarmKey, stage.code());
+            Long alarmId = store.alarmId(alarmKey);
+            if (alarmId != null) {
+                gasAlarms.add(new GasAlarm(alarmId, unitId, stage.code()));
+            }
+        }
+    }
+
+    public record GasAlarm(long alarmId, long unitId, int stage) {
     }
 
     private OffsetDateTime odt(Instant i) {

@@ -112,19 +112,22 @@ com.gte.argos.factory
 | `GET /internal/alarms/{id}` | 경보 한 건 |
 | `POST /internal/alarms/{id}/ack` `{ "userId": 7 }` | 확인 (OPEN → ACKED). 이미 확인됐으면 409 `ALARM_ALREADY_ACKED` |
 | `POST /internal/alarms/{id}/acting` `{ "userId": 7 }` | 조치 중 (→ ACTING) |
-| `POST /internal/alarms/{id}/close` `{ "userId": 7 }` | 종료 (→ CLOSED). 진행 중 이벤트가 있으면 409 `VALUE_STILL_OVER` + `details.sensors` |
+| `POST /internal/alarms/{id}/close` `{ "userId": 7 }` | 종료 (→ CLOSED). 진행 중 이벤트가 있으면 409 `VALUE_STILL_OVER` + `details.sensors`. 종료 사유 `closeReason`: 조치 중(ACTING)이었으면 `ACTION_DONE`, 아니면 `MANUAL` (7일치는 `AUTO_RECOVERED`). 경보 중 주파수를 바꾼 배기팬은 40Hz 로 복귀 명령(`trigger: RECOVERY`) |
 | `GET /internal/feed?after=0&limit=500` | 실시간 변화. 연계 서버가 1초마다 `after=next` 로 가져가 SSE 로 전달 |
 
 설비 명령 (연계 서버 → 중앙)
 
 | API | 설명 |
 | --- | --- |
-| `POST /internal/equipment/{id}/commands` `{ "command": "SHUTDOWN", "alarmId": 1051, "userId": 7 }` | 202 `{ commandId, status: "SENT" }`. 명령: `FAN_ON`·`FAN_OFF`·`FAN_RPM`(value 600~1800)·`SHUTDOWN`·`RESTART` |
+| `POST /internal/equipment/{id}/commands` `{ "command": "FAN_HZ", "value": 50, "userId": 7 }` | 202 `{ commandId, status: "SENT" \| "DUPLICATE", value, trigger }`. 명령: `FAN_HZ`(value 20~60 Hz, 평상시 40)·`FAN_STOP`·`SHUTDOWN`·`RESTART` |
 | `GET /internal/commands/{id}` | 명령 한 건 |
 
 실제 설비가 없어 응답은 시뮬레이션입니다 (팬 1초, 셧다운·재가동 3초 뒤 완료). 셧다운은 `RUN → STOPPING → STOPPED`,
-배기팬은 `fan_rpm` 이 바뀝니다. 진행은 피드 `COMMAND_RESULT`(SENT → DONE · FAILED). 센서값은 바꾸지 않습니다 (값 회복은 봇에 직접 명령).
-오류: `COMMAND_NOT_ALLOWED`, `NOT_A_FAN`, `RPM_OUT_OF_RANGE`, `EQUIPMENT_STOPPED`, `ALREADY_STOPPED`, `ALREADY_RUNNING`.
+배기팬은 `fan_rpm` = 주파수 × 30 (40Hz = 1200rpm). 진행은 피드 `COMMAND_RESULT`(SENT → DONE · FAILED · EXPIRED · CANCELLED). 센서값은 바꾸지 않습니다 (값 회복은 봇에 직접 명령).
+- DB 결과(`equipment_command.result`): `PENDING`(API 에서는 SENT) → `DONE`·`FAILED`·`EXPIRED`(30초 `expires_at` 지남)·`CANCELLED`(셧다운하면 처리 중 팬 명령 취소). 같은 설비에 같은 명령·값이 처리 중이면 `DUPLICATE` 로 기록만 하고 실행 안 함
+- `result_detail`: `{ targetHz, outputHz, message }`
+- `SHUTDOWN`·`RESTART` 는 테이블 명세서 v5 에 없지만 경보 셧다운 시연에 써서 남겨 둠
+오류: `COMMAND_NOT_ALLOWED`(예전 `FAN_ON`·`FAN_OFF`·`FAN_RPM` 포함), `NOT_A_FAN`, `HZ_OUT_OF_RANGE`, `EQUIPMENT_STOPPED`, `ALREADY_STOPPED`, `ALREADY_RUNNING`.
 
 기준값 (연계 서버 → 중앙)
 
@@ -153,6 +156,21 @@ com.gte.argos.factory
 `EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `THRESHOLD_CHANGED`, `MASTER_CHANGED`, `RESET`.
 `bootId` 가 바뀌면 중앙 서버가 다시 켜진 것이므로 `after=0` 부터, `gap=true` 면 `status`·`alarms` 를 다시 조회합니다.
 
+## ERD V6 반영 (`V4__erd_v6.sql`)
+
+`docs/erd/ArgOS_테이블명세서_v5.xlsx` 기준. 판정은 지금처럼 중앙 서버가 합니다 (v5 의 Node-RED 엣지·Kafka 는 범위 밖). 컬럼·허용 값만 맞췄습니다.
+
+| 테이블 | 바뀐 것 |
+| --- | --- |
+| `sensor_event` | `edge_key`(공장 코드-태그-시작 시각, 예 `P5-TE-305-20261116T090000`, UNIQUE), `max_stage`, `rule` = `HI`·`LO`·`AVG`·`IMMEDIATE`·`IR` (예전 `DURATION` → 하한 이벤트 `LO`, 나머지 `HI`), `roi`·`image_file_id`·`video_file_id`·`plc_ok`(비워 둠). API 이벤트에 `maxStage`·`edgeKey` 추가 |
+| `sensor_threshold` | `release_samples`(복귀 연속 수), `release_margin`(복귀 여유), `alarm_avg_sec`(예약), `immediate_value`(이 값 이상이면 바로 경보, 규칙 `IMMEDIATE`). 기본값 2단계 6 · 3단계 3 · 복귀 6 · 여유 0.05. **기존 행은 지속 횟수 그대로(24·6), 복귀 여유 0** 이라 판정이 바뀌지 않음. 기준값을 고쳐 저장하면 복귀 값들은 이전 행을 그대로 이어 받음 |
+| `sensor_trend` | `lost_n`(통신 끊김 수, 지금 입력에 품질 값이 없어 0) |
+| `sensor_daily` | 새 테이블. 1분 추이를 하루로 집계(샘플 수 가중 평균·최소·최대·n·lost_n). 10분마다 어제·오늘, 7일치 가져오기 뒤 전체, 1분 추이를 지우기 전에 그 날짜를 집계. 일 집계는 지우지 않음. 리셋하면 11/16 이후를 지우고 11/16 을 다시 집계 |
+| `alarm` | `close_reason` (`AUTO_RECOVERED`·`ACTION_DONE`·`MANUAL`). API 경보에 `closeReason` |
+| `equipment_command` | 명령 `FAN_HZ`·`FAN_STOP`, 결과 7가지, `trigger`(`APPROVED`·`RECOVERY`), `expires_at`, `result_detail`. 예전 행은 `FAN_RPM` → `FAN_HZ`(rpm÷30), `OK` → `DONE`, `FAIL` → `FAILED` |
+
+명세서와 다르게 둔 것: 컬럼 길이(코드 varchar(20) 등 지금이 더 김), `sensor_trend.n`·`sample_sec` 은 int, `SHUTDOWN`·`RESTART` 명령.
+
 ## 아직 안 한 것
 
 - Redis 입력 어댑터 (봇 → 중앙). `LiveJudgementService.ingest()` 를 부르면 됨
@@ -160,3 +178,28 @@ com.gte.argos.factory
 - 설비 명령을 봇(미니 PC)에 실제로 전달 (Redis 설계 후)
 - 화재 판정 (화재 시나리오 데이터가 오면)
 - 서버 재시작 때 진행 중이던 실시간 이벤트 이어 받기 (지금은 리셋으로 정리)
+
+## 2026-11-19 최신 DDL 반영 (배기팬 자동 제어 · 통계·이력)
+
+`V4__erd_v6.sql` 에 더한 것 (`db/ArgOS ERD V6.sql`, 기본값·허용 값은 `docs/erd/argos_ddl_v5_postgresql.sql`):
+
+| 대상 | 내용 |
+| --- | --- |
+| `equipment_command` | `trigger` 대신 `source`(USER · AUTO · RECOVERY), `approved_by`·`approved_at`, 결과 `AWAITING`·`DENIED` 추가. 셧다운 시연용 SHUTDOWN · RESTART 는 남김 |
+| `equipment.fan_auto` | 배기팬 자동 제어 스위치. 지금 배기팬 3대는 true |
+| `alarm_sensor_sample` | 알림이 열려 있는 동안 관제 단위 센서 전부(IR 제외)의 5초 값. 기존 알림은 원인 이벤트 샘플을 옮겨 둠 |
+| `alarm (hazard, raised_at)` 인덱스 | 알림 이력 유형 거르기 |
+
+- 배기팬 자동 제어 `FanAutoService`: 실시간 가스 알림 주의 45Hz · 경보 60Hz (`fan_auto` 인 팬, 이미 그 이상이면 안 보냄). 7일치 가져오기에서는 보내지 않음
+- 명령 `result_detail` 에 `beforeRpm` (바꾸기 전 회전수). 피드 `COMMAND_RESULT` 에 `alarmId`·`source`
+- 수동 승인(AWAITING → PENDING · DENIED)은 칸만 있고 흐름은 없음 (웹에 승인 버튼 없음, 수동이면 안내만)
+- 보관: 1분 추이 · 이벤트 샘플 · 알림 센서 샘플 **31일** (`argos.retention.keep-days`, `ARGOS_RETENTION_KEEP_DAYS`, 기본 31. 통계·이력 조회가 30일까지라서). 예전 `days`(7) 는 안 씀. 경보·이벤트·명령 이력은 지우지 않음
+- V6: `sensor.stream_url` (VMS 실시간 영상 주소, `PUT /internal/sensors/{id}` `{ streamUrl }` 로 넣음, master 의 `sensors[].streamUrl`). 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음)
+
+| API | 내용 |
+| --- | --- |
+| `GET /api/v1/internal/alarms?hazard=` | 유형 조건 |
+| `GET /api/v1/internal/alarms/{id}` 등 알림 응답 | `fanAuto` 추가 (가스 알림만) |
+| `GET /api/v1/internal/alarms/{id}/series` | 알림 상세 그래프. 30분 이하 5초(`alarm_sensor_sample`), 넘으면 1분 평균 |
+| `PATCH`(또는 `POST`) `/api/v1/internal/equipment/{id}/settings` | `{ active?, fanAuto? }` 바로 저장, 배치 판 번호 안 올림. 배기팬 없으면 400 `NO_FAN` |
+| `GET /api/v1/internal/master` 의 `equipment[].fanAuto` | 배기팬 자기 값, 배기팬이 달린 건조로는 그 팬 값, 나머지 null |

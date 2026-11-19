@@ -1,5 +1,6 @@
 package com.gte.argos.gateway.alarm;
 
+import com.gte.argos.gateway.central.CentralDto;
 import com.gte.argos.gateway.central.CentralDto.Alarm;
 import com.gte.argos.gateway.central.CentralDto.Event;
 import com.gte.argos.gateway.central.Codes;
@@ -30,6 +31,25 @@ public final class AlarmViews {
         return m.location(a.processId(), equipmentId);
     }
 
+    /** 가스 알림의 배기팬 자동 제어 (fan-auto-api.md 2장). 가스가 아니거나 배기팬이 없으면 null */
+    public static Map<String, Object> fanAuto(Alarm a) {
+        CentralDto.FanAuto f = a.fanAuto();
+        if (f == null || !"GAS".equals(a.hazard())) {
+            return null;
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("equipmentId", f.equipmentId());
+        m.put("fanEquipmentId", f.fanEquipmentId());
+        m.put("fanName", f.fanName());
+        m.put("mode", f.mode());
+        m.put("percent", f.percent());
+        m.put("rpm", f.rpm());
+        m.put("beforeRpm", f.beforeRpm());
+        m.put("status", f.status());
+        m.put("at", f.at());
+        return m;
+    }
+
     /** 알림 목록 한 줄 */
     public static Map<String, Object> item(Alarm a, MasterCache.Snapshot m, Map<Long, String> userNames,
                                            Checklist checklist) {
@@ -58,6 +78,7 @@ public final class AlarmViews {
         row.put("ackedAt", a.ackedAt());
         row.put("closedAt", a.closedAt());
         row.put("valueStillOver", a.valueStillOver());
+        row.put("fanAuto", fanAuto(a));
         if (checklist != null) {
             Map<String, Object> c = new LinkedHashMap<>();
             c.put("id", checklist.id());

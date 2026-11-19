@@ -192,6 +192,11 @@ public class StatsService {
         return out;
     }
 
+    /** GET /stats/alarms/{alarmId} — 알림 상세 패널 */
+    public Map<String, Object> alarmDetail(long alarmId) {
+        return alarms.historyDetail(alarmId);
+    }
+
     /** GET /stats/export?format=csv — 지금 조건 그대로 알림 이력 파일 */
     public Export export(AlarmCriteria c, String format) {
         UserScope scope = scope(c);
@@ -201,8 +206,10 @@ public class StatsService {
         }
         MasterCache.Snapshot m = masterCache.get();
         List<Map<String, Object>> rows = alarms.items(list, m);
-        List<String> header = List.of("발생 시각", "공장", "공정", "위치", "센서", "센서 종류", "측정값", "기준", "단위", "단계",
-                "상태", "확인자", "조치 담당자", "체크리스트", "조치 시간(분)", "종료 시각");
+        // 열 순서: stats-history-api.md 3장 (2026-11-19)
+        List<String> header = List.of("알림 번호", "발생 시각", "해제 시각", "유형", "공장", "공정", "설비", "등급",
+                "알림 센서", "센서 종류", "발생 값", "기준값", "단위", "상태", "확인자", "조치", "조치 담당자",
+                "체크리스트", "조치 시간(분)");
         List<List<Object>> table = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
             Alarm a = list.get(i);
@@ -211,13 +218,18 @@ public class StatsService {
             CentralDto.Process p = m.process(a.processId());
             @SuppressWarnings("unchecked")
             Map<String, Object> ck = (Map<String, Object>) r.get("checklist");
+            CentralDto.Equipment eq = r.get("equipmentId") == null ? null
+                    : m.equipment(((Number) r.get("equipmentId")).longValue());
             table.add(java.util.Arrays.asList(
+                    a.alarmId(),
                     a.raisedAt() == null ? "" : CSV_TIME.format(a.raisedAt().atZoneSameInstant(SimTime.ZONE)),
-                    f == null ? "" : f.name(), p == null ? "" : p.name(), r.get("location"), r.get("sensorTag"),
-                    r.get("sensorType"), r.get("value"), r.get("threshold"), r.get("unit"), Codes.stageName(a.stage()),
-                    a.status(), r.get("ackedBy"), r.get("assignee"),
-                    ck == null ? "" : ck.get("doneCount") + "/" + ck.get("totalCount"), r.get("actionMinutes"),
-                    a.closedAt() == null ? "" : CSV_TIME.format(a.closedAt().atZoneSameInstant(SimTime.ZONE))));
+                    a.closedAt() == null ? "" : CSV_TIME.format(a.closedAt().atZoneSameInstant(SimTime.ZONE)),
+                    hazardName(a.hazard()), f == null ? "" : f.name(), p == null ? "" : p.name(),
+                    eq == null ? a.unitName() : eq.name(), gradeName(a), r.get("sensorTag"),
+                    sensorTypeName((String) r.get("sensorType")), r.get("value"), r.get("threshold"), r.get("unit"),
+                    statusName(a.status()), r.get("ackedBy"), a.stage() >= 3 ? "설비 셧다운" : (ck == null ? "" : "체크리스트"),
+                    r.get("assignee"), a.stage() >= 3 || ck == null ? "" : ck.get("doneCount") + "/" + ck.get("totalCount"),
+                    r.get("actionMinutes")));
         }
         boolean xlsx = "xlsx".equalsIgnoreCase(format);
         String base = "ArgOS_alarm_" + c.from().toString().replace("-", "") + "_" + c.to().toString().replace("-", "");
@@ -239,7 +251,42 @@ public class StatsService {
         return new Export(base + ".csv", sb.toString().getBytes(StandardCharsets.UTF_8), "text/csv; charset=UTF-8");
     }
 
+    /** 한 번에 조회할 수 있는 기간 (from ~ to, 양 끝 포함). 2026-11-19 1년 → 30일 */
+    static final int MAX_DAYS = 30;
+
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    static String hazardName(String hazard) {
+        return "GAS".equals(hazard) ? "가스" : "FIRE".equals(hazard) ? "화재" : "";
+    }
+
+    /** 등급: 주의 / 경보 / 화재 (화재 경보는 '화재') */
+    static String gradeName(Alarm a) {
+        if (a.stage() < 3) {
+            return "주의";
+        }
+        return "FIRE".equals(a.hazard()) ? "화재" : "경보";
+    }
+
+    static String statusName(String status) {
+        return switch (status == null ? "" : status) {
+            case "OPEN" -> "확인 대기";
+            case "ACKED" -> "확인함";
+            case "ACTING" -> "조치 중";
+            case "CLOSED" -> "해제";
+            default -> "";
+        };
+    }
+
+    static String sensorTypeName(String type) {
+        return switch (type == null ? "" : type) {
+            case "CURRENT" -> "전류";
+            case "TEMP" -> "온도";
+            case "CO" -> "CO";
+            case "IR" -> "열화상";
+            default -> type == null ? "" : type;
+        };
+    }
 
     // ---------------------------------------------------------------
 
@@ -250,10 +297,9 @@ public class StatsService {
         } else if (c.factoryId() != null) {
             currentUser.checkFactory(scope, c.factoryId());
         }
-        // TODO(백엔드, 2026-11-19): 조회 기간 최대 1년 → 30일로 변경 요청. 366 → 30, 메시지 "한 번에 30일까지 조회할 수 있습니다."
         //   프론트는 이미 30일로 막음. 자세한 건 docs/api/stats-history-30days.md
-        if (c.days() > 366) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "RANGE_TOO_LARGE", "한 번에 1년까지 조회할 수 있습니다.");
+        if (c.days() > MAX_DAYS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "RANGE_TOO_LARGE", "한 번에 30일까지 조회할 수 있습니다.");
         }
         return scope;
     }

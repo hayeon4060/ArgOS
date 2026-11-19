@@ -30,7 +30,7 @@ class FcmClientTest {
     private static String[] jwtParts(KeyPair kp, String pem) throws Exception {
         java.nio.file.Path f = java.nio.file.Files.createTempFile("sa", ".json");
         java.nio.file.Files.writeString(f, "{\"project_id\":\"argos\",\"client_email\":\"a@b.c\",\"private_key\":\""
-                + pem.replace("\n", "\\n") + "\"}");
+                + pem.replace("\r", "").replace("\n", "\\n") + "\"}");
         FcmClient c = new FcmClient(f.toString(), new com.fasterxml.jackson.databind.ObjectMapper());
         return c.jwt("a@b.c", "https://oauth2.googleapis.com/token", java.time.Instant.parse("2026-11-16T00:00:00Z")).split("\\.");
     }

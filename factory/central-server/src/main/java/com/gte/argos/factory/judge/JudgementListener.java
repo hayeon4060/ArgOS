@@ -10,6 +10,10 @@ import java.util.List;
  */
 public interface JudgementListener {
 
+    /** 등록된 센서 값 하나가 들어옴 (판정 전). 알림이 열린 동안의 센서 값(alarm_sensor_sample) 저장에 쓴다 */
+    default void onReading(long sensorId, Instant ts, double value) {
+    }
+
     /** 1분 추이 한 칸이 끝남 */
     default void onTrend(TrendPoint point) {
     }
@@ -17,10 +21,12 @@ public interface JudgementListener {
     /**
      * 센서 이벤트 시작 (지속 조건을 채운 순간)
      *
+     * @param rule    판정 규칙 (sensor_event.rule): HI 상한 / LO 하한 / IMMEDIATE 즉시 경보
      * @param backlog 조건을 채우기까지 쌓인 샘플 (startedAt 부터 detectedAt 까지)
      */
     default void onEventOpened(long eventKey, long sensorId, long thresholdId, Stage stage,
-                               Instant startedAt, Instant detectedAt, boolean lowSide, List<Sample> backlog) {
+                               Instant startedAt, Instant detectedAt, boolean lowSide, String rule,
+                               List<Sample> backlog) {
     }
 
     /** 이벤트가 이어지는 동안 들어온 샘플 */

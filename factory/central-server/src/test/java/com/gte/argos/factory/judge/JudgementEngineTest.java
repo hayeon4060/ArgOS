@@ -118,6 +118,75 @@ class JudgementEngineTest {
         assertThat(rec.log).isEmpty();
     }
 
+    @Test
+    void 이벤트_규칙은_상한이면_HI_하한이면_LO() {
+        for (int i = 0; i < 24; i++) {
+            Instant ts = T0.plusSeconds(5L * i);
+            engine.accept(new SensorReading("IT-307", ts, 15.5));  // 하한 주의
+            engine.accept(new SensorReading("TE-305", ts, 152));   // 상한 주의
+        }
+
+        assertThat(rec.rules).containsExactly("LO", "HI");
+    }
+
+    @Test
+    void 즉시_경보_값이면_지속_조건_없이_바로_경보() {
+        SensorDef co = new SensorDef(323, "AT-303", "AT", 5,
+                new ThresholdRule(13, 15.0, 30.0, null, null, 24, 12, null, 0, 200.0),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.GAS))));
+        engine = new JudgementEngine(List.of(co), rec, JudgementEngine.Options.history());
+
+        feed("AT-303", 10, 3);
+        feed("AT-303", 210, 1);
+
+        assertThat(rec.log).containsExactly(
+                "event+ 323 ALARM start=3 detect=3 backlog=1",
+                "alarm+ unit=5 ALARM GAS",
+                "link");
+        assertThat(rec.rules).containsExactly("IMMEDIATE");
+    }
+
+    @Test
+    void 주의_중_즉시_경보_값이_오면_바로_경보로_오른다() {
+        SensorDef co = new SensorDef(323, "AT-303", "AT", 5,
+                new ThresholdRule(13, 15.0, 30.0, null, null, 24, 12, null, 0, 200.0),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.GAS))));
+        engine = new JudgementEngine(List.of(co), rec, JudgementEngine.Options.history());
+
+        feed("AT-303", 18, 24);
+        feed("AT-303", 220, 1);
+
+        assertThat(rec.log).containsSubsequence("event+ 323 WARN start=0 detect=23 backlog=24", "event^ ALARM");
+    }
+
+    @Test
+    void 복귀_여유가_있으면_기준_바로_아래_값은_정상으로_세지_않는다() {
+        SensorDef oven = new SensorDef(305, "TE-305", "TE", 5,
+                new ThresholdRule(5, 150.0, 160.0, null, null, 24, 6, null, 0.05, null),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(oven), rec, JudgementEngine.Options.history());
+
+        feed("TE-305", 152, 24);   // 주의 시작
+        feed("TE-305", 145, 10);   // 150 × 0.95 = 142.5 이상 → 아직 복귀 아님
+        assertThat(rec.log).doesNotContain("alarm- closed=true");
+
+        feed("TE-305", 140, 6);    // 142.5 미만 6개 → 끝
+        assertThat(rec.log).contains("event- end=34 peak=152.0", "alarm- closed=true");
+    }
+
+    @Test
+    void 복귀_횟수는_기준값의_release_samples_를_쓴다() {
+        SensorDef oven = new SensorDef(305, "TE-305", "TE", 5,
+                new ThresholdRule(5, 150.0, 160.0, null, null, 24, 6, 2, 0, null),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(oven), rec, JudgementEngine.Options.history());
+
+        feed("TE-305", 152, 24);
+        feed("TE-305", 140, 2);
+
+        assertThat(rec.log).contains("event- end=24 peak=152.0");
+    }
+
     /** 같은 값을 5초 간격으로 count 번 넣는다. tick 은 0부터 이어진다 */
     private void feed(String tag, double value, int count) {
         for (int i = 0; i < count; i++) {
@@ -130,10 +199,25 @@ class JudgementEngineTest {
         return (int) ((ts.getEpochSecond() - T0.getEpochSecond()) / 5);
     }
 
+    @Test
+    void 등록된_센서_값은_판정_전에_모두_onReading_으로_전달된다() {
+        feed("TE-305", 140, 3);
+        feed("XX-999", 1, 2);
+        assertThat(rec.readings).isEqualTo(3);
+    }
+
     private static final class Recorder implements JudgementListener {
+        int readings;
+
+        @Override
+        public void onReading(long sensorId, Instant ts, double value) {
+            readings++;
+        }
+
         final List<String> log = new ArrayList<>();
         final List<TrendPoint> trends = new ArrayList<>();
         final List<Boolean> lowSide = new ArrayList<>();
+        final List<String> rules = new ArrayList<>();
 
         @Override
         public void onTrend(TrendPoint point) {
@@ -142,10 +226,11 @@ class JudgementEngineTest {
 
         @Override
         public void onEventOpened(long eventKey, long sensorId, long thresholdId, Stage stage, Instant startedAt,
-                                  Instant detectedAt, boolean low, List<Sample> backlog) {
+                                  Instant detectedAt, boolean low, String rule, List<Sample> backlog) {
             log.add("event+ " + sensorId + " " + stage + " start=" + idx(startedAt) + " detect=" + idx(detectedAt)
                     + " backlog=" + backlog.size());
             lowSide.add(low);
+            rules.add(rule);
         }
 
         @Override

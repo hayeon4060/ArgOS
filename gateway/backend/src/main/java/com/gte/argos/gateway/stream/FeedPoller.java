@@ -53,6 +53,7 @@ public class FeedPoller {
     private final SimTime time;
     private final FireService fires;
     private final boolean enabled;
+    private final com.gte.argos.gateway.common.ActivityLogger activity;
 
     private String bootId;
     private long after = -1;
@@ -61,7 +62,9 @@ public class FeedPoller {
 
     public FeedPoller(CentralClient central, MasterCache masterCache, StreamHub hub, AlarmService alarms,
                       ChecklistRepository checklists, SimTime time, FireService fires,
-                      @Value("${argos.central.feed-enabled:true}") boolean enabled) {
+                      @Value("${argos.central.feed-enabled:true}") boolean enabled,
+                      com.gte.argos.gateway.common.ActivityLogger activity) {
+        this.activity = activity;
         this.central = central;
         this.masterCache = masterCache;
         this.hub = hub;
@@ -193,6 +196,25 @@ public class FeedPoller {
                 }
                 long processId = eq == null ? -1 : eq.processId();
                 hub.publish("command.result", id, view, s -> s.scope().canProcess(processId, masterCache.get()));
+                if (d.get("alarmId") != null) {
+                    // 알림 창의 fanAuto.status 를 갱신하도록 그 알림도 다시 알린다
+                    CentralDto.Alarm a = central.alarm(num(d.get("alarmId")));
+                    Map<String, Object> av = new LinkedHashMap<>();
+                    av.put("id", a.alarmId());
+                    av.put("level", Codes.level(a.stage()));
+                    av.put("hazard", a.hazard());
+                    av.put("status", a.status());
+                    av.put("valueStillOver", a.valueStillOver());
+                    av.put("fanAuto", com.gte.argos.gateway.alarm.AlarmViews.fanAuto(a));
+                    av.put("at", item.at());
+                    hub.publish("alarm.updated", id + "-a", av, s -> s.scope().canProcess(a.processId(), masterCache.get()));
+                    if ("AUTO".equals(d.get("source")) && "SENT".equals(d.get("status")) && eq != null) {
+                        int hz = d.get("value") == null ? 0 : ((Number) d.get("value")).intValue();
+                        activity.logAs(null, "FAN", masterCache.get().process(eq.processId()) == null ? null
+                                        : plantOf(eq.processId()), eq.processId(), "equipment_command",
+                                num(d.get("commandId")), autoFanText(eq.name(), hz, a.stage()));
+                    }
+                }
             }
             case "THRESHOLD_CHANGED" -> {
                 // 마스터의 "지금 기준값" 이 바뀌었으니 캐시를 비우고 그 공정을 보는 화면에 알린다
@@ -283,6 +305,17 @@ public class FeedPoller {
             hub.publish("level.changed", data, sub -> sub.scope().canSite(siteId == null ? -1 : siteId, m)
                     || sub.scope().canProcess(processId, m));
         }
+    }
+
+    private Long plantOf(long processId) {
+        CentralDto.Process p = masterCache.get().process(processId);
+        CentralDto.Factory f = p == null ? null : masterCache.get().factory(p.factoryId());
+        return f == null ? null : f.plantId();
+    }
+
+    /** 이용 로그 내용: '상도 건조로 배기팬 45Hz · 1350rpm (가스 주의 자동)' */
+    static String autoFanText(String fanName, int hz, int stage) {
+        return fanName + " " + hz + "Hz · " + (hz * 30) + "rpm (가스 " + (stage >= 3 ? "경보" : "주의") + " 자동)";
     }
 
     private static long num(Object o) {

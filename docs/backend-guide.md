@@ -1,7 +1,7 @@
 # ArgOS 백엔드 가이드
 
 서버 실행 → API 명세 보기 → 작업 현황(체크리스트)을 한 곳에 정리한 문서.
-최종 정리: 2026-11-19
+최종 정리: 2026-11-19 (배기팬 자동 제어 · 통계·이력 개편 반영)
 
 ---
 
@@ -136,8 +136,7 @@ python make_collection.py
 ### 머지 대기 (PR 만들어서 머지 필요)
 | 상태 | 브랜치 | 내용 |
 | --- | --- | --- |
-| 🔀 | `feature/erd-v5` | 테이블 명세서 v5 반영 (중앙·연계), FcmClientTest 수정 |
-| 🔀 | `feature/api-docs` | Swagger UI · Postman 컬렉션 |
+| 🔀 | `feature/erd-v6` | ERD V6 (배기팬 자동 제어, 알림 센서 샘플, 통계·이력 개편, 열화상 stream_url, 조회 30일), FcmClientTest 수정 |
 
 ### 중앙 서버 (8081)
 | 상태 | 항목 |
@@ -147,7 +146,9 @@ python make_collection.py
 | ✅ | 실시간 피드, internal API (master · status · series · events · alarms · feed) |
 | ✅ | 설비 명령 시뮬레이션, 기준값 관리 internal API |
 | 🔀 | ERD v5: 즉시 경보 · 회복 여유값 · 일 집계(`sensor_daily`) · 이벤트 키 · 명령 상태 확장 (`feature/erd-v5`) |
-| ❌ | 보존 정책 변경: 정상 1분 집계 7일 / 이상 구간(앞뒤 여유 포함) 1년 / 이벤트 · 알림 · 명령 1년 |
+| 🔀 | 배기팬 자동 제어 (가스 주의 45Hz · 경보 60Hz, 종료 때 40Hz 복귀), 설비 설정 저장 |
+| 🔀 | 보관 기간: 1분 추이 · 샘플 31일 (조회 30일 기준). 이벤트 · 알림 · 명령은 지우지 않음 |
+| ❌ | VMS 열화상 IR-301 받는 API (`POST /vms/ir`, 전송 규격 확인 중) |
 
 ### 연계 서버 (8080) — 화면별
 | 상태 | 화면 | 항목 |
@@ -157,6 +158,7 @@ python make_collection.py
 | ✅ | 대시보드 · 공정 현황 | 현황, 배치도, 센서 시계열, `limitType` |
 | ✅ | 알림 | 목록 · 상세 · 확인 · 종료 · 대응, 전일 시간대별(야간 19시~07시) |
 | ✅ | 설비 명령 | 팬 · 설비 정지 · 공정 정지 · 작업자 호출 |
+| 🔀 | 배기팬 자동 제어 | 알림 응답 `fanAuto`, `PATCH /equipment/{id}/settings`, 기준값 조회 `active`·`fanAuto` |
 | ✅ | 체크리스트 | 템플릿 · 배정 · 확인 · 리마인드 · 보고 |
 | ✅ | C4F · C5 · M2 화재 | 화재 목록 · 상세 · 해제 · 잠금 해제 승인 · 대피 확인 |
 | ❌ | C4F 화재 상세 | `thermal.cameraTag`, `values{thermalMax,temp,co}`, `actions[].running`, `serverTime` |
@@ -165,7 +167,7 @@ python make_collection.py
 | ❌ | F1 기준값 관리 | `equipmentCount`, `equipmentType`, `sensors[].max`, simulate `peaks` |
 | ⏸ | F1 기준값 관리 | 여러 설비 한 번에 저장 (있으면 좋음, 중앙도 수정 필요) |
 | ✅ | D1 통계 · 이력 | 요약 · 추이 · 공정별 · 히트맵 · 알림 목록, CSV · xlsx, 월간 보고서 PDF |
-| ⏸ | D1 통계 · 이력 | 화면 변경 예정 → 확정되면 반영 (`status`·`siteId` 필터, `actionType` 등) |
+| 🔀 | D1 통계 · 이력 | 개편 반영: 조건 `hazard`·`status`·`siteId`, 알림 상세 `GET /stats/alarms/{id}`, CSV 새 열 |
 | ✅ | E1 점검 · OCR | 업로드 → 인식 → 검토 → 완료, 오늘 점검 |
 | ❌ | E1 점검 관리 | summary `month`, doc-forms `group`·`options`·`row`, `GET /inspections/schedule?date=` |
 | 🔧 | E1 OCR | 지금은 시연용 인식기. 실제 인식은 `CLOVA_OCR_URL`·`CLOVA_OCR_SECRET` 설정 |
@@ -176,7 +178,7 @@ python make_collection.py
 | ❌ | I2 채팅 | 첨부 알림에 `level`, `sensorTag`, `value`, `unit` |
 | ✅ | 실시간 | SSE `/stream` |
 | 🔧 | 푸시 · 방송 | FCM `FCM_CREDENTIALS_PATH`, 방송 `BROADCAST_API_URL` 설정 (비우면 로그만) |
-| ✅ | API 명세 | Swagger UI · Postman (`feature/api-docs` 머지 대기) |
+| ✅ | API 명세 | Swagger UI · Postman |
 
 ### 범위 밖 · 나중
 | 상태 | 항목 |
@@ -186,7 +188,7 @@ python make_collection.py
 | ⏸ | 시연 데이터 · 봇 시나리오 |
 
 ### 다음에 할 순서 (제안)
-1. `feature/erd-v5`, `feature/api-docs` 머지
-2. ❌ 화면 필드 보완 (기준값 · 점검 · 화재 상세 · 채팅 · 내 정보)
-3. ❌ 보존 정책 변경
-4. ❌ 화재 시나리오 점검 · 영상 연결
+1. `feature/erd-v6` 머지
+2. ❌ VMS 열화상 받는 API (전송 규격 답변 후)
+3. ❌ 화면 필드 보완 (점검 · 화재 상세 · 채팅 · 내 정보)
+4. ❌ 화재 시나리오 점검

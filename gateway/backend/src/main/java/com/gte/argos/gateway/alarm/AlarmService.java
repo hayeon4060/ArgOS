@@ -267,6 +267,7 @@ public class AlarmService {
         out.put("equipmentType", eq == null ? null : eq.type());
         out.put("processId", a.processId());
         out.put("valueStillOver", a.valueStillOver());
+        out.put("fanAuto", AlarmViews.fanAuto(a));
         return out;
     }
 
@@ -337,7 +338,8 @@ public class AlarmService {
         out.put("status", a.status());
         out.put("hazard", a.hazard());
         out.put("fireId", null);
-        out.put("title", a.unitName() + "에서 " + Codes.stageName(a.stage()) + "가 발생했습니다");
+        // 유형 넣기 (docs/api/alarm-modal-hazard.md): '상도 건조로에서 가스 경보가 발생했습니다'
+        out.put("title", a.unitName() + "에서 " + hazardPrefix(a.hazard()) + Codes.stageName(a.stage()) + "가 발생했습니다");
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("reason", String.join(", ", reasons));
@@ -350,7 +352,164 @@ public class AlarmService {
         out.put("equipment", equipment);
         out.put("logs", logs);
         out.put("valueStillOver", a.valueStillOver());
+        out.put("fanAuto", AlarmViews.fanAuto(a));
         return out;
+    }
+
+    /**
+     * GET /stats/alarms/{alarmId}: 통계·이력 알림 상세 패널 (stats-history-api.md 2장).
+     * 지난 알림 · 진행 중 알림, 주의 · 경보 모두 같은 모양. 담당 범위 밖이면 404.
+     */
+    public Map<String, Object> historyDetail(long alarmId) {
+        UserScope scope = currentUser.require(UserScope.HQ_ADMIN, UserScope.PLANT_ADMIN);
+        Alarm a;
+        try {
+            a = central.alarm(alarmId);
+        } catch (ApiException e) {
+            throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
+        }
+        MasterCache.Snapshot m = masterCache.get();
+        if (!scope.canProcess(a.processId(), m)) {
+            throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
+        }
+        Map<String, Object> row = items(List.of(a), m).get(0);
+        OffsetDateTime now = time.now();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", a.alarmId());
+        out.put("level", Codes.level(a.stage()));
+        out.put("status", a.status());
+        out.put("hazard", a.hazard());
+        out.put("location", row.get("location"));
+        out.put("factoryId", a.factoryId());
+        out.put("processId", a.processId());
+        out.put("equipmentId", row.get("equipmentId"));
+        out.put("raisedAt", a.raisedAt());
+        out.put("closedAt", a.closedAt());
+        OffsetDateTime end = a.closedAt() != null ? a.closedAt() : now;
+        out.put("actionMinutes", a.raisedAt() == null ? null
+                : Math.max(1, java.time.Duration.between(a.raisedAt(), end).toMinutes()));
+        out.put("sensorTag", row.get("sensorTag"));
+        out.put("sensorType", row.get("sensorType"));
+        out.put("value", row.get("value"));
+        out.put("unit", row.get("unit"));
+        out.put("threshold", row.get("threshold"));
+        out.put("ackedBy", row.get("ackedBy"));
+        out.put("fanAuto", AlarmViews.fanAuto(a));
+
+        CentralDto.AlarmSeries s = central.alarmSeries(alarmId);
+        Map<String, Object> series = new LinkedHashMap<>();
+        series.put("from", s.from());
+        series.put("to", s.to());
+        series.put("intervalSec", s.intervalSec());
+        List<Map<String, Object>> sensors = new ArrayList<>();
+        for (CentralDto.AlarmSensorSeries x : s.sensors()) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("sensorId", x.sensorId());
+            r.put("tag", x.tag());
+            r.put("type", Codes.sensorType(x.type()));
+            r.put("unit", x.unit());
+            r.put("warn", x.warn());
+            r.put("alarm", x.alarm());
+            r.put("lowWarn", x.lowWarn());
+            r.put("lowAlarm", x.lowAlarm());
+            r.put("trigger", x.trigger());
+            r.put("points", x.points());
+            sensors.add(r);
+        }
+        series.put("sensors", sensors);
+        out.put("series", series);
+
+        Map<String, Object> th = thermal.forAlarm(a.processId(),
+                a.equipmentId(), central.status(a.processId()), now);
+        if (th != null) {
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("imageUrl", th.get("imageUrl"));
+            t.put("capturedAt", a.raisedAt());
+            t.put("max", th.get("max"));
+            t.put("avg", th.get("avg"));
+            t.put("maxPoint", th.get("maxPoint"));
+            t.put("cameraTag", th.get("cameraTag"));
+            out.put("thermal", t);
+        } else {
+            out.put("thermal", null);
+        }
+
+        List<Map<String, Object>> timeline = new ArrayList<>();
+        for (Object o : (List<?>) timeline(alarmId).get("timeline")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> st = (Map<String, Object>) o;
+            String step = historyStep(String.valueOf(st.get("step")));
+            if (step == null) {
+                continue;
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("at", st.get("at"));
+            r.put("step", step);
+            r.put("by", st.get("by"));
+            r.put("text", st.get("text") != null ? st.get("text") : historyText(step, a, row));
+            timeline.add(r);
+        }
+        timeline.sort(java.util.Comparator.comparing(r -> (OffsetDateTime) r.get("at"),
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        out.put("timeline", timeline);
+
+        if (a.stage() < 3) {
+            Checklist c = checklists.latestForAlarm(alarmId);
+            if (c == null) {
+                out.put("checklist", null);
+            } else {
+                Map<String, Object> ck = new LinkedHashMap<>();
+                ck.put("assignee", c.assigneeName());
+                ck.put("doneCount", c.doneCount());
+                ck.put("totalCount", c.items().size());
+                List<Map<String, Object>> items = new ArrayList<>();
+                for (ChecklistRepository.Item it : c.items()) {
+                    Map<String, Object> i = new LinkedHashMap<>();
+                    i.put("seq", it.seq());
+                    i.put("content", it.content());
+                    i.put("doneAt", it.doneAt());
+                    i.put("result", it.result());
+                    i.put("memo", it.memo());
+                    items.add(i);
+                }
+                ck.put("items", items);
+                out.put("checklist", ck);
+            }
+            out.put("shutdown", null);
+        } else {
+            out.put("checklist", null);
+            Map<Long, CentralDto.EquipmentStatus> eqStatus = new HashMap<>();
+            central.status(a.processId()).equipment().forEach(x -> eqStatus.put(x.equipmentId(), x));
+            Map<String, Object> sd = shutdownView(checklists.actions(alarmId), m.equipmentOf(a.processId()), eqStatus);
+            out.put("shutdown", sd == null ? null : Map.of("steps", sd.get("steps")));
+        }
+        return out;
+    }
+
+    /** GAS → '가스 ', FIRE → '화재 ', 없으면 빈 글자 */
+    static String hazardPrefix(String hazard) {
+        return "GAS".equals(hazard) ? "가스 " : "FIRE".equals(hazard) ? "화재 " : "";
+    }
+
+    /** 조치 이력 단계 → 상세 패널 단계 (RAISED ACK CHECKLIST REPORTED SHUTDOWN CLOSED). 나머지는 빼지 않고 그대로 */
+    static String historyStep(String step) {
+        return switch (step) {
+            case "REPORT" -> "REPORTED";
+            case "CLOSE" -> "CLOSED";
+            default -> step;
+        };
+    }
+
+    private static String historyText(String step, Alarm a, Map<String, Object> row) {
+        return switch (step) {
+            case "RAISED" -> Codes.stageName(a.stage()) + " 발생"
+                    + (row.get("sensorTag") == null ? "" : " · " + row.get("sensorTag") + " " + row.get("value")
+                    + " " + (row.get("unit") == null ? "" : row.get("unit"))
+                    + (row.get("threshold") == null ? "" : " (기준 " + row.get("threshold") + ")"));
+            case "ACK" -> "알림 확인";
+            case "CLOSED" -> "알림 해제";
+            default -> step;
+        };
     }
 
     /** POST /alarms/{alarmId}/ack — 공장 담당자만 */
