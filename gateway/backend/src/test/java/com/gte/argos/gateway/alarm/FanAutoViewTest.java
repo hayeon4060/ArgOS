@@ -29,6 +29,13 @@ class FanAutoViewTest {
         assertThat(AlarmService.historyStep("SHUTDOWN")).isEqualTo("SHUTDOWN");
     }
 
+    @Test
+    void 경보_창_제목에_유형() {
+        assertThat(AlarmService.hazardPrefix("GAS") + "경보").isEqualTo("가스 경보");
+        assertThat(AlarmService.hazardPrefix("FIRE") + "경보").isEqualTo("화재 경보");
+        assertThat(AlarmService.hazardPrefix(null)).isEmpty();
+    }
+
     private static CentralDto.Alarm alarm(String hazard, CentralDto.FanAuto f) {
         return new CentralDto.Alarm(1, 5, "상도 건조로", 12, 41L, 5, 1, 2, hazard, "OPEN", T, null, null, null,
                 null, null, false, List.of(), f);
