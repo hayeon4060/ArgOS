@@ -2,13 +2,14 @@
   상황 바꾸기 도구 (화면설계안 '시연 도구'와 같은 역할) — 개발 모드 + 예시 데이터일 때만 보임
   - 왼쪽 아래 작은 버튼 → 펼치면 상황 버튼
     · 정상 / 주의 발생(전류) / 가스 주의 발생(CO, 배기팬 자동 75%) / 경보 발생(CO 경보, 배기팬 자동 100%) / 화재 발생 / 처음 상황(주의 · 조치 중 2/5)
+    · 주의 1건 추가: 다른 설비(중도 건조로) 가스 주의를 하나 더함 → 상단 바 상태 띠를 누르면 목록이 내려옴
     · 담당자 앱 흉내: 항목 +1, 모두 완료 (체크리스트가 진행 중일 때)
   - 누르면 api/mock/scenario.js 의 상황이 바뀌고, 열린 화면이 모두 같이 바뀜
   - 실제 서버에 붙이면(VITE_USE_MOCK=false) 나오지 않음. 배포 빌드에도 나오지 않음 (MainLayout 에서 import.meta.env.DEV 로 거름)
 -->
 <script setup>
 import { computed, ref } from 'vue'
-import { activeChecklist, raiseGasWarn, raiseWarn, resetScenario, scenario, setNormal, tickChecklist } from '@/api/mock/scenario'
+import { activeChecklist, addExtraWarn, raiseGasWarn, raiseWarn, resetScenario, scenario, setNormal, tickChecklist } from '@/api/mock/scenario'
 import { raiseAlarm, raiseFire } from '@/api/mock/scenarioEmergency'
 import AppIcon from '@/components/AppIcon.vue'
 import { LEVEL_META } from '@/types/codes'
@@ -52,6 +53,12 @@ const checklist = computed(() => activeChecklist())
         <button type="button" :class="{ on: scenario.state === 'ALARM' }" @click="raiseAlarm">경보 발생</button>
         <button type="button" :class="{ on: scenario.state === 'FIRE' }" @click="raiseFire">화재 발생</button>
         <button type="button" @click="resetScenario">처음 상황</button>
+      </div>
+
+      <!-- 상단 바 상태 띠의 '여러 건 목록' 시연용: 다른 설비(중도 건조로) 가스 주의를 하나 더함 (2026-11-19) -->
+      <div class="group">
+        <span class="label">추가</span>
+        <button type="button" :class="{ on: !!scenario.extra }" :disabled="!!scenario.extra" @click="addExtraWarn">주의 1건 추가</button>
       </div>
 
       <div class="group">

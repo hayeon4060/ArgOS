@@ -63,7 +63,7 @@ export async function getAlarmDetail(alarmId) {
  */
 export function ackAlarm(alarmId, userName) {
   if (USE_MOCK) {
-    if (!mockAck(userName)) return mockFail({ code: 'ALREADY_ACKED', message: '이미 다른 사람이 확인한 알림입니다.', status: 409 })
+    if (!mockAck(userName, alarmId)) return mockFail({ code: 'ALREADY_ACKED', message: '이미 다른 사람이 확인한 알림입니다.', status: 409 })
     return mockOk({ id: Number(alarmId), status: 'ACKED' })
   }
   return http.post(`/alarms/${alarmId}/ack`)

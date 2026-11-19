@@ -30,10 +30,13 @@ export const useAlertStore = defineStore('alert', () => {
   /** 주의 확인·전송·조치 확인을 할 수 있는 사람 (공장 담당자) */
   const canAct = computed(() => auth.role === ROLE.PLANT_ADMIN)
 
-  /** 상태 띠에 보여 줄 대표 알림 (가장 높은 단계, 같으면 최근) */
-  const primary = computed(
-    () => [...activeAlarms.value].sort((a, b) => RANK[b.level] - RANK[a.level] || b.raisedAt.localeCompare(a.raisedAt))[0] ?? null,
+  /** 대응 중인 알림을 단계 높은 순(같으면 최근 순)으로 — 상단 바 상태 띠의 목록 */
+  const sortedAlarms = computed(() =>
+    [...activeAlarms.value].sort((a, b) => RANK[b.level] - RANK[a.level] || b.raisedAt.localeCompare(a.raisedAt)),
   )
+
+  /** 상태 띠에 보여 줄 대표 알림 (가장 높은 단계, 같으면 최근) */
+  const primary = computed(() => sortedAlarms.value[0] ?? null)
 
   /** 담당 범위 (공장 담당자는 담당 공장만) */
   const scope = () => {
@@ -99,5 +102,5 @@ export const useAlertStore = defineStore('alert', () => {
     modal.value = null
   }
 
-  return { activeAlarms, checklists, modal, canAct, primary, refresh, processNameOf, checklistOfEquipment, open, close, openFor, reset }
+  return { activeAlarms, sortedAlarms, checklists, modal, canAct, primary, refresh, processNameOf, checklistOfEquipment, open, close, openFor, reset }
 })
