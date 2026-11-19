@@ -261,6 +261,8 @@ public class AlarmService {
         // 열화상 그림(VMS)은 아직 없어서 IR 센서 값으로 요약 (imageUrl 은 null → 화면이 단계별 예시 그림 사용)
         out.put("thermal", withImage(thermal.forAlarm(a.processId(), eq == null ? null : eq.id(), status, time.now()), a));
         out.put("trend", trend);
+        // 같은 관제 단위 센서 3종(전류·온도·CO) 추이. 화면이 유형에 맞는 2개를 고름 (docs/api/warn-detail-trends.md)
+        out.put("trends", trends(a, status, unitSensors));
         out.put("causeCandidates", template == null ? List.of() : List.of(template.cause()));
         out.put("templateId", template == null ? null : template.id());
         out.put("equipmentId", eq == null ? null : eq.id());
@@ -484,6 +486,54 @@ public class AlarmService {
             out.put("shutdown", sd == null ? null : Map.of("steps", sd.get("steps")));
         }
         return out;
+    }
+
+    /** 주의 상세 추이 그래프들: 알림 발생 30분 전 ~ 지금, 1분 간격. 순서 전류 → 온도 → CO, 열화상 제외 */
+    private List<Map<String, Object>> trends(Alarm a, CentralDto.Status status, Set<Long> unitSensors) {
+        List<SensorStatus> targets = status.sensors().stream()
+                .filter(s -> unitSensors.contains(s.sensorId()) && !"IR".equals(s.type()))
+                .sorted(java.util.Comparator.comparingInt((SensorStatus s) -> trendOrder(s.type()))
+                        .thenComparingLong(SensorStatus::sensorId))
+                .toList();
+        if (targets.isEmpty()) {
+            return List.of();
+        }
+        OffsetDateTime from = a.raisedAt().minusMinutes(30);
+        OffsetDateTime to = time.now();
+        CentralDto.Series series = central.series(targets.stream().map(SensorStatus::sensorId).toList(), from,
+                to.isAfter(from) ? to : from.plusMinutes(31), "1m");
+        Map<Long, CentralDto.SensorSeries> byId = new HashMap<>();
+        series.series().forEach(x -> byId.put(x.sensorId(), x));
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (SensorStatus s : targets) {
+            CentralDto.SensorSeries x = byId.get(s.sensorId());
+            List<List<Object>> points = new ArrayList<>();
+            if (x != null && x.points() != null) {
+                for (List<Object> p : x.points()) {
+                    points.add(java.util.Arrays.asList(p.get(0), p.get(1)));
+                }
+            }
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("sensorId", s.sensorId());
+            t.put("tag", s.tag());
+            t.put("type", Codes.sensorType(s.type()));
+            t.put("unit", s.unit());
+            t.put("warn", s.warn());
+            t.put("alarm", s.alarm());
+            t.put("points", points);
+            out.add(t);
+        }
+        return out;
+    }
+
+    /** 전류 → 온도 → CO → 그 밖 */
+    static int trendOrder(String type) {
+        return switch (type == null ? "" : type) {
+            case "IT" -> 0;
+            case "TE" -> 1;
+            case "AT" -> 2;
+            default -> 3;
+        };
     }
 
     /** 경보에 VMS 열화상 사진이 붙어 있으면 imageUrl 을 채운다 */
