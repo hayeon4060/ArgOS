@@ -106,6 +106,7 @@ export function alarmTimeline(alarmId) {
 
 /* ───────── GET /alarms/{id}/detail : 주의 상세 (상도 건조로 1042 만) ───────── */
 export function alarmDetail(alarmId) {
+  if (Number(alarmId) === scenario.extra?.id) return extraAlarmDetail(scenario.extra)
   const a = scenario.alarm
   if (Number(alarmId) !== 1042 || !a) return null
   if (a.kind === 'GAS') return gasAlarmDetail(a)
@@ -198,6 +199,26 @@ function gasAlarmDetail(a) {
     processId: 12,
     equipmentId: 31,
     fanAuto: fanAutoOf({ equipmentId: 31, level: LEVEL.WARN, at: raisedAt }),
+  }
+}
+
+/**
+ * '주의 1건 추가'로 넣은 알림(1043, 중도 건조로 버너실 CO-12 22 ppm)의 주의 상세
+ * - 가스 주의 상세와 같은 모양에 위치·센서 이름만 바꿈 (상단 바 목록에서 골라 여는 흐름 확인용)
+ */
+function extraAlarmDetail(e) {
+  const d = gasAlarmDetail(e)
+  const tags = { 'CT-17': 'CT-16', 'TE-15': 'TE-14', 'CO-13': 'CO-12' }
+  return {
+    ...d,
+    id: e.id,
+    location: '울산공장 · 5공장 · 도장 공정 · 중도 건조로 버너실',
+    rule: { ...d.rule, sensorTag: 'CO-12' },
+    sensors: d.sensors.map((s) => ({ ...s, tag: tags[s.tag], value: s.type === 'CO' ? 22 : s.value })),
+    trend: { ...d.trend, sensorId: 312, tag: 'CO-12' },
+    trends: d.trends.map((t) => ({ ...t, tag: tags[t.tag] })),
+    equipmentId: 29,
+    fanAuto: null,
   }
 }
 

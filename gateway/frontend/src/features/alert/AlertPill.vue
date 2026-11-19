@@ -3,13 +3,17 @@
   - 대응 중 알림이 있을 때만: '⚠ 주의 1건  상도 건조로 · 눌러서 확인'
   - 나타날 때 튀어 오름(.4s) 후 1.6초마다 주황 빛번짐, 아이콘은 1초마다 깜빡임
   - 화재: '🔥 화재 발생  상도 건조로 버너실' (설계안)
-  - 누르면: 공장 담당자 → 알림 상태에 맞는 창 (주의 알림 / 주의 상세 / 체크리스트 진행 / 경보·화재 대응)
+  - 대응 중인 알림이 여러 건이면 (2026-11-19 재원님 요청): '주의 2건  상도 건조로 외 1건 · 눌러서 선택 ⌄'
+    누르면 띠 아래로 목록(AlertPillList)이 미끄러져 내려오고, 한 건을 고르면 그 알림 창이 열림
+    목록은 바깥을 누르거나 Esc, 다시 띠를 누르면 닫힘
+  - 누르면(한 건일 때 · 목록에서 골랐을 때): 공장 담당자 → 알림 상태에 맞는 창 (주의 알림 / 주의 상세 / 체크리스트 진행 / 경보·화재 대응)
             본사 관리자 → 화재면 사업장 선택(화재 현황), 그 밖에는 그 공정 배치도 화면으로 (조치는 공장 담당자 몫)
   - 색: 재원님이 정한 주의색 #F97316 (설계안은 띠 바탕만 조금 진한 #EA580C)
 -->
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import AlertPillList from './AlertPillList.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAlertStore } from '@/stores/alert'
 import { LEVEL, LEVEL_META } from '@/types/codes'
@@ -27,42 +31,123 @@ const where = computed(() => {
   return isFire.value ? last : last.replace(/ (배기팬|버너실|순환펌프)$/, '')
 })
 
-function onClick() {
+/* ───────── 여러 건일 때 내려오는 목록 ───────── */
+const total = computed(() => alert.activeAlarms.length)
+const many = computed(() => total.value > 1)
+const listOpen = ref(false)
+const root = ref(null)
+
+/** 알림 한 건 열기: 공장 담당자는 알림 창, 본사 관리자는 그 위치 화면 */
+function go(alarm) {
+  listOpen.value = false
   if (alert.canAct) {
-    alert.openFor(a.value)
+    alert.openFor(alarm)
     return
   }
-  if (isFire.value) {
+  if (alarm.level === LEVEL.FIRE) {
     router.push({ name: 'site-select' })
     return
   }
-  const { siteId, factoryId, processId } = a.value
+  const { siteId, factoryId, processId } = alarm
   router.push({ name: 'process', params: { siteId, factoryId, processId } })
 }
+
+/** 띠 누르기: 여러 건이면 목록을 열고 닫음, 한 건이면 바로 엶 */
+function onClick() {
+  if (many.value) listOpen.value = !listOpen.value
+  else go(a.value)
+}
+
+// 한 건 이하로 줄면 목록을 닫음
+watch(many, (v) => v || (listOpen.value = false))
+
+// 목록 바깥을 누르거나 Esc 를 누르면 닫음
+const onOutside = (e) => listOpen.value && !root.value?.contains(e.target) && (listOpen.value = false)
+const onKey = (e) => e.key === 'Escape' && (listOpen.value = false)
+onMounted(() => {
+  document.addEventListener('pointerdown', onOutside)
+  document.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onOutside)
+  document.removeEventListener('keydown', onKey)
+})
 </script>
 
 <template>
   <Transition name="pill">
-    <button
-      v-if="a && meta"
-      :key="a.level"
-      type="button"
-      class="pill"
-      :class="meta.key"
-      role="status"
-      @click="onClick"
-    >
-      <AppIcon :name="meta.icon" :size="18" class="ico" />
-      <template v-if="isFire">화재 발생<small>{{ where }}</small></template>
-      <template v-else>
-        {{ meta.label }} {{ count }}건
-        <small>{{ where }} · 눌러서 확인</small>
-      </template>
-    </button>
+    <div v-if="a && meta" :key="a.level" ref="root" class="wrap">
+      <button
+        type="button"
+        class="pill"
+        :class="meta.key"
+        role="status"
+        :aria-haspopup="many ? 'menu' : undefined"
+        :aria-expanded="many ? listOpen : undefined"
+        @click="onClick"
+      >
+        <AppIcon :name="meta.icon" :size="18" class="ico" />
+        <template v-if="isFire">화재 발생</template>
+        <template v-else>{{ meta.label }} {{ count }}건</template>
+        <!-- 여러 건: '상도 건조로 외 1건 · 눌러서 선택' + 펼침 화살표 -->
+        <small v-if="many">{{ where }} 외 {{ total - 1 }}건 · 눌러서 선택</small>
+        <small v-else>{{ where }}{{ isFire ? '' : ' · 눌러서 확인' }}</small>
+        <AppIcon v-if="many" name="cd" :size="16" class="more" :class="{ up: listOpen }" />
+      </button>
+
+      <!-- 아래로 미끄러져 내려오는 목록 (단계 높은 순) -->
+      <Transition name="slide">
+        <AlertPillList v-if="many && listOpen" class="drop" :alarms="alert.sortedAlarms" @pick="go" />
+      </Transition>
+    </div>
   </Transition>
 </template>
 
 <style scoped>
+/* 띠 + 목록을 감싸는 칸 (목록 위치의 기준) */
+.wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* 목록: 상단 바 아랫선에 붙어서 내려옴 (띠 38px + 상단 바 남는 높이) */
+.drop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + (var(--topbar-height) - 38px) / 2);
+  z-index: 20;
+}
+
+/* 미끄러져 내려오기: 위에서부터 220ms 동안 펼쳐짐 (그림자가 잘리지 않게 아래·옆은 넉넉히) */
+.slide-enter-active,
+.slide-leave-active {
+  transition:
+    clip-path 220ms ease-out,
+    transform 220ms ease-out;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  clip-path: inset(0 -40px 100% -40px);
+  transform: translateY(-10px);
+}
+
+.slide-enter-to,
+.slide-leave-from {
+  clip-path: inset(0 -40px -40px -40px);
+}
+
+/* 펼침 화살표: 열리면 뒤집힘 */
+.more {
+  flex: none;
+  transition: transform 150ms;
+}
+
+.more.up {
+  transform: rotate(180deg);
+}
+
 .pill {
   height: 38px;
   display: flex;
@@ -168,6 +253,7 @@ function onClick() {
 
 /* 좁은 화면: 설명 글자는 숨기고 '주의 1건' 은 끝까지 보이게 (줄어들지 않음) */
 @media (max-width: 1600px) {
+  .wrap,
   .pill {
     flex-shrink: 0;
   }
@@ -181,6 +267,11 @@ function onClick() {
   .pill,
   .pill .ico {
     animation: none !important;
+  }
+
+  .slide-enter-active,
+  .slide-leave-active {
+    transition: none;
   }
 }
 </style>

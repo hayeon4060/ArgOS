@@ -316,10 +316,24 @@ function emergencyAlarms() {
   return list
 }
 
+/** '주의 1건 추가'로 넣은 알림 (중도 건조로 버너실 CO-12 22 ppm 가스 주의, scenario.extra) — 없으면 null */
+function extraAlarm() {
+  const e = scenario.extra
+  if (!e) return null
+  return {
+    ...alarm(e.id, 5, e.status, 'CO 주의 기준 초과', '5공장 · 도장 공정 · 중도 건조로 버너실', 'CO-12', 'CO', 22, 'ppm', 20, e.raisedAt),
+    equipmentId: 29, // 중도 건조로
+    hazard: 'GAS',
+    ackedBy: e.ackedBy,
+    ackedAt: e.ackedAt && todayAt(e.ackedAt),
+  }
+}
+
 /** 오늘 알림 (최근 순, 지금 상황) */
 export function mockAlarms() {
   const top = topOvenAlarm()
-  return [...emergencyAlarms(), ...(top ? [top] : []), ...PAST_ALARMS]
+  const extra = extraAlarm()
+  return [...(extra ? [extra] : []), ...emergencyAlarms(), ...(top ? [top] : []), ...PAST_ALARMS]
 }
 
 /** 진행 중인 체크리스트가 있는지 (상단 바 숫자) */
