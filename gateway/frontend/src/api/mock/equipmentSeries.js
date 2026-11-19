@@ -89,6 +89,18 @@ export function alarmTrendPoints() {
 }
 
 /**
+ * 주의 상세 창의 온도·CO 추이 (전류 추이와 같은 시각, 마지막은 주의 발생 값)
+ * @param {'TEMP'|'CO'} type
+ * @param {number} last 마지막 점 값
+ */
+export function alarmTrendPointsOf(type, last) {
+  const start = DESIGN_START + shiftMin()
+  const points = Array.from({ length: 39 }, (_, k) => [isoAt(start + k), Math.round(topOvenValue(type, start + k))])
+  points[points.length - 1][1] = last
+  return points
+}
+
+/**
  * 센서 추이 응답 만들기
  * @param {Array} sensors 설비 상세의 센서 목록 (id, tag, type, unit, value, usual, warn, alarm)
  * @param {boolean} rising 상도 건조로가 주의 상황인지 (16:30 부터 값이 오르는 그래프)

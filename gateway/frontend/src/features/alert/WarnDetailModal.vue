@@ -3,17 +3,20 @@
   - 2026-11-19 재원님 요청: '센서 데이터 · 열화상 확인' 창을 이 창에 합침 (따로 여는 단추·창 삭제, 겹치던 추이 그래프는 하나만)
     제목에 유형을 붙임: CO 가 높으면 '가스 주의 상세', 전류·온도가 높으면 '화재 주의 상세'
   - 왼쪽: 발생 원인(문장·기준 띠) / 배기팬 자동 가동 줄(가스 주의만, detail.fanAuto) / 예상 원인 / 센서 데이터(센서 3종 값·기준·단계)
-  - 가운데: 열화상 이미지(주의 발생 시점 1장) + 최고 온도 위치 · 최고/평균 · 평소 같은 위치 / 센서 추이(최근 40분, 알림이 난 센서)
+  - 가운데: 열화상 이미지(주의 발생 시점 1장) + 최고 온도 위치 · 최고/평균 · 평소 같은 위치
+  - 아래(왼쪽·가운데 밑): 센서 추이 2개 (최근 40분) — 2026-11-19 재원님 요청
+    화재 주의 = 온도 · 전류 / 가스 주의 = CO · 전류. 응답에 trends 가 없으면 알림 센서 추이 하나만
   - 오른쪽: 조치 체크리스트(빼기·추가) / 전송 대상(공정 담당자) / 닫기 · 공정 담당자 앱으로 전송
-  - 화면 너비 1500px 이하: 두 칸 (왼쪽·가운데가 한 칸에 위아래로)
+  - 화면 너비 1500px 이하: 두 칸 (왼쪽·가운데·추이가 한 칸에 위아래로)
   - 데이터: GET /alarms/{id}/detail, GET /checklist-templates, GET /processes/{id}/workers
   - 전송: POST /checklists → '보내는 중' → 알림 띠 → 창 닫힘 (상단 바에 체크리스트 진행이 나타남)
   - 이미 보낸 알림이면 항목을 고칠 수 없고 단추는 '전송 완료'
 -->
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { placeOf, sensorTypeOfDetail, trendInfo } from './alarmPlace'
+import { placeOf, sensorTypeOfDetail, trendsOf } from './alarmPlace'
 import { hazardLabelOf } from './alarmView'
+import { hazardOf } from '@/features/history/historyFilter'
 import ChecklistEditor from './ChecklistEditor.vue'
 import FanAutoNotice from './FanAutoNotice.vue'
 import MiniTrend from './MiniTrend.vue'
@@ -62,8 +65,14 @@ onMounted(async () => {
   }
 })
 
-/** 추이 제목 '전류 추이' · '온도 추이' · 'CO 추이' (알림이 난 센서 종류) */
-const trend = computed(() => trendInfo(detail.value))
+/** 유형 'FIRE' · 'GAS' (응답의 hazard, 없으면 알림 센서 종류로) */
+const hazard = computed(() => {
+  const row = { hazard: detail.value?.hazard, sensorType: sensorTypeOfDetail(detail.value) }
+  return row.hazard || row.sensorType ? hazardOf(row) : null
+})
+
+/** 아래 추이 그래프 (화재: 온도·전류 / 가스: CO·전류) */
+const trends = computed(() => trendsOf(detail.value, hazard.value))
 
 /** 유형 문구 '가스 주의' · '화재 주의' (응답의 hazard, 없으면 알림 센서 종류로) */
 const kind = computed(() => {
@@ -156,7 +165,19 @@ async function send() {
               <div class="m-box"><small>평소 같은 위치</small><b class="mono">{{ detail.thermal.usualAtMax.toFixed(1) }} ℃</b></div>
             </div>
           </template>
-          <MiniTrend v-if="detail.trend" :trend="detail.trend" :title="trend.title" :dec="trend.dec" :sub="`${trend.tag} · 최근 40분`" :height="190" class="gap-s" />
+        </section>
+
+        <!-- 아래: 센서 추이 2개 (화재 = 온도·전류, 가스 = CO·전류) -->
+        <section v-if="trends.length" class="trends">
+          <MiniTrend
+            v-for="t in trends"
+            :key="t.tag"
+            :trend="t.trend"
+            :title="t.title"
+            :dec="t.dec"
+            :sub="`${t.tag} · 최근 40분`"
+            :height="180"
+          />
         </section>
 
         <!-- 오른쪽: 체크리스트 · 받는 사람 · 전송 -->
@@ -197,12 +218,14 @@ async function send() {
   color: var(--color-text-sub);
 }
 
-/* 세 칸: 왼쪽(원인·센서) | 가운데(열화상·추이) | 오른쪽(체크리스트·전송) */
+/* 세 칸: 왼쪽(원인·센서) | 가운데(열화상) | 오른쪽(체크리스트·전송), 왼쪽·가운데 밑에 추이 2개 */
 .cols {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: 'left mid right';
-  gap: 28px;
+  grid-template-areas:
+    'left mid right'
+    'trends trends right';
+  gap: 16px 28px;
   padding: 20px 28px 28px;
 }
 
@@ -218,13 +241,28 @@ async function send() {
   grid-area: right;
 }
 
-/* 좁은 화면: 두 칸 (왼쪽 아래에 열화상·추이) */
+/* 추이 2개: 왼쪽·가운데 칸 밑에 하나씩 나란히 (칸 간격과 같은 28px) */
+.trends {
+  grid-area: trends;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+
+/* 좁은 화면: 두 칸 (왼쪽 아래에 열화상·추이, 추이는 위아래로) */
 @media (max-width: 1500px) {
   .cols {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       'left right'
-      'mid right';
+      'mid right'
+      'trends right';
+  }
+
+  .trends {
+    grid-auto-flow: row;
+    gap: 12px;
   }
 }
 
