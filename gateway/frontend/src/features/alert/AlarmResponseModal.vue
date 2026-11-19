@@ -44,13 +44,17 @@ let serverOffset = 0
 async function load() {
   try {
     const r = await getAlarmResponse(props.alarmId)
+    // 화재면 화재 내용까지 받은 뒤 한 번에 넣음
+    // (응답만 먼저 넣으면 화재 창이 잠깐 경보 창 모양으로 떴다가 바뀜 — 2026-11-19 재원님이 찾은 버그)
+    const f = r.fireId ? await getFire(r.fireId) : null
+    if (f) serverOffset = new Date(f.serverTime ?? Date.now()).getTime() - Date.now()
+    fire.value = f
     response.value = r
-    if (r.fireId) {
-      fire.value = await getFire(r.fireId)
-      serverOffset = new Date(fire.value.serverTime ?? Date.now()).getTime() - Date.now()
-    }
+    errorMessage.value = ''
   } catch (error) {
-    errorMessage.value = error.message
+    // 대응하던 알림이 없어짐(다른 사람이 종료 · 상황 초기화) → 잠긴 창이 '없는 알림'으로 남지 않게 닫음
+    if (response.value) alert.close()
+    else errorMessage.value = error.message
   }
 }
 
@@ -215,8 +219,8 @@ function shake() {
               <b>{{ response.reason }}</b>
               <small>{{ response.reasonDetail }}</small>
             </div>
-            <!-- 가스 경보: 배기팬 자동 제어 결과 (자동이면 100%로 올림, 수동이면 안내만) -->
-            <FanAutoNotice v-if="response.fanAuto" :fan="response.fanAuto" tone="alarm" class="gap" />
+            <!-- 가스 경보: 배기팬 자동 제어 결과 (자동이면 100%로 올림, 수동이면 안내만) — 셧다운으로 설비를 세운 뒤에는 숨김 -->
+            <FanAutoNotice v-if="response.fanAuto && !stopped" :fan="response.fanAuto" tone="alarm" class="gap" />
           </section>
           <section>
             <div class="m-sect"><AppIcon name="chart" :size="15" />센서 데이터</div>

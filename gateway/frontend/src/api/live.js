@@ -5,6 +5,7 @@
  *   (api/mock/scenario.js)
  * - 실제 서버: 로그인하면 GET /stream (SSE) 을 열고, 아래 이벤트가 오면 emitLive(이벤트 이름)
  *   alarm.created · alarm.updated · checklist.updated · level.changed · threshold.changed · command.result · reset
+ *   fire.started · fire.updated · fire.cleared
  *   + chat.message (명세서 I2, 백엔드에는 아직 없음)
  *   (백엔드 gateway/backend .../stream/StreamHub 와 같은 이름)
  * - 브라우저 EventSource 는 Authorization 헤더를 못 붙이므로 fetch 로 스트림을 직접 읽음
@@ -34,6 +35,9 @@ const RELOAD_EVENTS = new Set([
   'level.changed',
   'threshold.changed',
   'command.result',
+  'fire.started', // 화재 감지 · 방송 · 해제 (백엔드 FireService) — 2026-11-19 전수조사에서 빠져 있던 것 추가
+  'fire.updated',
+  'fire.cleared',
   'equipment.updated', // 설비 설정(사용 상태 · 배기팬 자동/수동)이 바뀜 — 2026-11-19 추가, 백엔드 StreamHub 에 추가 필요
   'chat.message', // 채팅 새 글 (상단 바 숫자 · 채팅 패널) — 백엔드 StreamHub 에는 아직 없음 (명세서 I2)
   'reset',

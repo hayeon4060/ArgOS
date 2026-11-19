@@ -16,6 +16,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AlarmResponseModal from './AlarmResponseModal.vue'
 import { placeOf, siteNameOf } from './alarmPlace'
+import { hazardLabelOf } from './alarmView'
 import ChecklistProgressModal from './ChecklistProgressModal.vue'
 import WarnDetailModal from './WarnDetailModal.vue'
 import WarnNoticeModal from './WarnNoticeModal.vue'
@@ -52,6 +53,8 @@ let closeFireToast = null
 /** 본사 관리자 알림 띠 (설계안 onState() hq: 주의 · 경보 · 화재) */
 async function notifyHq(a) {
   const at = await where(a)
+  // 유형 문구 '가스 ' · '화재 ' (창 문구와 같게)
+  const kind = hazardLabelOf(a) ? `${hazardLabelOf(a)} ` : ''
   if (a.level === LEVEL.FIRE) {
     const site = [await siteNameOf(a.siteId), placeOf(a).factoryName].filter(Boolean).join(' ')
     closeFireToast = toast(`${site}에서 화재가 감지되었습니다.`, {
@@ -61,9 +64,27 @@ async function notifyHq(a) {
       onAction: () => router.push({ name: 'site-select' }),
     })
   } else if (a.level === LEVEL.ALARM) {
-    toast(`${at} ${placeOf(a).equipmentName}에서 경보가 발생했습니다.`, { type: 'err', ms: 6000, action: '위치 보기', onAction: () => goProcess(a) })
+    toast(`${at} ${placeOf(a).equipmentName}에서 ${kind}경보가 발생했습니다.`, { type: 'err', ms: 6000, action: '위치 보기', onAction: () => goProcess(a) })
   } else {
-    toast(`${at}에서 주의가 발생했습니다.`, { type: 'warn', action: '위치 보기', onAction: () => goProcess(a) })
+    toast(`${at}에서 ${kind}주의가 발생했습니다.`, { type: 'warn', action: '위치 보기', onAction: () => goProcess(a) })
+  }
+}
+
+/**
+ * 열려 있는 주의 창이 지금 알림 상태와 안 맞으면 정리 (2026-11-19 전수조사)
+ * - 주의 알림 창(길게 눌러 확인): 그 알림이 더는 '발생 중'이 아니면 닫음. 다른 사람이 먼저 확인했으면 주의 상세로 넘어감
+ *   (닫지 않으면 잠긴 창이 다른 알림 내용으로 바뀌어 남음 — 예: 가스 주의 창이 경보 직전에 '화재 주의'로 바뀜)
+ * - 주의 상세 창: 그 알림이 대응 목록에서 빠졌으면(종료 · 초기화) 닫음
+ */
+function closeStale(list) {
+  const m = alert.modal
+  if (!m) return
+  const a = list.find((x) => x.id === m.alarmId)
+  if (m.type === 'warn' && a?.status !== 'OPEN') {
+    if (a?.status === 'ACKED' && alert.canAct) alert.open('detail', { alarmId: a.id })
+    else alert.close()
+  } else if (m.type === 'detail' && !a) {
+    alert.close()
   }
 }
 
@@ -78,6 +99,7 @@ watch(
       closeFireToast()
       closeFireToast = null
     }
+    closeStale(list)
     // 새로 '발생 중(OPEN)'이 된 알림 (처음이면 지금 OPEN 인 것 전부)
     const fresh = list.filter((a) => a.status === 'OPEN' && before[a.id] !== 'OPEN')
     if (!fresh.length) return
@@ -100,8 +122,11 @@ watch(
   () => alert.checklists,
   (list) => {
     const done = list.filter((c) => c.status === 'REPORTED')
+    // 경보·화재 대응 중에는 '확인하기' 알림 띠를 미룸 (누르면 잠긴 경보·화재 창이 체크리스트 창으로 바뀌어 버림 — 2026-11-19 전수조사)
+    // 경보·화재가 끝난 뒤 다시 받을 때 띄움
+    const emergency = alert.activeAlarms.some(isEmergency)
     for (const c of done) {
-      if (reportedIds.has(c.id)) continue
+      if (reportedIds.has(c.id) || emergency) continue
       reportedIds.add(c.id)
       if (alert.canAct && alert.modal?.type !== 'checklist') {
         toast(`${c.assignee.name} 님이 체크리스트 ${c.items.length}개 항목을 모두 마쳤습니다.`, {
