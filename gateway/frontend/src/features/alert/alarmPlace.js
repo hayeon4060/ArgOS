@@ -55,13 +55,27 @@ export function sensorTypeOfDetail(detail) {
   return detail?.sensorType ?? detail?.sensors?.find((s) => s.tag === tag)?.type ?? TYPE_BY_PREFIX[tag.split('-')[0]] ?? null
 }
 
+/* 유형별로 보여 줄 추이 2개 (2026-11-19 재원님 요청) — 화재: 온도·전류 / 가스: CO·전류 */
+const TREND_TYPES = { FIRE: ['TEMP', 'CURRENT'], GAS: ['CO', 'CURRENT'] }
+
 /**
- * 주의 상세의 trend → 제목 '전류 추이' · 소수 자리
- * - trend 에는 tag · unit 만 있음 (백엔드 AlarmService.detail) → 종류는 같은 응답 sensors 에서 tag 로 찾음
- * @returns {{ title: string, tag: string, dec: number }}
+ * 주의 상세 아래 추이 그래프 목록
+ * - 응답 trends[] (센서별 추이) 에서 유형에 맞는 2개를 순서대로 고름
+ * - trends 가 없으면(백엔드 반영 전) 지금처럼 trend 하나만
+ * TODO(백엔드): GET /alarms/{id}/detail 에 trends[] 추가 (docs/api/warn-detail-trends.md)
+ * @param {object|null} detail
+ * @param {'FIRE'|'GAS'|null} hazard
+ * @returns {Array<{ trend: object, title: string, tag: string, dec: number }>}
  */
-export function trendInfo(detail) {
-  const tag = detail?.trend?.tag ?? detail?.rule?.sensorTag ?? ''
-  const meta = sensorTypeOf(sensorTypeOfDetail(detail))
-  return { title: `${meta?.label ?? '센서'} 추이`, tag, dec: meta?.dec ?? 1 }
+export function trendsOf(detail, hazard) {
+  if (!detail) return []
+  const typeOf = (t) => t.type ?? detail.sensors?.find((s) => s.tag === t.tag)?.type ?? TYPE_BY_PREFIX[(t.tag ?? '').split('-')[0]] ?? null
+  const list = detail.trends?.length ? detail.trends : detail.trend ? [detail.trend] : []
+  const wanted = TREND_TYPES[hazard]
+  // 유형에 맞는 종류만, 정해 둔 순서대로 (하나도 못 찾으면 받은 그대로)
+  const picked = wanted ? wanted.map((type) => list.find((t) => typeOf(t) === type)).filter(Boolean) : []
+  return (picked.length ? picked : list).map((t) => {
+    const meta = sensorTypeOf(typeOf(t))
+    return { trend: t, title: `${meta?.label ?? '센서'} 추이`, tag: t.tag ?? '', dec: meta?.dec ?? 1 }
+  })
 }

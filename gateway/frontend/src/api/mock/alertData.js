@@ -5,7 +5,7 @@
  *   GET /alarms/{id}/detail   : 주의 상세 (원인, 그때 센서값, 열화상 1장, 추이, 원인 후보)
  *   GET /checklists/{id}      : 체크리스트 한 건
  */
-import { alarmTrendPoints } from './equipmentSeries'
+import { alarmTrendPoints, alarmTrendPointsOf } from './equipmentSeries'
 import { mockAlarms, todayAt } from './data'
 import { THERMAL_BY_STATE, mockEquipmentEvents } from './equipmentData'
 import { EQUIPMENT, equipmentLevel, runStateOf, sensorsNow } from './processData'
@@ -136,6 +136,12 @@ export function alarmDetail(alarmId) {
       cameraTag: 'IR-01',
     },
     trend: { sensorId: 117, tag: 'CT-17', unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
+    // 센서별 추이 (2026-11-19 추가, 백엔드 요청 docs/api/warn-detail-trends.md) — 화면은 화재면 온도·전류를 고름
+    trends: [
+      { sensorId: 117, tag: 'CT-17', type: 'CURRENT', unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
+      { sensorId: 215, tag: 'TE-15', type: 'TEMP', unit: '℃', warn: 160, alarm: 180, points: alarmTrendPointsOf('TEMP', v[215]) },
+      { sensorId: 313, tag: 'CO-13', type: 'CO', unit: 'ppm', warn: 20, alarm: 30, points: alarmTrendPointsOf('CO', v[313]) },
+    ],
     causeCandidates: ['베어링 마모', '구동 벨트 장력 이상', '배기 덕트 댐퍼 막힘'],
     equipmentType: 'OVEN',
     sensorType: 'CURRENT',
@@ -179,6 +185,12 @@ function gasAlarmDetail(a) {
     },
     // 추이: 16:00 부터 6 ppm 근처 → 마지막에 24 ppm 으로 오름 (예시)
     trend: { sensorId: 313, tag: 'CO-13', unit: 'ppm', warn: 20, alarm: 30, points: gasTrendPoints() },
+    // 센서별 추이 — 화면은 가스면 CO·전류를 고름 (가스 주의 때 전류는 평소 값 18 A 근처)
+    trends: [
+      { sensorId: 117, tag: 'CT-17', type: 'CURRENT', unit: 'A', warn: 21.6, alarm: 27, points: usualTrendPoints(18, 0.4, v[117]) },
+      { sensorId: 215, tag: 'TE-15', type: 'TEMP', unit: '℃', warn: 160, alarm: 180, points: alarmTrendPointsOf('TEMP', v[215]) },
+      { sensorId: 313, tag: 'CO-13', type: 'CO', unit: 'ppm', warn: 20, alarm: 30, points: gasTrendPoints() },
+    ],
     causeCandidates: ['버너 공연비 이상 (불완전 연소)', '배기 덕트 댐퍼 막힘', '배기팬 회전수 부족'],
     equipmentType: 'OVEN',
     sensorType: 'CO',
@@ -194,6 +206,12 @@ function gasTrendPoints() {
   const pts = alarmTrendPoints()
   const n = pts.length
   return pts.map(([t], k) => [t, k < n - 8 ? 6 + ((k * 7) % 3) : Math.round(6 + ((k - (n - 8)) / 7) * 18)])
+}
+
+/** 평소 값 근처에서 조금씩 흔들리는 추이 (마지막 값은 last) */
+function usualTrendPoints(base, amp, last) {
+  const pts = alarmTrendPoints()
+  return pts.map(([t], k) => [t, k === pts.length - 1 ? last : Math.round((base + Math.sin(k * 1.3) * amp) * 10) / 10])
 }
 
 /* ───────── GET /checklists/{id} ───────── */

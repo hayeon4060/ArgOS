@@ -5,6 +5,8 @@
 | `ArgOS_API명세서.html` | 화면별로 부르는 API, 요청·응답 예시, 권한, 쓰는 DB 테이블, 에러, SSE 이벤트, 푸시 종류 |
 | `ArgOS_API구성도.png` | 화면 · 연계 서버 · DB · 중앙 서버 · 푸시 사이의 API 흐름 그림 |
 | `stats-history-30days.md` | (2026-11-19 요청) 통계·이력 조회 기간 1년 → 최대 30일, 백엔드 할 일 |
+| `alarm-modal-hazard.md` | (2026-11-19 요청) 주의·경보 창 유형 문구, 경보 대응 `title` 에 유형 넣기 |
+| `warn-detail-trends.md` | (2026-11-19 요청) 주의 상세 창 추이 그래프 2개 — `GET /alarms/{id}/detail` 에 `trends[]` 추가 |
 
 ## 이 문서의 성격
 

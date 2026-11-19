@@ -2,10 +2,11 @@
   지도에서 공장을 눌렀을 때 뜨는 말풍선 (설계안 v-dash.js vSite() 의 pop)
   - 들어갈 수 있는 공장(5공장): 공정 목록과 단계 + '공정 배치도 보기'
   - 그 외 공장: 오늘 알림 건수 + '아직 등록되지 않음' 안내
-  - 위치: anchor(구역 가운데, %) 의 오른쪽에, 지도 오른쪽 끝이면 왼쪽에 띄움
+  - 위치: anchor(구역 가운데, %) 의 오른쪽에 띄움 (2026-11-19 재원님 요청: 왼쪽 말고 오른쪽)
+    오른쪽 자리가 모자라면 점과의 간격(70px)을 줄여서 지도 안에 넣고, 그래도 안 들어갈 때만 왼쪽에 띄움
 -->
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { keyOf } from '@/features/site/stages'
@@ -22,19 +23,43 @@ const props = defineProps({
 
 const emit = defineEmits(['enter'])
 
-// 지도 오른쪽(60% 넘음)에 있는 공장이면 말풍선을 왼쪽에
-const onLeft = computed(() => props.anchor.x > 60)
+/* 말풍선 자리: 점에서 70px 띄우고 너비 292px (아래 CSS 와 같은 값), 간격은 24px 까지 줄일 수 있음 */
+const GAP = 70
+const MIN_GAP = 24
+const WIDTH = 292
+
+// 지도(말풍선이 놓이는 칸) 너비 — 창 크기가 바뀌면 다시 잼
+const root = ref(null)
+const mapWidth = ref(0)
+const measure = () => (mapWidth.value = root.value?.offsetParent?.clientWidth ?? 0)
+onMounted(() => {
+  measure()
+  window.addEventListener('resize', measure)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', measure))
+
+// 오른쪽에 둘 때 점과의 간격: 지도 오른쪽 끝(여백 8px)을 넘지 않게 70px 에서 줄임
+const gap = computed(() => {
+  if (!mapWidth.value) return GAP
+  const dotX = (props.anchor.x / 100) * mapWidth.value
+  return Math.min(GAP, mapWidth.value - 8 - WIDTH - dotX)
+})
+// 간격을 줄여도 안 들어갈 때만 왼쪽에
+const onLeft = computed(() => gap.value < MIN_GAP)
+
 const style = computed(() => ({
   left: `${props.anchor.x}%`,
   top: `${props.anchor.y}%`,
 }))
+// 말풍선: 오른쪽이면 점에서 gap 만큼, 왼쪽이면 CSS(.left) 값
+const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, marginLeft: `${gap.value}px` }))
 </script>
 
 <template>
   <!-- 구역 가운데 점 -->
   <span class="dot" :style="{ ...style, background: LEVEL_META[factory.level].color }" />
 
-  <div class="zone-popover" :class="{ left: onLeft }" :style="style" @click.stop>
+  <div ref="root" class="zone-popover" :class="{ left: onLeft }" :style="popStyle" @click.stop>
     <div class="head">
       {{ factory.name }}
       <LevelBadge :level="factory.level" />
@@ -76,7 +101,7 @@ const style = computed(() => ({
   pointer-events: none;
 }
 
-/* 말풍선: 기본은 점 오른쪽 70px, 왼쪽 모드는 점 왼쪽 70px */
+/* 말풍선: 기본은 점 오른쪽 70px, 자리가 없을 때만 점 왼쪽 70px (.left) */
 .zone-popover {
   position: absolute;
   z-index: 4;

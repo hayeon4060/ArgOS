@@ -725,3 +725,8 @@
 - '센서 데이터 · 열화상 확인' 창을 주의 상세 창에 합침 (`GET /alarms/{id}/detail` 한 번으로 그림). 새 API·DB 없음.
 - 요청 1개: `GET /alarms/{id}/response` 의 `title` 에 유형 넣기. 자세한 내용: 저장소 **`docs/api/alarm-modal-hazard.md`**.
 
+## 23. 주의 상세 창 추이 그래프 2개 · 공장 말풍선 위치 (2026-11-19, 재원님 요청)
+
+- 주의 상세 창 아래 추이 그래프 2개: 화재 주의 = 온도·전류, 가스 주의 = CO·전류.
+- 요청 1개: `GET /alarms/{id}/detail` 에 센서별 추이 `trends[]` 추가 (지금은 알림 센서 하나의 `trend` 만). 없으면 화면은 `trend` 하나만 그림. 자세한 내용: 저장소 **`docs/api/warn-detail-trends.md`**.
+- 사업장 지도에서 공장을 누르면 뜨는 공정 목록 말풍선을 공장 오른쪽에 띄움 (화면만 바뀜, API 없음).
