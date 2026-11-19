@@ -86,6 +86,11 @@ h2 small {
   text-decoration: none;
 }
 
+.row.router-link-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
 .row.fresh {
   border-color: #93c5fd;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
@@ -118,6 +123,7 @@ h2 small {
 
 .text b {
   font-size: 15px;
+  word-break: keep-all; /* 좁은 목록(폴드 펼침)에서 낱말 가운데서 끊지 않게 */
 }
 
 .at {

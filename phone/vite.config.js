@@ -18,11 +18,16 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url))
 // 관제 웹 위치: ARGOS_WEB → 저장소 안(../gateway/frontend) → 압축 풀어 둔 사본(../ArgOS-develop/...) 순서
 const web = process.env.ARGOS_WEB
   ? path.resolve(process.env.ARGOS_WEB)
-  : [here('../gateway/frontend'), here('../ArgOS-develop/ArgOS-develop/gateway/frontend')].find((p) => existsSync(p))
+  : [here('../gateway/frontend'), here('../ArgOS-develop/gateway/frontend'), here('../ArgOS-develop/ArgOS-develop/gateway/frontend')].find((p) =>
+      existsSync(p),
+    )
+if (!web) throw new Error('관제 웹(gateway/frontend) 폴더를 찾지 못했습니다. ARGOS_WEB=경로 로 알려 주세요.')
 
 export default defineConfig(({ command }) => ({
   base: command === 'serve' ? '/phone/' : './',
   plugins: [vue()],
+  // 설치형 앱 푸시(src/push.js): Firebase 설정 파일 없이 FCM 을 켜면 앱이 멈출 수 있어 빌드할 때 있는지 알려 줌
+  define: { __FCM__: JSON.stringify(existsSync(here('./android/app/google-services.json'))) },
   resolve: {
     alias: [
       { find: /^@\/utils\/storage(\.js)?$/, replacement: here('./src/storage.js') },

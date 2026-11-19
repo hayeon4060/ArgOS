@@ -2,7 +2,8 @@
  * 담당자 앱 라우터
  *
  * 화면 (수행계획서 '앱 화면', API 명세서 M1·M2):
- *  로그인(#/login) → 공정 현황(#/) : 담당 공정 설비 상태
+ *  로그인(#/login) → 공정 현황(#/) : 담당 공정 설비 상태 + 3D 설비 배치도
+ *                  → 설비 상세(#/equipment/:id) : 주의 상세 · 열화상 · 체크리스트 시작
  *                → 체크리스트(#/checklists) : 공장 담당자에게 받은 목록 → 한 건(#/checklists/:id) 체크 · 완료 보고
  *
  * - 해시 주소: Capacitor 로 감쌌을 때도 서버 설정 없이 동작
@@ -21,6 +22,12 @@ const routes = [
     // meta.tab: 아래 탭 표시, meta.back: 위 바 뒤로 단추가 갈 곳
     children: [
       { path: '', name: 'home', component: () => import('./pages/HomePage.vue'), meta: { tab: 'home', title: '공정 현황' } },
+      {
+        path: 'equipment/:equipmentId',
+        name: 'equipment',
+        component: () => import('./pages/EquipmentPage.vue'),
+        meta: { tab: 'home', title: '설비 상세', back: 'home' },
+      },
       {
         path: 'checklists',
         name: 'checklists',

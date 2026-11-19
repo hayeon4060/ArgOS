@@ -24,6 +24,11 @@
 
         </activity>
 
+        <!-- FCM 알림 기본 채널: 앱 push.js 가 만드는 중요도 최대 채널 (화면 꺼져 있어도 소리 · 진동 · 화면 위 알림) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="argos_alert" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -38,4 +43,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 휴대폰 알림(FCM) 허용 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

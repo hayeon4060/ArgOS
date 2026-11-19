@@ -3,15 +3,21 @@
   - 경보·화재 띠: 담당 공정이 경보 이상이면 맨 위에 빨간 띠 (공장 담당자 지시 · 대피 안내)
   - 할 일: 진행 중 체크리스트 (누르면 체크리스트로)
   - 담당 공정 상태: 공정 단계 + 설비 단계별 개수
-  - 설비 목록: 내 담당 설비 먼저, 그 안에서 이상 있는 설비 먼저. 설비마다 센서 지금 값(단계 색)과 배기팬
+  - 설비 배치도: 웹과 같은 도장 공정 3D 배치도(PaintMap), 설비를 누르면 설비 상세
+    휴대폰 폭에서는 크게 그려 좌우로 밀어 보게 하고, 처음에는 내 담당 설비(이상 있는 것 먼저)를 가운데로
+  - 설비 목록: 내 담당 설비 먼저, 그 안에서 이상 있는 설비 먼저. 설비마다 센서 지금 값(단계 색)과 배기팬, 누르면 설비 상세
   - 데이터: GET /processes/{id}/layout · /status (웹 3D 배치도와 같은 API, processId 는 로그인 응답 scope.processIds)
     값이 바뀌면(SSE, 지금은 예시 상황) 조용히 다시 불러옴
 -->
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getProcessLayout, getProcessStatus } from '@/api/process'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
+import PaintMap from '@/features/process/PaintMap.vue'
+import { svgKeyOf } from '@/features/process/paintLayout'
+import { layoutPlacement } from '@/features/process/processEquipment'
 import { useAuthStore } from '@/stores/auth'
 import { LEVEL, LEVEL_META, SENSOR_STAGES } from '@/types/codes'
 import { useLiveReload } from '@/utils/useLiveReload'
@@ -21,6 +27,7 @@ import { useMyChecklistsStore } from '../stores/myChecklists'
 
 const auth = useAuthStore()
 const my = useMyChecklistsStore()
+const router = useRouter()
 
 const processId = computed(() => auth.user?.scope?.processIds?.[0] ?? null)
 const layout = ref(null)
@@ -59,6 +66,7 @@ const equipment = computed(() => {
   return layout.value.equipment
     .map((e) => ({
       id: e.id,
+      key: svgKeyOf(e.code), // 배치도 그림 안 이름
       name: e.name,
       level: eqStatus[e.id]?.level ?? LEVEL.NORMAL,
       fan: eqStatus[e.id]?.fan ?? null,
@@ -71,6 +79,24 @@ const equipment = computed(() => {
 const mine = computed(() => equipment.value.filter((e) => e.mine))
 const others = computed(() => equipment.value.filter((e) => !e.mine))
 const danger = computed(() => RANK[status.value?.level] >= RANK[LEVEL.ALARM])
+
+/** 공장 관리에서 옮긴 설비 자리 · 사용 안 함 (웹 배치도와 같게) */
+const placement = computed(() => layoutPlacement(layout.value))
+const openEquipment = (e) => router.push({ name: 'equipment', params: { equipmentId: e.id } })
+
+const mapScroll = ref(null)
+const paintMap = ref(null)
+/** 좌우로 밀 수 있을 때(휴대폰 폭) 내 담당 설비를 가운데로 */
+function centerMap() {
+  const box = mapScroll.value
+  const target = mine.value[0]
+  if (!box || !target || box.scrollWidth <= box.clientWidth) return
+  const p = placement.value.positions[target.key] ?? paintMap.value.defaultPositions()[target.key]
+  const vb = box.querySelector('svg')?.viewBox.baseVal
+  if (!p || !vb?.width) return
+  box.scrollLeft = ((p.x - vb.x) / vb.width) * box.scrollWidth - box.clientWidth / 2
+}
+watch(paintMap, (m) => m && centerMap(), { flush: 'post' })
 
 /** 설비 단계별 개수 (정상·주의·경보) */
 const counts = computed(() =>
@@ -127,12 +153,40 @@ const counts = computed(() =>
         </ul>
       </section>
 
+      <!-- 3D 설비 배치도 -->
+      <section class="map-card">
+        <div class="map-head">
+          <b>설비 배치도</b>
+          <span>설비를 누르면 상세</span>
+        </div>
+        <div ref="mapScroll" class="map-scroll">
+          <div class="map">
+            <PaintMap
+              ref="paintMap"
+              :equipment="equipment"
+              :positions="placement.positions"
+              :inactive="placement.inactive"
+              @select="openEquipment"
+              @fan="openEquipment"
+            />
+          </div>
+        </div>
+      </section>
+
       <h2>내 담당 설비 <small>{{ mine.length }}</small></h2>
-      <EquipmentCard v-for="e in mine" :key="e.id" :equipment="e" />
+      <div class="grid">
+        <RouterLink v-for="e in mine" :key="e.id" :to="{ name: 'equipment', params: { equipmentId: e.id } }" class="eq-link">
+          <EquipmentCard :equipment="e" />
+        </RouterLink>
+      </div>
       <p v-if="!mine.length" class="state small">담당으로 지정된 설비가 없습니다.</p>
 
       <h2>공정의 다른 설비 <small>{{ others.length }}</small></h2>
-      <EquipmentCard v-for="e in others" :key="e.id" :equipment="e" compact />
+      <div class="grid">
+        <RouterLink v-for="e in others" :key="e.id" :to="{ name: 'equipment', params: { equipmentId: e.id } }" class="eq-link">
+          <EquipmentCard :equipment="e" compact />
+        </RouterLink>
+      </div>
     </template>
   </div>
 </template>
@@ -297,6 +351,45 @@ const counts = computed(() =>
   background: var(--color-level-alarm);
 }
 
+.map-card {
+  margin-top: 12px;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.map-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 15px;
+}
+
+.map-head span {
+  font-size: 12px;
+  color: var(--color-text-weak);
+}
+
+/* 휴대폰 폭: 카드 끝까지 넓혀 크게 그리고 좌우로 밀어 봄 */
+.map-scroll {
+  margin: 6px -14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* 웹 배치도 칸 비율 (1236 × 790) */
+.map {
+  width: 170%;
+  aspect-ratio: 1236 / 790;
+}
+
+.eq-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
 h2 {
   display: flex;
   align-items: baseline;
@@ -319,6 +412,33 @@ h2 small {
 .state.small {
   margin-top: 0;
   font-size: 13px;
+}
+
+/* 폴드 펼친 화면: 할 일 여러 개·설비 카드를 두 줄로 */
+@media (min-width: 600px) {
+  .todo,
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    align-items: start;
+  }
+
+  .grid :deep(.eq) {
+    margin-bottom: 0;
+  }
+
+  /* 펼친 화면: 배치도 전체를 한 번에 */
+  .map-scroll {
+    margin: 6px 0 0;
+    overflow: visible;
+  }
+
+  .map {
+    width: auto;
+    max-width: 900px;
+    margin: 0 auto;
+  }
 }
 
 @keyframes danger-pulse {

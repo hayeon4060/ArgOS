@@ -99,3 +99,6 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# Firebase 설정 (프로젝트마다 다름, 커밋 금지 — phone/README.md 설치형 앱 알림)
+app/google-services.json

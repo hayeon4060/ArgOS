@@ -4,6 +4,7 @@
   - 센서 지금 값: 정상은 회색, 주의·경보는 그 색 글자 + '주의 기준 21.6'
   - 배기팬이 있으면 켜짐·회전수
   - compact: 공정의 다른 설비 — 정상이면 센서 값을 한 줄로 줄임
+  - 누르면 설비 상세 (감싸는 링크는 HomePage), 오른쪽 위 꺾쇠가 그 표시
 -->
 <script setup>
 import AppIcon from '@/components/AppIcon.vue'
@@ -24,7 +25,7 @@ const short = () => props.compact && props.equipment.level === LEVEL.NORMAL
   <article class="eq" :class="`is-${LEVEL_META[equipment.level]?.key}`">
     <div class="head">
       <b>{{ equipment.name }}</b>
-      <LevelBadge :level="equipment.level" />
+      <span class="head-right"><LevelBadge :level="equipment.level" /><AppIcon name="cr" :size="16" class="chev" /></span>
     </div>
 
     <p v-if="short()" class="line mono">
@@ -75,6 +76,16 @@ const short = () => props.compact && props.equipment.level === LEVEL.NORMAL
   justify-content: space-between;
   gap: 8px;
   font-size: 15px;
+}
+
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chev {
+  color: var(--color-text-weak);
 }
 
 .line {
