@@ -17,7 +17,7 @@ export function getEquipmentTree(factoryId) {
   return http.get('/equipment/tree', { params: { factoryId } })
 }
 
-/** 센서별 계절 기준 */
+/** 센서별 계절 기준 — seasons[계절] = { warn, alarm, lowWarn, lowAlarm, warnHoldSec, alarmHoldSec, validFrom } */
 export function getThresholds(equipmentId) {
   if (USE_MOCK) {
     const data = equipmentThresholds(equipmentId)
@@ -28,7 +28,8 @@ export function getThresholds(equipmentId) {
 
 /**
  * 변경 미리보기: { current: { warnCount, alarmCount }, proposed: {...}, diff, hits }
- * @param {{ sensorId, warn, alarm, warnHoldSec?, alarmHoldSec?, days? }} body
+ * @param {{ sensorId, warn, alarm, lowWarn?, lowAlarm?, warnHoldSec?, alarmHoldSec?, days? }} body
+ *   lowWarn · lowAlarm: 하한 기준 (전류 센서만 값이 있음, DB sensor_threshold.low_warn · low_alarm)
  */
 export function simulateThreshold(body) {
   if (USE_MOCK) return mockOk(simulate(body))
@@ -38,7 +39,7 @@ export function simulateThreshold(body) {
 /**
  * 저장
  * @param {number} equipmentId
- * @param {{ season, version, reason, sensors: [{ sensorId, warn, alarm, warnHoldSec, alarmHoldSec }] }} body
+ * @param {{ season, version, reason, sensors: [{ sensorId, warn, alarm, lowWarn, lowAlarm, warnHoldSec, alarmHoldSec }] }} body
  * @param {string} by 예시 데이터에서 '바꾼 사람' 기록용 (실제 서버는 토큰으로 앎)
  */
 export function saveThresholds(equipmentId, body, by) {
