@@ -6,21 +6,24 @@
  * - 상황이 바뀌면 emitLive() → 열려 있는 화면이 조용히 다시 불러옴 (api/live.js)
  *   실제 서버에서는 이 파일 대신 SSE 이벤트가 같은 일을 함
  * - 상황 바꾸기 도구(features/demo/DemoTool.vue, 개발 모드에서만)와 주의 확인·체크리스트 API 흉내가 아래 함수를 부름
- * - 여러 화면이 같은 상황을 봄 (실제 서버에서는 SSE 가 하는 일)
- *   · 개발 서버(npm run dev): 개발 서버가 상황 하나를 들고 중계 (vite.config.js mockSync)
- *     → PC 관제 웹과 휴대폰 담당자 앱(/phone/)처럼 다른 기기끼리도 바로 같이 바뀜
- *   · 개발 서버가 없으면: 같은 브라우저 창끼리만 (localStorage storage 이벤트)
- *   localStorage 에도 저장해 새로고침해도 이어짐. 처음 상황으로 돌리려면 상황 바꾸기 도구 '처음 상황'
- * - phoneUsers: 담당자 앱을 켜 둔 공정 담당자 id 목록 — 받는 사람이 앱에 있으면 체크리스트 자동 진행을 안 함
- * - 담당자 앱이 남긴 항목별 결과·메모는 checklist.results[i] = { result, memo }, 완료 보고 한 줄은 checklist.reportMemo
- *   (phone/src/api/myChecklists.js 가 씀. 없으면 예전처럼 '이상 없음' · 2번째 항목 현장 메모)
+ * - 새로고침해도 이어지게 sessionStorage 에 저장 (브라우저 탭을 닫으면 처음 상황으로)
+ * - 개발 서버에서는 웹·담당자 앱(휴대폰)이 같은 상황을 봄: 바뀌면 개발 서버(mockSync.js)에 올리고,
+ *   다른 화면이 바꾼 상황을 받아 덮어씀 (scenarioSynced = 처음 한 번 맞춘 뒤)
  *
  * 처음 상황(기본값) = 그동안 화면들이 보여 주던 상황:
  *   16:38:20 상도 건조로 배기팬 전류 CT-17 22.4 A 주의 → 16:38:31 확인 → 16:41:05 체크리스트 전송 → 김도현 2/5 진행 중
+ *
+ * 시각: 위의 시각표(16:38:20 · 16:52:08 · 16:58:04 …)는 화면설계안의 시각.
+ *   상황을 바꾸는 순간을 '지금'으로 삼아 시각표 전체를 같은 간격만큼 옮김 (anchorAt)
+ *   → 이 상황(상도 건조로 주의 · 경보 · 화재)의 시각은 오후 4시 전에 시연해도 상단 시계보다 미래로 보이지 않음. 시각 사이 간격은 설계안 그대로
+ *   (그 밖의 오늘 기록 — 오전·오후의 해제된 알림, 점검 일정 17:00 등 — 은 고정 시각 그대로라 이른 시각에는 미래로 보일 수 있음)
+ *   옮긴 간격은 scenario.shiftSec 에 두고, 다른 예시 데이터의 설계안 시각도 designAt() 으로 같이 옮김
+ *   (자정 바로 뒤에 상황을 바꾸면 앞선 시각이 전날 밤 시각이 될 수 있음 — 예시 데이터라 날짜는 따로 맞추지 않음)
  */
 import { reactive, toRaw, watch } from 'vue'
 import { emitLive } from '../live'
 import { LEVEL } from '@/types/codes'
+import { USE_MOCK } from './index'
 
 const STORAGE_KEY = 'argos.mock.scenario'
 
@@ -61,9 +64,43 @@ const toSec = (t) => {
 }
 const toTime = (sec) => `${pad(Math.floor(sec / 3600) % 24)}:${pad(Math.floor(sec / 60) % 60)}:${pad(sec % 60)}`
 
+/* ───────── 설계안 시각표를 '지금' 기준으로 옮기기 ───────── */
+
+const DAY_SEC = 24 * 3600
+const TIME_RE = /^\d{2}:\d{2}:\d{2}$/
+/** 하루 안으로 (음수·24시 넘음 → 0~24시) */
+const wrapDay = (sec) => ((sec % DAY_SEC) + DAY_SEC) % DAY_SEC
+/** 지금 PC 시각 (0시부터 초) */
+const nowSec = () => {
+  const d = new Date()
+  return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
+}
+
+/** 'HH:mm:ss' 를 sec 초만큼 옮김 (비어 있으면 그대로) */
+export const shiftTime = (t, sec) => (t ? toTime(wrapDay(toSec(t) + sec)) : t)
+
+/** 값 안의 'HH:mm:ss' 문자열을 모두 sec 초만큼 옮김 (객체 · 배열 안까지) */
+function shiftDeep(v, sec) {
+  if (typeof v === 'string') return TIME_RE.test(v) ? shiftTime(v, sec) : v
+  if (Array.isArray(v)) return v.map((x) => shiftDeep(x, sec))
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shiftDeep(x, sec)]))
+  return v
+}
+
+/**
+ * 설계안 시각표로 만든 상황을, base 시각이 '지금'이 되도록 옮김
+ * @param {string} base 설계안에서 이 상황이 시작된 시각 (예: 주의 발생 '16:38:20')
+ * @param {object} next 설계안 시각으로 적은 상황 값
+ * @returns {object} 시각을 옮긴 상황 값 + shiftSec(옮긴 초)
+ */
+export function anchorAt(base, next) {
+  const shiftSec = nowSec() - toSec(base)
+  return { ...shiftDeep(next, shiftSec), shiftSec }
+}
+
 /** 처음 상황 */
 function initial() {
-  return {
+  return anchorAt('16:42:10', {
     /** 'NORMAL' | 'WARN' | 'ALARM' | 'FIRE' */
     state: LEVEL.WARN,
     /** 상도 건조로 전류 주의 알림 (없으면 null). status: OPEN → ACKED → ACTING → CLOSED */
@@ -101,7 +138,7 @@ function initial() {
     thresholdVersion: {},
     /** 예시 시계: base 시각에서 실제로 흐른 초를 더함 */
     clock: { base: '16:42:10', at: Date.now() },
-  }
+  })
 }
 
 /** 경보·화재가 없는 상태 (상황을 통째로 바꿀 때 같이 비움) */
@@ -109,9 +146,10 @@ export const NO_EMERGENCY = () => ({ incident: null, fire: null, shutdown: null,
 
 function load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY))
     // 예전에 저장된 값에 새 칸이 없을 수 있어 처음 값 위에 덮음
-    if (saved?.state) return { ...initial(), ...saved }
+    // shiftSec 이 없는 예전 값은 설계안 시각 그대로였으므로 0
+    if (saved?.state) return { ...initial(), shiftSec: 0, ...saved }
   } catch {
     // 저장된 값을 못 읽으면 처음 상황
   }
@@ -121,83 +159,79 @@ function load() {
 /** 지금 예시 상황 (화면에서 직접 고치지 말고 아래 함수로만 바꿈) */
 export const scenario = reactive(load())
 
-/** 마지막으로 저장했거나 받은 값 (같은 값을 다시 보내 화면끼리 주고받기가 끝없이 이어지지 않게) */
-let lastJson = null
+/* ───────── 화면끼리 같은 상황 (개발 서버 중계) ───────── */
 
-/** 개발 서버 중계 주소 (vite.config.js mockSync). 개발 서버가 없으면(배포 빌드·Capacitor 앱) 이 기기 안에서만 */
-const SYNC_URL = import.meta.env.DEV ? '/__mock/scenario' : null
-/** 처음에 중계 서버 값을 받기 전에는 보내지 않음 (휴대폰의 오래된 상황이 PC 의 지금 상황을 덮지 않게) */
-let synced = !SYNC_URL
+// 설치형 앱(APK) 시연 빌드는 앱 안에 개발 서버가 없으므로 PC 개발 서버 주소를 빌드할 때 넣음 (담당자 앱 .env.production.local)
+// 앱 로그인 화면에서 바꾼 PC 주소(argos.relay)가 있으면 그것 — PC 주소가 바뀌어도 다시 빌드하지 않게
+const RELAY = import.meta.env.DEV ? '' : savedRelay() || (import.meta.env.VITE_MOCK_RELAY ?? '')
+function savedRelay() {
+  try {
+    return localStorage.getItem('argos.relay') ?? ''
+  } catch {
+    return ''
+  }
+}
+const SYNC = USE_MOCK && (import.meta.env.DEV || !!RELAY)
+const SYNC_URL = `${RELAY}/__mock/scenario`
+const syncId = Math.random().toString(36).slice(2) // 내가 올린 것은 다시 받지 않음
+let synced = '' // 마지막으로 서버와 같았던 상황 (JSON) — 같으면 다시 올리지 않음
 
-function send(json) {
-  fetch(SYNC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json }).catch(() => {
-    // 개발 서버가 꺼졌으면 이 기기 안에서만 계속
-  })
+function pushScenario(json) {
+  synced = json
+  fetch(SYNC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: `{"from":"${syncId}","state":${json}}` }).catch(
+    () => {}, // 개발 서버가 꺼져 있으면 이 화면 혼자 동작
+  )
 }
 
-// 바뀔 때마다 저장 (+ 중계 서버로)
+function applyRemote(state) {
+  for (const k of Object.keys(scenario)) if (!(k in state)) delete scenario[k]
+  Object.assign(scenario, state)
+  synced = JSON.stringify(toRaw(scenario))
+  emitLive('level.changed')
+}
+
+/** 처음 한 번 서버 상황에 맞춤 (서버에 아직 없으면 내 상황을 올림). 개발 서버가 아니면 바로 끝 */
+export const scenarioSynced = !SYNC
+  ? Promise.resolve()
+  : new Promise((resolve) => {
+      const sync = () =>
+        fetch(SYNC_URL)
+          .then((r) => r.json())
+          .then(({ state }) => (state ? applyRemote(state) : pushScenario(JSON.stringify(toRaw(scenario)))))
+          .catch(() => {})
+          .finally(resolve)
+      const es = new EventSource(`${SYNC_URL}/stream`)
+      es.onopen = sync // 개발 서버를 다시 켜서 다시 연결돼도 맞춤
+      es.onerror = resolve // 중계가 없는 서버면 기다리지 않음
+      es.onmessage = (e) => {
+        const { from, state } = JSON.parse(e.data)
+        if (from !== syncId) applyRemote(state)
+      }
+    })
+
+// 바뀔 때마다 저장 (+ 개발 서버에 올림)
 watch(
   scenario,
   () => {
     const json = JSON.stringify(toRaw(scenario))
-    if (json === lastJson) return
-    lastJson = json
     try {
-      localStorage.setItem(STORAGE_KEY, json)
+      sessionStorage.setItem(STORAGE_KEY, json)
     } catch {
       // 저장 못 해도 화면은 그대로 동작
     }
-    if (SYNC_URL && synced) send(json)
+    if (SYNC && json !== synced) pushScenario(json)
   },
   { deep: true },
 )
-
-/** 다른 화면이 바꾼 상황을 받아 열린 화면을 다시 불러옴 */
-function applyRemote(json) {
-  if (!json || json === lastJson) return // 내가 보낸 값이 되돌아온 것
-  try {
-    const next = JSON.parse(json)
-    if (!next?.state) return
-    stopTick() // 다른 화면이 상황을 움직이고 있으면 이 화면의 자동 진행은 멈춤
-    Object.assign(scenario, next)
-    // 받은 글자 그대로가 아니라 이 화면 기준으로 다시 만든 값: 화면마다 키 순서가 달라도 되돌려 보내지 않게
-    lastJson = JSON.stringify(toRaw(scenario))
-    emitLive('scenario.synced')
-  } catch {
-    // 깨진 값은 무시
-  }
-}
-
-/** 중계 서버와 처음 맞추기가 끝나면 풀림 (담당자 앱이 '앱 켜 둠' 표시를 이 뒤에 함) */
-export const scenarioSynced = SYNC_URL
-  ? fetch(SYNC_URL)
-      .then((r) => r.text())
-      .then((json) => {
-        synced = true
-        if (json && json !== 'null') applyRemote(json)
-        else send((lastJson = JSON.stringify(toRaw(scenario)))) // 중계 서버가 비었으면 이 화면 값으로 시작
-      })
-      .catch(() => {
-        synced = true
-      })
-  : Promise.resolve()
-
-if (SYNC_URL) {
-  // 다른 기기·창이 바꾸면 중계 서버가 바로 보내 줌 (끊기면 브라우저가 알아서 다시 연결)
-  new EventSource(`${SYNC_URL}/stream`).onmessage = (e) => applyRemote(e.data)
-} else {
-  // 개발 서버가 없으면 같은 브라우저의 다른 창끼리만 (localStorage)
-  window.addEventListener('storage', (e) => e.key === STORAGE_KEY && applyRemote(e.newValue))
-}
-
-/** 받는 담당자가 담당자 앱을 켜 두었는지 (그러면 사람이 직접 체크) — 앱이 phoneUsers 에 표시 (phone/src/api/myChecklists.js) */
-const inPhoneApp = (userId) => scenario.phoneUsers?.includes(userId) ?? false
 
 /** 예시 시계의 지금 시각 'HH:mm:ss' */
 export function scenarioNow() {
   const passed = Math.floor((Date.now() - scenario.clock.at) / 1000)
   return toTime(toSec(scenario.clock.base) + passed)
 }
+
+/** 설계안 시각(예: 경보 전의 '16:47:36')을 지금 상황의 시각으로 옮김 — 예시 데이터 파일들이 씀 */
+export const designAt = (t) => shiftTime(t, scenario.shiftSec ?? 0)
 
 /** 'HH:mm:ss' 두 시각 사이 초 */
 export const secondsBetween = (from, to) => toSec(to) - toSec(from)
@@ -241,24 +275,24 @@ export function replace(next, event) {
   emitLive(event)
 }
 
-/** 정상 (알림 없음, 오늘 16:30:05) */
+/** 정상 (알림 없음, 설계안 16:30:05 → 지금) */
 export function setNormal() {
   replace(
-    { state: LEVEL.NORMAL, alarm: null, checklist: null, ...NO_EMERGENCY(), clock: { base: '16:30:05', at: Date.now() } },
+    anchorAt('16:30:05', { state: LEVEL.NORMAL, alarm: null, checklist: null, ...NO_EMERGENCY(), clock: { base: '16:30:05', at: Date.now() } }),
     'level.changed',
   )
 }
 
-/** 주의 발생 (16:38:20 CT-17 22.4 A, 아직 아무도 확인 안 함) */
+/** 주의 발생 (설계안 16:38:20 → 지금, CT-17 22.4 A, 아직 아무도 확인 안 함) */
 export function raiseWarn() {
   replace(
-    {
+    anchorAt('16:38:20', {
       state: LEVEL.WARN,
       alarm: { id: 1042, status: 'OPEN', raisedAt: '16:38:20', ackedAt: null, ackedBy: null, closedAt: null },
       checklist: null,
       ...NO_EMERGENCY(),
       clock: { base: '16:38:20', at: Date.now() },
-    },
+    }),
     'alarm.created',
   )
 }
@@ -295,14 +329,13 @@ export function sendChecklist({ items, assigneeId, sentBy }) {
     remindCount: 0,
     lastRemindMs: 0,
     reassigned: [],
-    results: [], // 담당자 앱 항목별 { result, memo }
     reportedAt: null,
-    reportMemo: null,
     confirmedAt: null,
     result: null,
   }
   emitLive('checklist.updated')
-  if (!inPhoneApp(assigneeId)) startAutoTick()
+  // 담당자가 앱을 켜 두었으면 사람이 앱에서 체크 (phoneUsers: 담당자 앱 api/myChecklists.js markPhoneUser)
+  if (!scenario.phoneUsers?.includes(assigneeId)) startAutoTick()
   return scenario.checklist
 }
 

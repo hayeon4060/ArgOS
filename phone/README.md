@@ -36,6 +36,8 @@ npm run dev
 
 **휴대폰으로 보기**: 두 서버를 `npm run dev -- --host` 로 켜고, 휴대폰을 PC 와 같은 Wi-Fi(또는 휴대폰 핫스팟에 PC 연결)에 두고 `http://PC주소:5173/phone/` 을 엽니다. PC 관제 웹과 같은 상황을 봅니다. 기기끼리 접속을 막는 공용 Wi-Fi 에서는 안 열립니다.
 
+**다른 PC 에서 같이 보기**: 관제 웹 개발 서버는 `host: true` 라 같은 Wi-Fi 의 다른 PC 도 크롬으로 `http://PC주소:5173` 을 열면 같은 예시 상황을 보고, 내 휴대폰 앱과 연동됩니다. 다른 PC 에서 개발 서버를 따로 켜면 상황이 따로 노니, 서버는 한 PC 에서만 켭니다. FCM 키(`argos-fcm-key.json`)도 서버를 켠 PC 에만 있으면 됩니다.
+
 | 아이디 | 이름 | 담당 |
 | --- | --- | --- |
 | `u5_paint01` | 김도현 | 5공장 도장 공정 · 상도 부스 · 상도 건조로 (예시 체크리스트를 받는 사람) |
@@ -79,7 +81,7 @@ android\gradlew.bat -p android assembleDebug        # → android\app\build\outp
 ```
 
 - **Android Studio 에서 빌드할 때**: Settings → Build, Execution, Deployment → Build Tools → Gradle → **Gradle JDK** 를 `C:\Java\zulu21` 로. 프로젝트 경로에 한글이 있어 `android/gradle.properties` 에 `android.overridePathCheck=true` 를 둠
-- **시연 빌드(예시 데이터 + PC 연동)**: `.env.production.local` 에 `VITE_MOCK_RELAY=http://PC주소:5173` 을 넣고 빌드하면, 앱이 PC 관제 웹 개발 서버(`npm run dev -- --host`)와 같은 예시 상황을 봅니다 — 웹에서 체크리스트 전송 → 앱 알림 띠, 앱에서 체크 → 웹 진행 창. PC 주소가 바뀌면 고치고 다시 빌드.
+- **시연 빌드(예시 데이터 + PC 연동)**: `.env.production.local` 에 `VITE_MOCK_RELAY=http://PC주소:5173` 을 넣고 빌드하면, 앱이 PC 관제 웹 개발 서버(`npm run dev -- --host`)와 같은 예시 상황을 봅니다 — 웹에서 체크리스트 전송 → 앱 알림 띠, 앱에서 체크 → 웹 진행 창. PC 주소가 바뀌면 다시 빌드하지 않고 앱 로그인 화면 아래 **PC 주소** 칸에 새 주소(예: `192.168.0.38:5173`)를 넣고 저장 (앱이 다시 켜지며 그 주소로 붙음).
   PC 의 `http://` 주소에 붙으려고 `capacitor.config.json` 에 `server.androidScheme: http` · `cleartext: true` 를 둠 (실제 서버가 https 가 되면 `cleartext` 는 끌 것).
 - **비우면**: 앱 혼자 휴대폰 안 예시 데이터로 동작 (PC 필요 없음).
 - **실제 서버**: `.env` 에 `VITE_USE_MOCK=false`, `VITE_API_BASE_URL=https://연계서버/api/v1` 을 넣고 `npm run android`. 앱 안에서 `/api/v1` 은 휴대폰 자신을 가리키므로 주소를 꼭 적어야 합니다.

@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# 개발 서버 웹 푸시 키 · 구독 (mockSync.js, 커밋 금지)
+.mock-push.json

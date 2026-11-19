@@ -17,8 +17,26 @@ import { USE_MOCK } from '@/api/mock'
 /** 서버 PushSender · 개발 서버 mockSync.js 의 channel_id 와 같게. 중요도 5(최대) = 화면 위로 뜨는 알림 + 소리 */
 export const CHANNEL_ID = 'argos_alert'
 
-/** 시연 빌드에서 토큰을 등록할 PC 개발 서버 (.env.production.local) */
-const RELAY = import.meta.env.VITE_MOCK_RELAY ?? ''
+/** 시연 빌드에서 토큰을 등록할 PC 개발 서버: 로그인 화면에서 바꾼 주소(argos.relay) → .env.production.local */
+export const RELAY = savedRelay() || (import.meta.env.VITE_MOCK_RELAY ?? '')
+function savedRelay() {
+  try {
+    return localStorage.getItem('argos.relay') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** 로그인 화면 'PC 주소' 저장 — 예시 상황 연결(scenario.js)도 이 값을 읽으므로 저장 뒤 앱을 다시 띄움 */
+export function saveRelay(url) {
+  try {
+    if (url) localStorage.setItem('argos.relay', url)
+    else localStorage.removeItem('argos.relay')
+  } catch {
+    // 저장 못 하면 빌드 때 주소 그대로
+  }
+  location.reload()
+}
 // __FCM__: 빌드할 때 google-services.json 이 있었는지 (vite.config.js define)
 const enabled = Capacitor.isNativePlatform() && __FCM__ && (!USE_MOCK || !!RELAY)
 

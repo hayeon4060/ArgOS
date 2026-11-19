@@ -17,6 +17,16 @@ import LoginSubmit from '@/features/auth/LoginSubmit.vue'
 import { SESSION_HOURS } from '@/features/session/sessionConfig'
 import { useAuthStore } from '@/stores/auth'
 import { loadSavedLoginId, saveLoginId } from '@/utils/storage'
+import { Capacitor } from '@capacitor/core'
+import { RELAY, saveRelay } from '@phone/push'
+
+// 설치형 앱 시연 빌드: 예시 상황 · 알림을 같이 쓰는 PC 개발 서버 주소 (Wi-Fi 가 바뀌어 PC 주소가 바뀌면 여기서 고침)
+const showRelay = USE_MOCK && Capacitor.isNativePlatform()
+const relay = ref(RELAY)
+function onSaveRelay() {
+  const url = relay.value.trim().replace(/\/+$/, '')
+  saveRelay(url && !/^https?:\/\//.test(url) ? `http://${url}` : url)
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -128,6 +138,13 @@ async function onSubmit() {
       <p class="guide">관제 웹(본사·공장 담당자)과 따로 쓰는 공정 담당자 전용 화면입니다.</p>
       <p v-if="USE_MOCK" class="mock-hint">예시 계정: u5_paint01 (김도현), u5_paint02 (박성훈) / argos1234</p>
     </form>
+    <div v-if="showRelay" class="relay">
+      <label for="phone-relay">PC 주소 (관제 웹 개발 서버)</label>
+      <div class="relay-row">
+        <input id="phone-relay" v-model="relay" inputmode="url" placeholder="192.168.0.38:5173" />
+        <button type="button" @click="onSaveRelay">저장</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -135,8 +152,10 @@ async function onSubmit() {
 .login {
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 16px;
   padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
   background: var(--color-bg);
 }
@@ -195,5 +214,37 @@ h1 {
   margin-top: 8px;
   font-size: 12px;
   color: var(--color-text-weak);
+}
+.relay {
+  width: 100%;
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--color-text-sub);
+}
+.relay-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.relay input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+}
+.relay button {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
 }
 </style>

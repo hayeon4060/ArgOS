@@ -9,7 +9,7 @@ import { alarmTrendPoints } from './equipmentSeries'
 import { mockAlarms, todayAt } from './data'
 import { THERMAL_BY_STATE, mockEquipmentEvents } from './equipmentData'
 import { EQUIPMENT, equipmentLevel, runStateOf, sensorsNow } from './processData'
-import { TOP_OVEN_VALUES, scenario, scenarioNow, workerName } from './scenario'
+import { TOP_OVEN_VALUES, designAt, scenario, scenarioNow, workerName } from './scenario'
 import { LEVEL } from '@/types/codes'
 import irWarn from '@/assets/images/thermal/ir_warn.jpg'
 
@@ -133,7 +133,7 @@ export function alarmDetail(alarmId) {
       zoneName: '배기팬 모터부',
       cameraTag: 'IR-01',
     },
-    trend: { sensorId: 117, unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
+    trend: { sensorId: 117, tag: 'CT-17', unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
     causeCandidates: ['베어링 마모', '구동 벨트 장력 이상', '배기 덕트 댐퍼 막힘'],
     equipmentType: 'OVEN',
     sensorType: 'CURRENT',
@@ -168,12 +168,12 @@ export function checklistView(checklistId) {
       seq: i + 1,
       content,
       doneAt: c.doneTimes[i] ? todayAt(c.doneTimes[i]) : null,
-      // 담당자 앱이 남긴 결과·메모가 있으면 그 값 (phone/src/api/myChecklists.js)
+      // 담당자 앱에서 체크한 항목은 그 결과·메모 (c.results), 흉내로 진행한 항목은 '이상 없음'
       result: c.doneTimes[i] ? (c.results?.[i]?.result ?? '이상 없음') : null,
       memo: c.results?.[i] ? c.results[i].memo : i === memoIndex ? c.memo.text : null,
     })),
+    reportMemo: c.reportMemo ?? null,
     reportedAt: c.reportedAt && todayAt(c.reportedAt),
-    reportMemo: c.reportMemo ?? null, // 완료 보고 한 줄 (명세서 GET 응답에 없음, POST report 의 memo)
     confirmedAt: c.confirmedAt && todayAt(c.confirmedAt),
     // 서버 지금 시각 (명세서에 없음): '경과 시간'을 서버 시계 기준으로 세려고. 예시 데이터는 예시 시계
     serverTime: todayAt(scenarioNow()),
@@ -226,7 +226,7 @@ export function alarmResponse(alarmId) {
       : '배기팬 과부하로 배기량이 줄어 버너실 CO가 경보 기준을 넘었습니다.',
     reasonDetail: fire ? '' : '전류 27.5 A (평소의 153%) · CO 34 ppm · 온도 164 ℃ 상승 중', // 명세서에 없음 (사유 아래 한 줄)
     cameraId: 301,
-    thermal: { imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale, zoneName: fire ? '버너실 앞' : '배기팬 모터부' },
+    thermal: { imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale, zoneName: fire ? '버너실 앞' : '배기팬 모터부', cameraTag: 'IR-01' },
     // 상도 건조로 센서 3종 (명세서는 공정 센서 전부 — 설계안은 3종만)
     sensors: top.map((s) => ({
       id: s.id, tag: s.tag, type: s.type, equipmentName: '상도 건조로', value: s.value, unit: s.unit, warn: s.warn, alarm: s.alarm, level: s.level,
@@ -265,20 +265,20 @@ export function fireView() {
     detectedAt: todayAt(f.detectedAt),
     basis: '열화상 최고 온도가 화재 기준(150 ℃)을 3초 이상 넘었습니다. 온도 212 ℃ · CO 120 ppm 동시 상승',
     values: { thermalMax: t.max, temp: 212, co: 120 }, // 명세서에 없음 (감지 근거 숫자 칸)
-    thermal: { cameraId: 301, imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale },
+    thermal: { cameraId: 301, cameraTag: 'IR-01', imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale },
     broadcast: {
       on: f.status === 'ACTIVE',
-      startedAt: todayAt('16:58:05'),
+      startedAt: todayAt(designAt('16:58:05')), // 설계안 시각 → 지금 상황 기준
       message: '5공장 도장 공정에서 화재가 발생했습니다. 작업자는 즉시 지정 대피로로 대피하십시오.',
     },
-    hqNotifiedAt: todayAt('16:58:06'),
+    hqNotifiedAt: todayAt(designAt('16:58:06')),
     unlock: { failCount: f.failCount, maxFail: 5, locked: f.locked },
     actions: [
       { step: 'DETECTED', ...done(f.detectedAt), text: '화재 감지' },
-      { step: 'BROADCAST', ...done('16:58:05'), text: '공장 내 경고 방송 송출', running: f.status === 'ACTIVE' },
-      { step: 'SHUTDOWN', ...done('16:58:06'), text: '상도 건조로 자동 셧다운 (버너 연료 차단)' },
-      { step: 'HQ_NOTIFY', ...done('16:58:06'), text: '본사 관제 통보' },
-      { step: 'WORKER_PUSH', ...done('16:58:06'), text: '도장 공정 담당자 앱 알림' },
+      { step: 'BROADCAST', ...done(designAt('16:58:05')), text: '공장 내 경고 방송 송출', running: f.status === 'ACTIVE' },
+      { step: 'SHUTDOWN', ...done(designAt('16:58:06')), text: '상도 건조로 자동 셧다운 (버너 연료 차단)' },
+      { step: 'HQ_NOTIFY', ...done(designAt('16:58:06')), text: '본사 관제 통보' },
+      { step: 'WORKER_PUSH', ...done(designAt('16:58:06')), text: '도장 공정 담당자 앱 알림' },
       f.status === 'CLEARED'
         ? { step: 'CLEARED', at: todayAt(f.clearedAt), done: true, text: `경보 해제 · ${f.clearedBy}` }
         : { step: 'CLEARED', at: null, done: false, text: '공장 담당자 경보 해제 (비밀번호 확인 필요)' },

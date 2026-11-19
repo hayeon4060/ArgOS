@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
     saveAuth({ accessToken: accessToken.value, user: user.value, expiresAt: expiresAt.value })
   }
 
-  /** 아이디·비밀번호 로그인: 성공하면 상태와 브라우저에 저장. client: 'WEB'(관제 웹) | 'APP'(담당자 앱) */
+  /** 아이디·비밀번호 로그인: 성공하면 상태와 브라우저에 저장 */
   async function login(loginId, password, client = 'WEB') {
     const result = await authApi.login({ loginId, password, client })
     accessToken.value = result.accessToken
