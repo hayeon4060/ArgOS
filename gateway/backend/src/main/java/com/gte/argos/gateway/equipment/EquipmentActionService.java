@@ -51,29 +51,55 @@ public class EquipmentActionService {
         this.time = time;
     }
 
-    /** POST /equipment/{id}/fan — { power: ON|OFF } 또는 { rpm: 600~1800 } */
-    public Map<String, Object> fan(long equipmentId, String power, Integer rpm) {
+    /** 배기팬 회전수 범위 (화면 슬라이더) */
+    static final int RPM_MIN = 600;
+    static final int RPM_MAX = 1800;
+    /** 회전수 = 주파수 × 30 (중앙 서버와 같음. 40Hz = 1200rpm 평상시) */
+    static final int RPM_PER_HZ = 30;
+    static final int HZ_NORMAL = 40;
+
+    /**
+     * POST /equipment/{id}/fan — { power: ON|OFF } 또는 { rpm: 600~1800 } 또는 { hz: 20~60 }.
+     * 중앙 명령(테이블 명세서 v5): 끄기 = FAN_STOP, 켜기 = FAN_HZ 40, 회전수·주파수 = FAN_HZ (rpm ÷ 30)
+     */
+    public Map<String, Object> fan(long equipmentId, String power, Integer rpm, Integer hz) {
         UserScope scope = currentUser.require(UserScope.PLANT_ADMIN);
         Equipment eq = equipment(scope, equipmentId);
-        String command;
-        Double value = null;
-        String summary;
-        if (rpm != null) {
-            command = "FAN_RPM";
-            value = rpm.doubleValue();
-            summary = eq.name() + " RPM " + rpm;
-        } else if ("OFF".equals(power)) {
-            command = "FAN_OFF";
-            summary = eq.name() + " 끄기";
-        } else if ("ON".equals(power)) {
-            command = "FAN_ON";
-            summary = eq.name() + " 켜기";
-        } else {
-            throw new IllegalArgumentException("power 또는 rpm 이 필요합니다");
+        FanCommand c = fanCommand(power, rpm, hz);
+        CommandResult r = central.command(equipmentId, c.command(), c.hz() == null ? null : c.hz().doubleValue(),
+                null, scope.userId());
+        if ("DUPLICATE".equals(r.status())) {
+            throw ApiException.conflict("COMMAND_PENDING", "같은 명령을 처리하고 있습니다. 잠시 뒤 다시 시도해 주세요.");
         }
-        CommandResult r = central.command(equipmentId, command, value, null, scope.userId());
-        activity.log(scope.userId(), "FAN", plantOf(eq), eq.processId(), "equipment", equipmentId, summary);
+        activity.log(scope.userId(), "FAN", plantOf(eq), eq.processId(), "equipment", equipmentId, eq.name() + " " + c.text());
         return accepted(r);
+    }
+
+    /** 화면 요청 → 중앙 명령. 회전수는 가장 가까운 주파수로 바꾼다 */
+    static FanCommand fanCommand(String power, Integer rpm, Integer hz) {
+        if (hz != null) {
+            if (hz < RPM_MIN / RPM_PER_HZ || hz > RPM_MAX / RPM_PER_HZ) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "HZ_OUT_OF_RANGE", "주파수는 20 ~ 60 Hz 사이여야 합니다.");
+            }
+            return new FanCommand("FAN_HZ", hz, hz + "Hz (" + hz * RPM_PER_HZ + "rpm)");
+        }
+        if (rpm != null) {
+            if (rpm < RPM_MIN || rpm > RPM_MAX) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "RPM_OUT_OF_RANGE", "RPM 은 600 ~ 1,800 사이여야 합니다.");
+            }
+            int h = Math.round(rpm / (float) RPM_PER_HZ);
+            return new FanCommand("FAN_HZ", h, "RPM " + rpm + " (" + h + "Hz)");
+        }
+        if ("OFF".equals(power)) {
+            return new FanCommand("FAN_STOP", null, "끄기");
+        }
+        if ("ON".equals(power)) {
+            return new FanCommand("FAN_HZ", HZ_NORMAL, "켜기 (" + HZ_NORMAL + "Hz)");
+        }
+        throw new IllegalArgumentException("power, rpm, hz 중 하나가 필요합니다");
+    }
+
+    record FanCommand(String command, Integer hz, String text) {
     }
 
     /** POST /equipment/{id}/shutdown — { alarmId, reason } */

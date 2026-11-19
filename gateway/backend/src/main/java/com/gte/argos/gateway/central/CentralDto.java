@@ -158,7 +158,7 @@ public final class CentralDto {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CommandResult(long commandId, long equipmentId, String command, String status, String runState,
-                                Integer fanRpm) {
+                                Integer fanRpm, Double value, String trigger) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

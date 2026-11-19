@@ -69,7 +69,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | M2 | `PATCH /checklists/{id}/items/{itemId}` | 공정 | |
 | M2 | `POST /checklists/{id}/report` | 공정 | 409 `ITEMS_NOT_DONE` |
 | M1 | `POST /me/push-token` · `DELETE /me/push-token` | 로그인 | |
-| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` | 공장 | 202, 결과는 SSE `command.result` |
+| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` 또는 `{ hz }` | 공장 | 202, 결과는 SSE `command.result`. 중앙 명령(테이블 명세서 v5): 끄기 `FAN_STOP`, 켜기 `FAN_HZ` 40, `rpm`(600~1,800) → `FAN_HZ` rpm÷30, `hz`(20~60) 그대로. 같은 명령 처리 중이면 409 `COMMAND_PENDING`, 범위 밖 400 `RPM_OUT_OF_RANGE`·`HZ_OUT_OF_RANGE`. SSE `command.result` 의 `command` 값도 `FAN_HZ`·`FAN_STOP`, `status` 에 `EXPIRED`·`CANCELLED` 추가 |
 | C4 | `POST /equipment/{id}/shutdown` `{ alarmId, reason }` | 공장 | 202 |
 | C4 | `POST /processes/{id}/shutdown` `{ alarmId, equipmentIds, reason }` | 공장 | 202, 이미 정지된 설비는 건너뜀 |
 | C4 | `POST /processes/{id}/call-workers` `{ alarmId }` | 공장 | |
@@ -266,6 +266,14 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | `BROADCAST_API_URL` | 방송 시스템. `POST {url}/start`, `POST {url}/stop` (방송 시스템 API 가 정해지면 경로만 맞추면 됨) |
 | `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` | CLOVA OCR |
 | `ARGOS_FILES_DIR` | 올린 파일 저장 위치 (기본 `./data/files`) |
+
+### 테이블 명세서 v5 반영 (`V6__erd_v5.sql`)
+
+- `chat_read`: `last_msg_id` → `last_read_msg_id`, `read_at` → `updated_at`
+- `chat_message.body`: TEXT (길이는 API 에서 1,000자)
+- `file_asset`: 종류에 `THERMAL`·`VIDEO`, `sensor_id`·`captured_at` 추가
+- 로그인 쪽 V1 테이블(`login_history.user_id` NULL 허용, `activity_log.summary` TEXT 등)은 그대로
+- 중앙 서버 쪽 변경(경보 종료 사유, 이벤트 규칙 `HI`/`LO`, 설비 명령 `FAN_HZ` 등)은 `factory/central-server/README.md` 참고
 
 ## 아직 없는 것
 
