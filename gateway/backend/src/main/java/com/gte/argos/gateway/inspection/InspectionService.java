@@ -106,6 +106,53 @@ public class InspectionService {
         return out;
     }
 
+    /**
+     * GET /inspections/schedule?date= — 달력 날짜를 눌렀을 때 그날 점검 목록 (명세서에 없음, backend-notes 13장).
+     * 담당 범위 안 공정만. 시각순.
+     */
+    public List<Map<String, Object>> daySchedule(java.time.LocalDate date, Long factoryId) {
+        UserScope scope = admin();
+        if (factoryId != null) {
+            currentUser.checkFactory(scope, factoryId);
+        }
+        OffsetDateTime now = time.now();
+        MasterCache.Snapshot m = masterCache.get();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> r : jdbc.queryForList("""
+                SELECT s.*, u.name AS assignee, d.name AS form_name, du.name AS done_by_name
+                FROM inspection_schedule s
+                LEFT JOIN app_user u ON u.user_id = s.assignee_id
+                LEFT JOIN app_user du ON du.user_id = s.done_by
+                LEFT JOIN doc_form d ON d.form_type = s.form_type
+                WHERE s.planned_at = :day ORDER BY s.planned_time NULLS LAST, s.schedule_id
+                """, new MapSqlParameterSource("day", date))) {
+            Long pid = r.get("process_id") == null ? null : ((Number) r.get("process_id")).longValue();
+            if (!inScope(scope, pid, factoryId, m)) {
+                continue;
+            }
+            CentralDto.Equipment eq = m.equipment(((Number) r.get("equipment_id")).longValue());
+            CentralDto.Process p = pid == null ? null : m.process(pid);
+            CentralDto.Factory f = p == null ? null : m.factory(p.factoryId());
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("scheduleId", r.get("schedule_id"));
+            v.put("date", date.toString());
+            v.put("time", r.get("planned_time") == null ? null : r.get("planned_time").toString().substring(0, 5));
+            v.put("title", r.get("title"));
+            v.put("formType", r.get("form_type"));
+            v.put("formName", r.get("form_name"));
+            v.put("processId", pid);
+            v.put("processName", (f == null ? "" : f.name() + " ") + (p == null ? "" : p.name()));
+            v.put("equipmentId", eq == null ? null : eq.id());
+            v.put("equipmentName", eq == null ? null : eq.name());
+            v.put("assignee", r.get("assignee"));
+            v.put("status", scheduleStatus(r, now));
+            v.put("doneAt", r.get("done_at"));
+            v.put("doneBy", r.get("done_by_name"));
+            out.add(v);
+        }
+        return out;
+    }
+
     /** DONE | DELAYED | PLANNED (예정 시각이 지났는데 안 했으면 DELAYED) */
     static String scheduleStatus(Map<String, Object> r, OffsetDateTime now) {
         String s = String.valueOf(r.get("status"));
@@ -181,6 +228,7 @@ public class InspectionService {
         cal.forEach((d, c) -> calendar.add(Map.of("date", d, "done", c[0], "planned", c[1], "delayed", c[2])));
         int total = done + planned + delayed;
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("month", ym.toString());
         out.put("rate", total == 0 ? 0 : Math.round(done * 100.0 / total));
         out.put("done", done);
         out.put("planned", planned);
@@ -494,8 +542,12 @@ public class InspectionService {
     @SuppressWarnings("unchecked")
     static List<String> validate(List<Map<String, Object>> fields, Map<String, Object> form) {
         Map<String, String> types = new LinkedHashMap<>();
+        Map<String, List<String>> options = new LinkedHashMap<>();
         for (Map<String, Object> d : (List<Map<String, Object>>) form.get("fields")) {
             types.put(String.valueOf(d.get("key")), String.valueOf(d.get("type")));
+            if (d.get("options") instanceof List<?> o) {
+                options.put(String.valueOf(d.get("key")), o.stream().map(String::valueOf).toList());
+            }
         }
         List<String> bad = new ArrayList<>();
         for (Map<String, Object> f : fields) {
@@ -508,6 +560,10 @@ public class InspectionService {
             if ("number".equals(t) && !v.matches("-?\\d+(\\.\\d+)?")) {
                 bad.add(key);
             } else if ("date".equals(t) && !v.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                bad.add(key);
+            } else if ("time".equals(t) && !v.matches("\\d{1,2}:\\d{2}")) {
+                bad.add(key);
+            } else if ("choice".equals(t) && options.containsKey(key) && !options.get(key).contains(v)) {
                 bad.add(key);
             }
         }

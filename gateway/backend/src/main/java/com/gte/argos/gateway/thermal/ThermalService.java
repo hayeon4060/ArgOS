@@ -39,6 +39,17 @@ public class ThermalService {
         this.currentUser = currentUser;
     }
 
+    /** 화면에서 쓰는 열화상 사진 주소 (중앙 file_asset id). 없으면 null */
+    public static String imageUrl(Long centralFileId) {
+        return centralFileId == null ? null : "/api/v1/thermal/images/" + centralFileId;
+    }
+
+    /** GET /thermal/images/{fileId}: 중앙 서버에 저장된 VMS 열화상 사진 */
+    public org.springframework.http.ResponseEntity<byte[]> image(long fileId) {
+        currentUser.scope();
+        return central.file(fileId);
+    }
+
     public Map<String, Object> latest(long cameraId, Long equipmentId) {
         UserScope scope = currentUser.scope();
         MasterCache.Snapshot m = masterCache.get();

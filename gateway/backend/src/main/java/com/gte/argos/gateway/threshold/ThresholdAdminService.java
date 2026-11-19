@@ -114,11 +114,14 @@ public class ThresholdAdminService {
             row.put("seasons", seasons);
             row.put("legal", s.get("legal"));
             row.put("basis", basis);
+            row.put("max", bandMax(seasons.get(String.valueOf(raw.get("activeSeason"))) != null
+                    ? seasons.get(String.valueOf(raw.get("activeSeason"))) : seasons.get("ALL"), values.get(sensorId)));
             sensors.add(row);
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("equipmentId", equipmentId);
         out.put("equipmentName", eq.name());
+        out.put("equipmentType", eq.type());
         out.put("activeSeason", raw.get("activeSeason"));
         out.put("version", raw.get("version"));
         out.put("sensors", sensors);
@@ -360,6 +363,24 @@ public class ThresholdAdminService {
         MasterCache.Snapshot m = masterCache.get();
         Long f = m.factoryOfProcess(eq.processId());
         return f == null ? null : m.plantOfFactory(f);
+    }
+
+    /** 기준 띠 끝 = (경보 · 주의 · 지금 값 중 가장 큰 값) × 1.25, 소수 첫째 자리. 셋 다 없으면 null */
+    @SuppressWarnings("unchecked")
+    static Double bandMax(Object season, Double current) {
+        double top = current == null ? Double.NaN : current;
+        if (season instanceof Map<?, ?> m) {
+            for (String k : List.of("alarm", "warn")) {
+                Object v = ((Map<String, Object>) m).get(k);
+                if (v instanceof Number n && (Double.isNaN(top) || n.doubleValue() > top)) {
+                    top = n.doubleValue();
+                }
+            }
+        }
+        if (Double.isNaN(top) || top <= 0) {
+            return null;
+        }
+        return Math.round(top * 1.25 * 10) / 10.0;
     }
 
     private static Map<String, Object> seasonView(Map<String, Object> r, int sampleSec) {

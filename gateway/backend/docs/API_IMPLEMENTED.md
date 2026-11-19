@@ -353,3 +353,19 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
   - 주소 넣기: 중앙 `PUT /api/v1/internal/sensors/{sensorId}` `{ "streamUrl": "http://..." }` (빈 글자면 지움)
 - 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음, `file_asset` 종류에 VIDEO 없음)
 - `/stats/*` 조회 기간 최대 30일
+
+### 화면 추가 필드 (backend-notes 10 · 11 · 13 · 14 · 17장, 2026-11-19)
+
+| API | 추가 |
+| --- | --- |
+| `GET /fires/{id}` | `values { thermalMax, temp, co }` (열화상 최고 · 그 관제 단위 온도 · CO, 원인 이벤트 최고값 반영), `actions[].text` · `running`(송출 중 · 대피 확인 중), `serverTime`, `thermal.imageUrl`(VMS 사진) |
+| `GET /equipment/{id}/thresholds` | `equipmentType`, `sensors[].max`(기준 띠 끝 = 경보·주의·지금 값 중 큰 값 × 1.25) |
+| `POST /thresholds/simulate` | `peaks [{ at, value }]` (알림마다 그래프에 찍을 점, `hits` 와 같은 순서) |
+| `GET /inspections/summary` | `month` (`2026-11`) |
+| `GET /doc-forms` | 칸 정의를 프론트 양식과 같게 (`V7__doc_forms_v2.sql`): `group` · `options` · `row` · F01 `time` · `note`. 칸 종류 text · number · date · datetime · time · choice · check · sign. 저장할 때 choice 는 보기 중 하나, time 은 `HH:MM` 이어야 함 (아니면 400 + `fields`) |
+| `GET /inspections/schedule?date=YYYY-MM-DD&factoryId=` | **신규** 그날 점검 목록 `[{ scheduleId, date, time, title, formType, formName, processId, processName, equipmentId, equipmentName, assignee, status(DONE·PLANNED·DELAYED), doneAt, doneBy }]` |
+| `GET /me` | `scopeText` (모든 사업장 / 5공장 전체 / 5공장 · 도장 공정) |
+| 채팅 글의 `alarm` | `level`, `hazard`, `sensorTag`, `value`, `unit` |
+| `GET /thermal/images/{fileId}` | **신규** VMS 열화상 사진 (로그인 필요). 알림 상세·경보 창·통계 상세·화재 상세 `thermal.imageUrl` 이 이 주소 |
+
+- 시연용 인식기: F01 은 예시 원본(f01_filled.jpg) 값·위치 그대로, 나머지 양식은 칸 종류대로 값을 채움

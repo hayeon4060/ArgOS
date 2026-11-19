@@ -45,6 +45,15 @@ public class InspectionController {
         return ApiResponse.ok(service.summary(month, factoryId));
     }
 
+    /** 그날 점검 목록 (달력 날짜 → 작은 창). date = YYYY-MM-DD */
+    @GetMapping("/inspections/schedule")
+    public ApiResponse<List<Map<String, Object>>> schedule(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+            @RequestParam(required = false) Long factoryId) {
+        return ApiResponse.ok(service.daySchedule(date, factoryId));
+    }
+
     @GetMapping("/doc-forms")
     public ApiResponse<List<Map<String, Object>>> forms() {
         return ApiResponse.ok(service.forms());

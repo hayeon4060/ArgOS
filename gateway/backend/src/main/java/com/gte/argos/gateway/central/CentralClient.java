@@ -126,6 +126,17 @@ public class CentralClient {
                 new ParameterizedTypeReference<Envelope<Alarm>>() { });
     }
 
+    /** 중앙 서버가 저장한 파일 (VMS 열화상 사진). [내용, 형식] */
+    public org.springframework.http.ResponseEntity<byte[]> file(long fileId) {
+        try {
+            return rest.get().uri("/api/v1/internal/files/{id}", fileId).retrieve().toEntity(byte[].class);
+        } catch (RestClientResponseException e) {
+            throw translate(e);
+        } catch (ResourceAccessException e) {
+            throw upstream();
+        }
+    }
+
     public CentralDto.AlarmSeries alarmSeries(long alarmId) {
         return get(u -> u.path("/api/v1/internal/alarms/{id}/series").build(alarmId),
                 new ParameterizedTypeReference<Envelope<CentralDto.AlarmSeries>>() { });
