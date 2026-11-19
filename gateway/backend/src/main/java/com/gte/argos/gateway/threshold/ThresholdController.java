@@ -63,6 +63,17 @@ public class ThresholdController {
 
     @GetMapping("/sensors/{sensorId}")
     public ApiResponse<Map<String, Object>> sensor(@PathVariable long sensorId) {
+        return sensorView(sensorId);
+    }
+
+    /** 설비 설정 바로 저장 (사용 상태 · 배기팬 자동 제어) */
+    @org.springframework.web.bind.annotation.PatchMapping("/equipment/{equipmentId}/settings")
+    public ApiResponse<Map<String, Object>> settings(@PathVariable long equipmentId,
+            @RequestBody ThresholdAdminService.SettingsRequest body) {
+        return ApiResponse.ok(service.saveSettings(equipmentId, body));
+    }
+
+    private ApiResponse<Map<String, Object>> sensorView(long sensorId) {
         return ApiResponse.ok(service.sensor(sensorId));
     }
 

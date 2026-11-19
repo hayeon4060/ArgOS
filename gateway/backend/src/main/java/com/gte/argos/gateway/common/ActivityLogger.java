@@ -27,6 +27,12 @@ public class ActivityLogger {
      */
     public void log(long userId, String type, Long plantId, Long processId, String targetTable, Long targetId,
                     String summary) {
+        logAs((Long) userId, type, plantId, processId, targetTable, targetId, summary);
+    }
+
+    /** 사람이 아닌 서버가 한 일 (배기팬 자동 제어 등). userId 가 null 이면 '시스템' */
+    public void logAs(Long userId, String type, Long plantId, Long processId, String targetTable, Long targetId,
+                      String summary) {
         jdbc.update("""
                 INSERT INTO activity_log (user_id, plant_id, process_id, type, target_table, target_id, summary, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
