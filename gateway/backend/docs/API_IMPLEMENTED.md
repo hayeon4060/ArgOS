@@ -369,3 +369,9 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 | `GET /thermal/images/{fileId}` | **신규** VMS 열화상 사진 (로그인 필요). 알림 상세·경보 창·통계 상세·화재 상세 `thermal.imageUrl` 이 이 주소 |
 
 - 시연용 인식기: F01 은 예시 원본(f01_filled.jpg) 값·위치 그대로, 나머지 양식은 칸 종류대로 값을 채움
+
+### 주의 상세 추이 그래프 2개 (`docs/api/warn-detail-trends.md`, 2026-11-19)
+
+- `GET /alarms/{id}/detail` 에 `trends[]` 추가: 같은 관제 단위 센서 3종(전류 → 온도 → CO 순, 열화상 제외)
+  `{ sensorId, tag, type(CURRENT·TEMP·CO), unit, warn, alarm, points: [[시각, 값]] }`. 기간·간격은 `trend` 와 같음 (발생 30분 전 ~ 지금, 1분)
+- `trend` 는 그대로 (알림이 난 센서)

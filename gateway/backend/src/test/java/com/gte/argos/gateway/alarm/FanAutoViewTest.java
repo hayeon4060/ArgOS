@@ -36,6 +36,13 @@ class FanAutoViewTest {
         assertThat(AlarmService.hazardPrefix(null)).isEmpty();
     }
 
+    @Test
+    void 주의_상세_추이는_전류_온도_CO_순서() {
+        assertThat(AlarmService.trendOrder("IT")).isLessThan(AlarmService.trendOrder("TE"));
+        assertThat(AlarmService.trendOrder("TE")).isLessThan(AlarmService.trendOrder("AT"));
+        assertThat(AlarmService.trendOrder("AT")).isLessThan(AlarmService.trendOrder("IR"));
+    }
+
     private static CentralDto.Alarm alarm(String hazard, CentralDto.FanAuto f) {
         return new CentralDto.Alarm(1, 5, "상도 건조로", 12, 41L, 5, 1, 2, hazard, "OPEN", T, null, null, null,
                 null, null, false, List.of(), f);
