@@ -37,8 +37,8 @@ public class FeedingListener implements JudgementListener {
 
     @Override
     public void onEventOpened(long eventKey, long sensorId, long thresholdId, Stage stage, Instant startedAt,
-                              Instant detectedAt, boolean lowSide, List<Sample> backlog) {
-        store.onEventOpened(eventKey, sensorId, thresholdId, stage, startedAt, detectedAt, lowSide, backlog);
+                              Instant detectedAt, boolean lowSide, String rule, List<Sample> backlog) {
+        store.onEventOpened(eventKey, sensorId, thresholdId, stage, startedAt, detectedAt, lowSide, rule, backlog);
         sensorByEventKey.put(eventKey, sensorId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("eventId", store.eventId(eventKey));
@@ -46,6 +46,7 @@ public class FeedingListener implements JudgementListener {
         data.put("stage", stage.code());
         data.put("startedAt", odt(startedAt));
         data.put("lowSide", lowSide);
+        data.put("rule", rule);
         feed.append("EVENT_OPENED", odt(detectedAt), data);
     }
 

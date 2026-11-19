@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <pre>
  * POST /api/v1/internal/equipment/{equipmentId}/commands
  *      { "command": "SHUTDOWN", "alarmId": 1051, "userId": 7 }
- *      { "command": "FAN_RPM", "value": 1200, "userId": 7 }
- *      → 202 { commandId, status: "SENT" }. 완료는 피드 COMMAND_RESULT (DONE · FAILED)
+ *      { "command": "FAN_HZ", "value": 50, "userId": 7 }
+ *      → 202 { commandId, status: "SENT" | "DUPLICATE" }. 완료는 피드 COMMAND_RESULT (DONE · FAILED · EXPIRED · CANCELLED)
  * GET  /api/v1/internal/commands/{commandId}
  * </pre>
  */
@@ -46,8 +46,8 @@ public class EquipmentCommandController {
     }
 
     /**
-     * @param command FAN_ON | FAN_OFF | FAN_RPM | SHUTDOWN | RESTART
-     * @param value   FAN_RPM 일 때 RPM (600 ~ 1800)
+     * @param command FAN_HZ | FAN_STOP | SHUTDOWN | RESTART
+     * @param value   FAN_HZ 일 때 목표 주파수 (20 ~ 60 Hz, 평상시 40)
      * @param alarmId 경보 대응 중 명령이면 그 경보
      * @param userId  누른 사람 (연계 DB app_user.user_id)
      */

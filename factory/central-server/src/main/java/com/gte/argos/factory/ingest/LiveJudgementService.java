@@ -9,6 +9,7 @@ import com.gte.argos.factory.live.FeedingListener;
 import com.gte.argos.factory.live.LiveFeed;
 import com.gte.argos.factory.live.LiveState;
 import com.gte.argos.factory.master.SensorDefinitionLoader;
+import com.gte.argos.factory.retention.SensorDailyService;
 import com.gte.argos.factory.store.JdbcJudgementStore;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -42,14 +43,16 @@ public class LiveJudgementService {
     private final DemoClock clock;
     private final LiveState state;
     private final LiveFeed feed;
+    private final SensorDailyService daily;
 
     private JudgementEngine engine;
     private FeedingListener listener;
     private Map<String, Long> sensorIdByTag = Map.of();
 
     public LiveJudgementService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock,
-                                LiveState state, LiveFeed feed) {
+                                LiveState state, LiveFeed feed, SensorDailyService daily) {
         this.jdbc = jdbc;
+        this.daily = daily;
         this.sensorLoader = sensorLoader;
         this.clock = clock;
         this.state = state;
@@ -102,6 +105,7 @@ public class LiveJudgementService {
         jdbc.update("DELETE FROM alarm WHERE raised_at >= ?", cutoff);
         jdbc.update("DELETE FROM sensor_event WHERE started_at >= ? OR ended_at IS NULL", cutoff);
         jdbc.update("DELETE FROM sensor_trend WHERE ts >= ?", cutoff);
+        daily.resetFromSimStart();
         jdbc.update("UPDATE equipment SET run_state = 'RUN', "
                 + "fan_rpm = CASE WHEN equipment_type = 'FAN' THEN 1200 ELSE fan_rpm END");
         engine = null;

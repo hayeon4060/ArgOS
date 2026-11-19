@@ -59,7 +59,7 @@ public final class JudgementEngine {
             }
             case OPENED -> {
                 listener.onEventOpened(r.eventKey(), def.sensorId(), def.rule().thresholdId(), r.stage(),
-                        r.startedAt(), r.detectedAt(), r.lowSide(), r.backlog());
+                        r.startedAt(), r.detectedAt(), r.lowSide(), r.rule(), r.backlog());
                 correlator.onEventOpened(def, r.eventKey(), r.stage(), r.lowSide(), r.detectedAt());
             }
             case SAMPLE -> {

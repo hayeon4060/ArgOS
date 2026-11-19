@@ -4,6 +4,7 @@ import com.gte.argos.factory.common.time.DemoClock;
 import com.gte.argos.factory.judge.JudgementEngine;
 import com.gte.argos.factory.judge.SensorDef;
 import com.gte.argos.factory.master.SensorDefinitionLoader;
+import com.gte.argos.factory.retention.SensorDailyService;
 import com.gte.argos.factory.store.JdbcJudgementStore;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -38,11 +39,14 @@ public class HistoryImportService {
     private final JdbcTemplate jdbc;
     private final SensorDefinitionLoader sensorLoader;
     private final DemoClock clock;
+    private final SensorDailyService daily;
 
-    public HistoryImportService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock) {
+    public HistoryImportService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock,
+                                SensorDailyService daily) {
         this.jdbc = jdbc;
         this.sensorLoader = sensorLoader;
         this.clock = clock;
+        this.daily = daily;
     }
 
     @Transactional
@@ -84,6 +88,8 @@ public class HistoryImportService {
         }
         engine.flushTrends();
         store.flush();
+        int dailyRows = daily.aggregateAll();
+        log.info("센서 일 집계 {}행", dailyRows);
 
         Result result = new Result(false, read, skipped, afterCutoff[0], engine.unknownTagCount(),
                 store.trendCount(), store.eventCount(), store.alarmCount(), System.currentTimeMillis() - started);
@@ -96,6 +102,7 @@ public class HistoryImportService {
         jdbc.update("DELETE FROM alarm WHERE raised_at < ?", cutoff);
         jdbc.update("DELETE FROM sensor_event WHERE started_at < ?", cutoff);
         jdbc.update("DELETE FROM sensor_trend WHERE ts < ?", cutoff);
+        jdbc.update("DELETE FROM sensor_daily WHERE day <= ?", cutoff.atZoneSameInstant(clock.zone()).toLocalDate());
         log.info("기존 7일치 판정 결과를 지웠습니다");
     }
 

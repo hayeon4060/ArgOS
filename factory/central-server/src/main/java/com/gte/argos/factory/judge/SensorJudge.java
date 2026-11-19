@@ -12,7 +12,9 @@ import java.util.List;
  * <pre>
  * - 주의 범위 이상인 값이 warnSamples 개 연속   → 주의 이벤트 시작 (시작 시각 = 연속 구간의 첫 샘플)
  * - 경보 범위 값이 alarmSamples 개 연속         → 경보 이벤트 시작, 또는 진행 중 이벤트를 경보로 올림
- * - 이벤트 중 정상 값이 recoverSamples 개 연속  → 이벤트 끝 (끝 시각 = 정상으로 돌아온 첫 샘플)
+ * - 즉시 경보 값(immediate) 이상이면              → 지속 조건 없이 바로 경보 (규칙 IMMEDIATE)
+ * - 이벤트 중 정상 값이 복귀 횟수만큼 연속       → 이벤트 끝 (끝 시각 = 정상으로 돌아온 첫 샘플)
+ *   복귀 횟수는 기준값의 release_samples (없으면 엔진 기본값), 정상은 복귀 여유만큼 기준 안쪽인 값
  * - 값이 sampleSec × 3 넘게 비면 연속 카운트를 처음부터 다시 셈
  * </pre>
  *
@@ -41,6 +43,7 @@ final class SensorJudge {
     private long openEventKey = -1;
     private Stage openStage;
     private boolean openLowSide;
+    private String openRule;
     private double openPeak;
 
     SensorJudge(SensorDef def, int recoverSamples) {
@@ -106,15 +109,17 @@ final class SensorJudge {
             backlog.clear();
         }
         alarmRun = stage == Stage.ALARM ? alarmRun + 1 : 0;
+        boolean immediate = rule.isImmediate(value);
 
         if (!hasOpenEvent()) {
-            Stage reached = reachedStage(rule);
+            Stage reached = immediate ? Stage.ALARM : reachedStage(rule);
             if (reached == null) {
                 return Result.NONE;
             }
             openEventKey = nextEventKey.getAsLong();
             openStage = reached;
             openLowSide = rule.isLowSide(value);
+            openRule = immediate ? "IMMEDIATE" : openLowSide ? "LO" : "HI";
             // 경보 범위 값은 주의 이상 연속 구간에도 포함되므로 시작 시각은 항상 그 구간의 첫 샘플
             Instant startedAt = warnRunStart;
             List<Sample> opened = List.copyOf(backlog);
@@ -124,16 +129,18 @@ final class SensorJudge {
             }
             backlog.clear();
             normalRun = 0;
-            return Result.opened(openEventKey, reached, startedAt, ts, openLowSide, opened);
+            return Result.opened(openEventKey, reached, startedAt, ts, openLowSide, openRule, opened);
         }
 
         // 이벤트 진행 중
         Result result = Result.sample(openEventKey, sample);
-        if (stage != Stage.NORMAL) {
-            openPeak = extreme(openPeak, value);
+        if (!rule.isRecovered(value)) {
+            if (stage != Stage.NORMAL) {
+                openPeak = extreme(openPeak, value);
+            }
             normalRun = 0;
             normalRunStart = null;
-            if (openStage == Stage.WARN && alarmRun >= rule.alarmSamples()) {
+            if (openStage == Stage.WARN && (immediate || alarmRun >= rule.alarmSamples())) {
                 openStage = Stage.ALARM;
                 return result.withEscalation(Stage.ALARM);
             }
@@ -144,12 +151,17 @@ final class SensorJudge {
             normalRunStart = ts;
         }
         normalRun++;
-        if (normalRun >= recoverSamples) {
+        if (normalRun >= recoverSamples(rule)) {
             Result closed = result.withClose(normalRunStart, openPeak);
             clearOpenEvent();
             return closed;
         }
         return result;
+    }
+
+    /** 이벤트를 끝내는 데 필요한 정상 연속 수 */
+    private int recoverSamples(ThresholdRule rule) {
+        return rule.releaseSamples() != null ? rule.releaseSamples() : recoverSamples;
     }
 
     /** 지속 조건을 채운 단계 (경보가 우선). 아직 못 채웠으면 null */
@@ -178,6 +190,7 @@ final class SensorJudge {
         openEventKey = -1;
         openStage = null;
         openLowSide = false;
+        openRule = null;
         openPeak = 0;
         normalRun = 0;
         normalRunStart = null;
@@ -192,30 +205,33 @@ final class SensorJudge {
             Instant startedAt,
             Instant detectedAt,
             boolean lowSide,
+            String rule,
             List<Sample> backlog,
             Sample sample,
             Stage escalatedTo,
             Instant endedAt,
             double peak) {
 
-        static final Result NONE = new Result(Kind.NONE, -1, null, null, null, false, List.of(), null, null, null, 0);
+        static final Result NONE = new Result(Kind.NONE, -1, null, null, null, false, null, List.of(), null, null, null, 0);
 
         enum Kind { NONE, OPENED, SAMPLE }
 
-        static Result opened(long key, Stage stage, Instant startedAt, Instant detectedAt, boolean lowSide, List<Sample> backlog) {
-            return new Result(Kind.OPENED, key, stage, startedAt, detectedAt, lowSide, backlog, null, null, null, 0);
+        static Result opened(long key, Stage stage, Instant startedAt, Instant detectedAt, boolean lowSide, String rule,
+                             List<Sample> backlog) {
+            return new Result(Kind.OPENED, key, stage, startedAt, detectedAt, lowSide, rule, backlog, null, null, null, 0);
         }
 
         static Result sample(long key, Sample sample) {
-            return new Result(Kind.SAMPLE, key, null, null, null, false, List.of(), sample, null, null, 0);
+            return new Result(Kind.SAMPLE, key, null, null, null, false, null, List.of(), sample, null, null, 0);
         }
 
         Result withEscalation(Stage to) {
-            return new Result(kind, eventKey, stage, startedAt, detectedAt, lowSide, backlog, sample, to, endedAt, peak);
+            return new Result(kind, eventKey, stage, startedAt, detectedAt, lowSide, rule, backlog, sample, to, endedAt, peak);
         }
 
         Result withClose(Instant ended, double peakValue) {
-            return new Result(kind, eventKey, stage, startedAt, detectedAt, lowSide, backlog, sample, escalatedTo, ended, peakValue);
+            return new Result(kind, eventKey, stage, startedAt, detectedAt, lowSide, rule, backlog, sample, escalatedTo, ended,
+                    peakValue);
         }
 
         boolean escalated() {

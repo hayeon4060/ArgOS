@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +34,11 @@ public class JdbcJudgementStore implements JudgementListener {
             ON CONFLICT (sensor_id, ts) DO UPDATE
                SET avg_v = EXCLUDED.avg_v, min_v = EXCLUDED.min_v, max_v = EXCLUDED.max_v, n = EXCLUDED.n
             """;
+    private static final String INSERT_EVENT = """
+            INSERT INTO sensor_event (sensor_id, threshold_id, stage, max_stage, rule, started_at, peak_value, edge_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+    private static final DateTimeFormatter EDGE_TS = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss");
     private static final String INSERT_SAMPLE = """
             INSERT INTO sensor_event_sample (event_id, ts, value) VALUES (?, ?, ?)
             ON CONFLICT (event_id, ts) DO NOTHING
@@ -46,6 +52,7 @@ public class JdbcJudgementStore implements JudgementListener {
     private final List<Object[]> sampleBatch = new ArrayList<>();
     private final Map<Long, Long> eventIds = new HashMap<>();
     private final Map<Long, Long> alarmIds = new HashMap<>();
+    private final Map<Long, String> prefixes = new HashMap<>();
 
     private long trendCount;
     private long eventCount;
@@ -68,7 +75,8 @@ public class JdbcJudgementStore implements JudgementListener {
 
     @Override
     public void onEventOpened(long eventKey, long sensorId, long thresholdId, Stage stage,
-                              Instant startedAt, Instant detectedAt, boolean lowSide, List<Sample> backlog) {
+                              Instant startedAt, Instant detectedAt, boolean lowSide, String rule,
+                              List<Sample> backlog) {
         KeyHolder kh = new GeneratedKeyHolder();
         double peak = backlog.isEmpty() ? 0 : backlog.get(0).value();
         for (Sample s : backlog) {
@@ -76,15 +84,15 @@ public class JdbcJudgementStore implements JudgementListener {
         }
         final double initialPeak = peak;
         jdbc.update(con -> {
-            PreparedStatement ps = con.prepareStatement("""
-                    INSERT INTO sensor_event (sensor_id, threshold_id, stage, rule, started_at, peak_value)
-                    VALUES (?, ?, ?, 'DURATION', ?, ?)
-                    """, new String[] {"event_id"});
+            PreparedStatement ps = con.prepareStatement(INSERT_EVENT, new String[] {"event_id"});
             ps.setLong(1, sensorId);
             ps.setLong(2, thresholdId);
             ps.setInt(3, stage.code());
-            ps.setObject(4, odt(startedAt));
-            ps.setDouble(5, initialPeak);
+            ps.setInt(4, stage.code());
+            ps.setString(5, rule == null ? (lowSide ? "LO" : "HI") : rule);
+            ps.setObject(6, odt(startedAt));
+            ps.setDouble(7, initialPeak);
+            ps.setString(8, edgeKey(sensorId, startedAt));
             return ps;
         }, kh);
         long eventId = kh.getKey().longValue();
@@ -107,7 +115,8 @@ public class JdbcJudgementStore implements JudgementListener {
     public void onEventEscalated(long eventKey, Stage stage, Instant at) {
         Long eventId = eventIds.get(eventKey);
         if (eventId != null) {
-            jdbc.update("UPDATE sensor_event SET stage = ? WHERE event_id = ?", stage.code(), eventId);
+            jdbc.update("UPDATE sensor_event SET stage = ?, max_stage = GREATEST(max_stage, ?) WHERE event_id = ?",
+                    stage.code(), stage.code(), eventId);
         }
     }
 
@@ -159,7 +168,9 @@ public class JdbcJudgementStore implements JudgementListener {
     public void onAlarmCleared(long alarmKey, Instant at, boolean closed) {
         Long alarmId = alarmIds.get(alarmKey);
         if (alarmId != null && closed) {
-            jdbc.update("UPDATE alarm SET status = 'CLOSED', closed_at = ? WHERE alarm_id = ?", odt(at), alarmId);
+            // 과거 데이터는 사람이 조치하지 않고 값이 돌아와 닫힌 것으로 본다
+            jdbc.update("UPDATE alarm SET status = 'CLOSED', closed_at = ?, close_reason = 'AUTO_RECOVERED' WHERE alarm_id = ?",
+                    odt(at), alarmId);
         }
     }
 
@@ -210,6 +221,39 @@ public class JdbcJudgementStore implements JudgementListener {
             jdbc.batchUpdate(INSERT_SAMPLE, sampleBatch);
             sampleBatch.clear();
         }
+    }
+
+    /**
+     * 중복 방지 키 = 공장 코드 + 태그 + 시작 시각 (예: P5-AT-301-20261117T175525). v5 의 엣지 키와 같은 모양.
+     * 같은 키가 이미 있으면 뒤에 번호를 붙인다.
+     */
+    private String edgeKey(long sensorId, Instant startedAt) {
+        String prefix = prefixes.computeIfAbsent(sensorId, id -> {
+            List<String> rows = jdbc.queryForList("""
+                    SELECT f.code || '-' || s.tag FROM sensor s
+                    JOIN equipment e ON e.equipment_id = s.equipment_id
+                    JOIN process p ON p.process_id = e.process_id
+                    JOIN factory f ON f.factory_id = p.factory_id
+                    WHERE s.sensor_id = ?
+                    """, String.class, id);
+            return rows.isEmpty() ? "S" + id : rows.get(0);
+        });
+        String key = edgeKey(prefix, startedAt, zone);
+        String candidate = key;
+        for (int n = 2; exists(candidate); n++) {
+            candidate = key + "-" + n;
+        }
+        return candidate;
+    }
+
+    static String edgeKey(String prefix, Instant startedAt, ZoneId zone) {
+        String key = prefix + "-" + EDGE_TS.format(startedAt.atZone(zone));
+        return key.length() > 36 ? key.substring(0, 36) : key;
+    }
+
+    private boolean exists(String edgeKey) {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM sensor_event WHERE edge_key = ?", Integer.class, edgeKey);
+        return n != null && n > 0;
     }
 
     private OffsetDateTime odt(Instant i) {

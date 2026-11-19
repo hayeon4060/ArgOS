@@ -105,19 +105,21 @@ public final class InternalDto {
 
     public record Event(long eventId, long sensorId, String tag, String type, String unit, long equipmentId,
                         long processId, int stage, String rule, OffsetDateTime startedAt, OffsetDateTime endedAt,
-                        Double peak, Long thresholdId, Double warn, Double alarm, Double lowWarn, Double lowAlarm) {
+                        Double peak, Long thresholdId, Double warn, Double alarm, Double lowWarn, Double lowAlarm,
+                        int maxStage, String edgeKey) {
     }
 
     public record Sample(OffsetDateTime ts, Double value) {
     }
 
     /**
+     * @param closeReason    종료 사유 AUTO_RECOVERED | ACTION_DONE | MANUAL (열려 있으면 null)
      * @param valueStillOver 아직 끝나지 않은 이벤트가 있음 (경보 종료 불가)
      */
     public record Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
                         long factoryId, long plantId, int stage, String hazard, String status,
                         OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
-                        Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                        Long closedBy, OffsetDateTime closedAt, Long thermalFileId, String closeReason,
                         boolean valueStillOver, List<Event> events) {
     }
 

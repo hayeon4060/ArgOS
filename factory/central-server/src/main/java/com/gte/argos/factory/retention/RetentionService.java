@@ -19,7 +19,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * - 1시간마다 (시작 1분 뒤 처음) 시연 시계 기준 (오늘 0시 - N일, 기본 7일)보다 오래된 값을 지운다
  *   · sensor_trend         : 그래프용 1분 추이 (정상값 포함 전부)
  *   · sensor_event_sample  : 경보 구간 원본 샘플
- * - 지우지 않는 것: alarm, sensor_event (통계·이력·월간 보고서), file_asset (경보 시작 이미지)
+ * - 지우지 않는 것: alarm, sensor_event (통계·이력·월간 보고서), file_asset (경보 시작 이미지), sensor_daily (일 집계)
+ * - 지우기 전에 지울 날짜의 일 집계(sensor_daily)를 먼저 만든다
  * - 시연 시계 기준인 이유: 실제 시각으로 지우면 7일치 시연 데이터(11/09~)의 앞쪽이 지워진다
  * </pre>
  */
@@ -31,10 +32,12 @@ public class RetentionService {
     private final JdbcTemplate jdbc;
     private final DemoClock clock;
     private final ArgosProperties.Retention retention;
+    private final SensorDailyService daily;
 
-    public RetentionService(JdbcTemplate jdbc, DemoClock clock, ArgosProperties props) {
+    public RetentionService(JdbcTemplate jdbc, DemoClock clock, ArgosProperties props, SensorDailyService daily) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.daily = daily;
         this.retention = props.retention();
     }
 
@@ -54,6 +57,11 @@ public class RetentionService {
     @Transactional
     public Result purge() {
         OffsetDateTime cutoff = cutoff(clock.now(), retention.days(), clock.zone()).atZone(clock.zone()).toOffsetDateTime();
+        java.sql.Date oldest = jdbc.queryForObject("SELECT MIN((ts AT TIME ZONE ?)::date) FROM sensor_trend WHERE ts < ?",
+                java.sql.Date.class, clock.zone().getId(), cutoff);
+        if (oldest != null) {
+            daily.aggregate(oldest.toLocalDate(), cutoff.toLocalDate().minusDays(1));
+        }
         int trend = jdbc.update("DELETE FROM sensor_trend WHERE ts < ?", cutoff);
         int samples = jdbc.update("DELETE FROM sensor_event_sample WHERE ts < ?", cutoff);
         if (trend > 0 || samples > 0) {

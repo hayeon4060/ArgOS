@@ -42,7 +42,7 @@ public class InternalQueryRepository {
     private static final String EVENT_SELECT = """
             SELECT ev.event_id, ev.sensor_id, s.tag, s.sensor_type, s.unit, s.equipment_id, e.process_id,
                    ev.stage, ev.rule, ev.started_at, ev.ended_at, ev.peak_value, ev.threshold_id,
-                   th.warn_value, th.alarm_value, th.low_warn, th.low_alarm
+                   ev.max_stage, ev.edge_key, th.warn_value, th.alarm_value, th.low_warn, th.low_alarm
             FROM sensor_event ev
             JOIN sensor s ON s.sensor_id = ev.sensor_id
             JOIN equipment e ON e.equipment_id = s.equipment_id
@@ -328,7 +328,7 @@ public class InternalQueryRepository {
             boolean stillOver = events.stream().anyMatch(e -> e.endedAt() == null);
             out.add(new Alarm(r.alarmId(), r.unitId(), r.unitName(), r.processId(), r.equipmentId(), r.factoryId(),
                     r.plantId(), r.stage(), r.hazard(), r.status(), r.raisedAt(), r.ackedBy(), r.ackedAt(),
-                    r.closedBy(), r.closedAt(), r.thermalFileId(), stillOver, events));
+                    r.closedBy(), r.closedAt(), r.thermalFileId(), r.closeReason(), stillOver, events));
         }
         return out;
     }
@@ -347,7 +347,8 @@ public class InternalQueryRepository {
                 rs.getInt("stage"), rs.getString("rule"), odt(rs, "started_at"), odt(rs, "ended_at"),
                 rs.getObject("peak_value", Double.class), rs.getObject("threshold_id", Long.class),
                 rs.getObject("warn_value", Double.class), rs.getObject("alarm_value", Double.class),
-                rs.getObject("low_warn", Double.class), rs.getObject("low_alarm", Double.class));
+                rs.getObject("low_warn", Double.class), rs.getObject("low_alarm", Double.class),
+                rs.getInt("max_stage"), rs.getString("edge_key"));
     }
 
     private AlarmRow alarmRow(ResultSet rs) throws SQLException {
@@ -355,7 +356,8 @@ public class InternalQueryRepository {
                 rs.getLong("process_id"), rs.getObject("unit_equipment_id", Long.class), rs.getLong("factory_id"),
                 rs.getLong("plant_id"), rs.getInt("stage"), rs.getString("hazard"), rs.getString("status"),
                 odt(rs, "raised_at"), rs.getObject("acked_by", Long.class), odt(rs, "acked_at"),
-                rs.getObject("closed_by", Long.class), odt(rs, "closed_at"), rs.getObject("thermal_file", Long.class));
+                rs.getObject("closed_by", Long.class), odt(rs, "closed_at"), rs.getObject("thermal_file", Long.class),
+                rs.getString("close_reason"));
     }
 
     private OffsetDateTime odt(ResultSet rs, String col) throws SQLException {
@@ -385,7 +387,7 @@ public class InternalQueryRepository {
     private record AlarmRow(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
                             long factoryId, long plantId, int stage, String hazard, String status,
                             OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
-                            Long closedBy, OffsetDateTime closedAt, Long thermalFileId) {
+                            Long closedBy, OffsetDateTime closedAt, Long thermalFileId, String closeReason) {
     }
 
     public record EventFilter(Instant from, Instant to, Long sensorId, Long equipmentId, Long processId,

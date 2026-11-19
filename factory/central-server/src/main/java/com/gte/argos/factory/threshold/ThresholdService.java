@@ -214,9 +214,13 @@ public class ThresholdService {
             jdbc.update("""
                     INSERT INTO sensor_threshold
                         (sensor_id, warn_value, alarm_value, low_warn, low_alarm, warn_samples, alarm_samples,
+                         release_samples, release_margin, alarm_avg_sec, immediate_value,
                          basis, note, valid_from, changed_by, season)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, GREATEST(?, ?), ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, GREATEST(?, ?), ?, ?)
                     """, t.sensorId(), t.warn(), t.alarm(), t.lowWarn(), t.lowAlarm(), warnSamples, alarmSamples,
+                    // 복귀 횟수·여유·평균 시간·즉시값은 화면에서 고치지 않으므로 이전 기준을 그대로 잇는다 (없으면 v5 기본값)
+                    intOr(base, "releaseSamples", 6), base == null ? 0.05 : ((Number) base.get("releaseMargin")).doubleValue(),
+                    base == null ? null : base.get("alarmAvgSec"), base == null ? null : base.get("immediate"),
                     reason, now, before == null ? now : ((OffsetDateTime) before.get("validFrom")).plusNanos(1_000_000),
                     userId, season);
             Map<String, Object> change = new LinkedHashMap<>();
@@ -400,6 +404,10 @@ public class ThresholdService {
         m.put("lowAlarm", rs.getObject("low_alarm", Double.class));
         m.put("warnSamples", rs.getInt("warn_samples"));
         m.put("alarmSamples", rs.getInt("alarm_samples"));
+        m.put("releaseSamples", rs.getInt("release_samples"));
+        m.put("releaseMargin", rs.getDouble("release_margin"));
+        m.put("alarmAvgSec", rs.getObject("alarm_avg_sec", Integer.class));
+        m.put("immediate", rs.getObject("immediate_value", Double.class));
         m.put("basis", rs.getString("basis"));
         m.put("note", rs.getString("note"));
         m.put("validFrom", odt(rs, "valid_from"));
