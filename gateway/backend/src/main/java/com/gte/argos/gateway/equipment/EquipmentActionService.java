@@ -59,6 +59,31 @@ public class EquipmentActionService {
     static final int HZ_NORMAL = 40;
 
     /**
+     * POST /fan-commands/{commandId}/approve · deny — 수동 배기팬 승인 대기 명령을 공장 담당자가 승인 · 거절.
+     * 승인하면 그 주파수로 실행, 거절하면 DENIED. 본사 관리자는 열람만 (403). 승인 대기가 아니면 409 COMMAND_NOT_AWAITING
+     */
+    public Map<String, Object> decideFan(long commandId, boolean approve) {
+        UserScope scope = currentUser.require(UserScope.PLANT_ADMIN);
+        CommandResult before = central.findCommand(commandId);
+        Equipment eq = masterCache.get().equipment(before.equipmentId());
+        if (eq == null) {
+            throw ApiException.notFound("COMMAND_NOT_FOUND", "없는 명령입니다.");
+        }
+        currentUser.checkProcess(scope, eq.processId());
+        CommandResult r = central.decideCommand(commandId, approve ? "approve" : "deny", scope.userId());
+        int hz = r.value() == null ? 0 : r.value().intValue();
+        activity.log(scope.userId(), "FAN", plantOf(eq), eq.processId(), "equipment_command", commandId,
+                eq.name() + " " + hz + "Hz · " + (hz * 30) + "rpm " + (approve ? "승인 (가스 알림 수동)" : "거절 (가스 알림 수동)"));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("commandId", r.commandId());
+        out.put("equipmentId", r.equipmentId());
+        out.put("status", r.status());
+        out.put("hz", hz);
+        out.put("rpm", hz * 30);
+        return out;
+    }
+
+    /**
      * POST /equipment/{id}/fan — { power: ON|OFF } 또는 { rpm: 600~1800 } 또는 { hz: 20~60 }.
      * 중앙 명령(테이블 명세서 v5): 끄기 = FAN_STOP, 켜기 = FAN_HZ 40, 회전수·주파수 = FAN_HZ (rpm ÷ 30)
      */

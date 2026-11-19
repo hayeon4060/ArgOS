@@ -387,6 +387,7 @@ public class AlarmService {
         out.put("equipmentId", row.get("equipmentId"));
         out.put("raisedAt", a.raisedAt());
         out.put("closedAt", a.closedAt());
+        out.put("closeReason", a.closeReason());
         OffsetDateTime end = a.closedAt() != null ? a.closedAt() : now;
         out.put("actionMinutes", a.raisedAt() == null ? null
                 : Math.max(1, java.time.Duration.between(a.raisedAt(), end).toMinutes()));

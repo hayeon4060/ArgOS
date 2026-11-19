@@ -28,6 +28,18 @@ public class EquipmentActionController {
         return ApiResponse.ok(service.fan(equipmentId, body.power(), body.rpm(), body.hz()));
     }
 
+    /** 수동 배기팬: 가스 알림 때 승인 대기(fanAuto.status = AWAITING)인 명령 승인 */
+    @PostMapping("/fan-commands/{commandId}/approve")
+    public ApiResponse<Map<String, Object>> approveFan(@PathVariable long commandId) {
+        return ApiResponse.ok(service.decideFan(commandId, true));
+    }
+
+    /** 승인 대기 명령 거절 (fanAuto.status = DENIED) */
+    @PostMapping("/fan-commands/{commandId}/deny")
+    public ApiResponse<Map<String, Object>> denyFan(@PathVariable long commandId) {
+        return ApiResponse.ok(service.decideFan(commandId, false));
+    }
+
     @PostMapping("/equipment/{equipmentId}/shutdown")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, Object>> shutdown(@PathVariable long equipmentId,
