@@ -6,6 +6,7 @@
  *   (주의: CT-17 22.4 A, TE-15 146 ℃, CO-13 9 ppm / 정상: 18.1 A, 142 ℃, 6 ppm)
  * - 게이지 눈금 끝(max)·평소 값(usual)은 화면설계안 js/v-dash.js EQD 값
  */
+import { addedLayout } from './addedScope'
 import { EQUIPMENT, equipmentLevel, sensorsNow } from './processData'
 import { SCENARIO_TIME, todayIso } from './equipmentSeries'
 import { activeChecklist, designAt, scenario, workerName } from './scenario'
@@ -42,10 +43,24 @@ const TYPE_LABEL = { CURRENT: '전류', TEMP: '온도', CO: 'CO' }
 /** 상도 건조로 (예시 상황이 걸린 설비) */
 export const TOP_OVEN_ID = 31
 
+/**
+ * 공장 관리에서 도장 공정에 추가한 설비의 상세 (2026-11-20) — 센서 · 열화상 · 체크리스트가 아직 없는 빈 설비
+ * (없는 id 면 null → 404)
+ */
+function mockAddedEquipment(equipmentId) {
+  const e = addedLayout(12).equipment.find((x) => x.id === Number(equipmentId))
+  if (!e) return null
+  return {
+    id: e.id, code: e.code, name: e.name, type: e.type, processId: 12, seq: null,
+    path: ['울산공장', '5공장', '도장 공정'],
+    level: LEVEL.NORMAL, runState: 'RUNNING', sensors: [], cameraId: null, activeChecklist: null,
+  }
+}
+
 /** 설비 상세: GET /equipment/{id} (지금 상황). 없는 설비면 null */
 export function mockEquipment(equipmentId) {
   const e = EQUIPMENT.find((x) => x.id === Number(equipmentId))
-  if (!e) return null
+  if (!e) return mockAddedEquipment(equipmentId)
   const sensors = sensorsNow()
   const c = e.id === TOP_OVEN_ID ? activeChecklist() : null
   return {

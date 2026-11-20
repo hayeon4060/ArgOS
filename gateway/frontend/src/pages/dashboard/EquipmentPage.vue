@@ -22,7 +22,6 @@ import SensorGaugeCard from '@/features/equipment/SensorGaugeCard.vue'
 import ThermalCard from '@/features/equipment/ThermalCard.vue'
 import TrendCard from '@/features/equipment/TrendCard.vue'
 import { useLiveValues } from '@/features/equipment/useLiveValues'
-import { svgKeyOf } from '@/features/process/paintLayout'
 import { buildProcessEquipment, layoutPlacement } from '@/features/process/processEquipment'
 import { useLiveReload } from '@/utils/useLiveReload'
 
@@ -33,7 +32,9 @@ const equipment = ref(null)
 const events = ref([])
 const thermal = ref(null)
 const processEquipment = ref([])
-const placement = ref({ positions: {}, inactive: [] })
+const placement = ref({ positions: {}, inactive: [], hidden: [] })
+// 배치도 안에서 이 설비를 가리키는 이름 (그림에 원래 있는 설비는 그림 이름, 공장 관리에서 추가한 설비는 'x' + id)
+const focusKey = computed(() => processEquipment.value.find((e) => e.id === equipment.value?.id)?.key ?? '')
 const loading = ref(true)
 const errorMessage = ref('')
 
@@ -152,9 +153,10 @@ function onSelectEquipment(eq) {
       <EquipmentLocationCard
         class="location"
         :equipment="processEquipment"
-        :focus-key="svgKeyOf(equipment.code)"
+        :focus-key="focusKey"
         :positions="placement.positions"
         :inactive="placement.inactive"
+        :hidden="placement.hidden"
         :sub="locationSub"
         @select="onSelectEquipment"
       />

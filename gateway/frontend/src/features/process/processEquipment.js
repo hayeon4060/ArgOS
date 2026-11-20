@@ -1,23 +1,26 @@
 /**
  * 화면용 설비 목록 만들기: 배치도(layout) + 지금 값(status) 을 합침
  * - 공정 배치도(ProcessPage)와 설비 상세(EquipmentPage, 설비 위치 그림)가 같이 씀
- * - key: 그림 안 설비 이름 (code 'TC-OVEN' → 'top-oven')
+ * - key: 그림 안 설비 이름 (code 'TC-OVEN' → 'top-oven'), 공장 관리에서 추가한 설비는 'x' + id — paintLayout.js drawingOf
  * - 실제 서버는 한 그림에 설비가 여러 대(건조로 + 배기팬 + 버너실 …) → 그림용으로는 mergeByKey 로 묶어 씀
  * - sensors: 이 설비에 붙은 센서 + 지금 값·단계
  */
-import { svgKeyOf } from './paintLayout'
+import { drawingOf, hiddenDrawings } from './paintLayout'
 import { LEVEL } from '@/types/codes'
 
 /**
  * 공장 관리에서 저장한 배치 → 배치도(PaintMap) 값
  * - positions: layout 설비의 pos { x, y } (DB pos_x · pos_y, 배치도 화면 좌표). 값이 없는 설비는 빼서 그림 그대로
  * - inactive: 사용 안 함 설비 (DB is_active = false)
- * @returns {{ positions: { [설비 이름]: { x, y } }, inactive: string[] }}
+ * - hidden: 숨길 설비 그림 — 그림에는 있지만 등록되지 않은 설비 (paintLayout.js hiddenDrawings)
+ * @returns {{ positions: { [설비 이름]: { x, y } }, inactive: string[], hidden: string[] }}
  */
 export function layoutPlacement(layout) {
+  const all = (layout?.equipment ?? []).map((e) => ({ ...e, ...drawingOf(e) }))
   // 그림 하나에 설비가 여러 대면 대표 설비의 위치 · 사용 여부만 씀 (배기팬 · 버너실 값이 덮어쓰지 않게)
-  const list = mergeByKey((layout?.equipment ?? []).map((e) => ({ ...e, key: svgKeyOf(e.code) })))
+  const list = mergeByKey(all)
   return {
+    hidden: hiddenDrawings(all),
     positions: Object.fromEntries(list.filter((e) => e.pos?.x != null && e.pos?.y != null).map((e) => [e.key, { x: e.pos.x, y: e.pos.y }])),
     inactive: list.filter((e) => e.active === false).map((e) => e.key),
   }
@@ -56,7 +59,8 @@ export function buildProcessEquipment(layout, status) {
     const now = status.equipment.find((x) => x.id === e.id) ?? {}
     return {
       id: e.id,
-      key: svgKeyOf(e.code),
+      ...drawingOf(e), // key(배치도 안 이름) · shape(그림 이름)
+      code: e.code,
       name: e.name,
       seq: e.seq,
       level: now.level ?? LEVEL.NORMAL,

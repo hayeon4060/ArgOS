@@ -12,7 +12,7 @@ import { addProcess, addedLayout, addedProcessName, saveAddedLayout } from './mo
 import { mockSiteTrees } from './mock/data'
 import { saveLayout } from './mock/layoutData'
 import { USE_MOCK, mockFail, mockOk } from './mock'
-import { mockProcess as paintProcess } from './mock/processData'
+import { mockProcess as paintProcess, sensorsNow } from './mock/processData'
 import { LEVEL } from '@/types/codes'
 import { autoCode } from './sites'
 
@@ -68,13 +68,17 @@ export function getTodayInspections(processId) {
  *   · pos { x, y }: pos_x · pos_y — 배치도 화면 좌표(PaintMap 그림 좌표, 설비 가운데 점). 미터가 아님
  *   · type: equipment_type 코드 (OVEN · FAN · BURNER · TANK · PUMP · CAMERA)
  *   · active: is_active
- * @param {{ version, equipment: { create: [], update: [{ id, pos?: { x, y }, name?, type?, active? }], delete: [] } }} body
+ *   · shape(create 만): 배치도에 그릴 그림 이름 ('top-oven' · 'fan' …, features/process/paintLayout.js) — DB equipment.shape
+ * - equipment.delete: 지울 설비 id 들 (서버는 센서가 붙은 설비는 지우지 않고 사용 안 함으로 바꿈)
+ * @param {{ version, equipment: { create: [{ tempId, name, type, shape, pos }], update: [{ id, pos?: { x, y }, name?, type?, active? }], delete: number[] } }} body
  * @returns {{ version, changedCount }}
  */
 export function saveProcessLayout(processId, body) {
   if (USE_MOCK) {
     // 공장 관리에서 추가한 공정은 addedScope.js, 도장 공정은 layoutData.js
-    const r = addedProcessName(processId) ? saveAddedLayout(processId, body) : saveLayout(processId, body)
+    // (도장 공정 삭제 규칙: 센서가 붙은 설비는 지우지 않고 사용 안 함 → 센서 유무를 알려 줌)
+    const hasSensors = (id) => sensorsNow().some((s) => s.equipmentId === id)
+    const r = addedProcessName(processId) ? saveAddedLayout(processId, body) : saveLayout(processId, body, hasSensors)
     return r.error ? mockFail(r.error) : mockOk(r.data)
   }
   return http.put(`/processes/${processId}/layout`, body)
