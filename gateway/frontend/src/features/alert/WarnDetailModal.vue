@@ -30,6 +30,7 @@ import BaseModal from '@/components/BaseModal.vue'
 import ThermalImage from '@/features/equipment/ThermalImage.vue'
 import { useAlertStore } from '@/stores/alert'
 import { useAuthStore } from '@/stores/auth'
+import { toLayoutPx } from '@/utils/screenScale'
 import { toast } from '@/utils/toast'
 
 const props = defineProps({
@@ -85,7 +86,7 @@ const time = computed(() => detail.value?.raisedAt.slice(11, 19) ?? '')
 const zoneName = computed(() => [detail.value?.thermal?.cameraTag, placeOf(detail.value).processName].filter(Boolean).join(' · '))
 
 // 창 너비: 세 칸이 들어가게 넓게, 화면이 좁으면 화면에 맞춤
-const modalWidth = Math.min(1640, window.innerWidth - 48)
+const modalWidth = Math.min(1640, toLayoutPx(window.innerWidth) - 48) // 배율이 걸린 화면에서는 화면 폭도 배율로 나눠서
 
 /** 이미 보낸 알림 (조치 중) */
 const sent = () => detail.value?.status === 'ACTING'

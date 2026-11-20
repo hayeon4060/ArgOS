@@ -32,6 +32,7 @@ import { SEASON_META, changes as changesOf, check, draftsOf, num, savedOf } from
 import { useAuthStore } from '@/stores/auth'
 import { ROLE_LABEL, SENSOR_TYPES } from '@/types/codes'
 import { formatYmd } from '@/utils/format'
+import { toLayoutPx } from '@/utils/screenScale'
 import { toast } from '@/utils/toast'
 
 const props = defineProps({
@@ -57,7 +58,7 @@ const loading = ref(true)
 const errorMessage = ref('')
 const shown = ref(true) // false 가 되면 사라지는 움직임 뒤 close
 // 창 너비: 1600px, 화면이 좁으면 화면 폭에 맞춤 (양옆 24px 여백)
-const modalWidth = Math.min(1600, window.innerWidth - 48)
+const modalWidth = Math.min(1600, toLayoutPx(window.innerWidth) - 48) // 배율이 걸린 화면에서는 화면 폭도 배율로 나눠서
 
 // 트리에서 이 설비 줄 (이름·종류·단계) 과 같은 공정 (건조로 3대 묶어 저장할 때 씀)
 const equipmentRow = computed(() => tree.value.flatMap((p) => p.equipment).find((e) => e.id === props.equipmentId) ?? null)

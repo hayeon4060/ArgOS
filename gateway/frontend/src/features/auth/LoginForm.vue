@@ -199,7 +199,7 @@ async function onSubmit() {
   position: relative;
   width: 440px;
   max-width: calc(100% - 32px);
-  margin: max(32px, calc(50vh - 296px)) auto 80px;
+  margin: max(32px, calc(var(--screen-h) / 2 - 296px)) auto 80px;
   padding: 44px 40px 32px;
   background: #fff;
   border: 1px solid var(--color-border-card);

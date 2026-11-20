@@ -192,7 +192,7 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PER)))
 }
 
 .ilt {
-  height: min(560px, calc(100vh - 300px));
+  height: min(560px, calc(var(--screen-h) - 300px));
   overflow-y: auto;
 }
 

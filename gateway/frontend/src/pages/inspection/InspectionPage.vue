@@ -302,7 +302,7 @@ onBeforeUnmount(() => {
 .ocr {
   display: flex;
   flex-direction: column;
-  height: max(760px, calc(100vh - var(--topbar-height) - 40px));
+  height: max(760px, calc(var(--screen-h) - var(--topbar-height) - 40px));
   background: var(--color-surface);
   border: 1px solid var(--color-border-card);
   border-radius: var(--radius-md);

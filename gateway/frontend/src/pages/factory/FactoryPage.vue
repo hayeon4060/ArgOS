@@ -406,7 +406,7 @@ watch(
   grid-template-columns: minmax(0, 300fr) minmax(0, 1128fr) minmax(0, 420fr);
   gap: 16px;
   align-items: stretch;
-  height: max(760px, calc(100vh - var(--topbar-height) - 110px));
+  height: max(760px, calc(var(--screen-h) - var(--topbar-height) - 110px));
 }
 
 .grid > * {
