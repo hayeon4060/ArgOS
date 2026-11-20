@@ -235,6 +235,98 @@ class JudgementEngineTest {
         assertThat(String.join(" | ", rec.log)).contains("event^ ALARM");
     }
 
+    private void edge(String tag, String key, EdgeStage.Phase phase, Stage stage, String rule, Double value,
+                      Double peak, Boolean plcOk) {
+        engine.acceptEdgeStage(new EdgeStage(tag, key, phase, stage, rule, 5L, value, peak, plcOk,
+                T0.plusSeconds(5L * tick)));
+        tick++;
+    }
+
+    private void edgeValue(String tag, double value) {
+        engine.acceptValue(new SensorReading(tag, T0.plusSeconds(5L * tick), value));
+        tick++;
+    }
+
+    @Test
+    void 엣지_값은_판정하지_않고_추이와_현재값만() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        for (int i = 0; i < 40; i++) {
+            edgeValue("TE-305", 170);   // 경보 범위지만 엣지가 판정하므로 이벤트 없음
+        }
+        engine.flushTrends();
+        assertThat(rec.log).isEmpty();
+        assertThat(rec.readings).isEqualTo(40);
+        assertThat(rec.trends).isNotEmpty();
+    }
+
+    @Test
+    void 엣지_단계로_이벤트를_열고_올리고_닫는다_경보는_관제_단위로() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        String k = "P5-TE-305-20261116T090145";
+        edge("TE-305", k, EdgeStage.Phase.START, Stage.WARN, "HI", 150.8, null, true);
+        edge("TE-305", k, EdgeStage.Phase.START, Stage.WARN, "HI", 150.8, null, true); // 다시 온 START 는 무시
+        edgeValue("TE-305", 158);
+        edge("TE-305", k, EdgeStage.Phase.UPDATE, Stage.ALARM, "HI", 160.3, null, true);
+        edge("TE-305", k, EdgeStage.Phase.UPDATE, Stage.WARN, "HI", 158.0, null, true); // 3 → 2
+        edge("TE-305", k, EdgeStage.Phase.END, Stage.NORMAL, "HI", 144.6, 170.2, true);
+
+        assertThat(rec.log).containsExactly(
+                "event+ 305 WARN start=0 detect=0 backlog=1",
+                "edge " + k + " plc=true",
+                "alarm+ unit=5 WARN FIRE",
+                "link",
+                "edge null plc=true",
+                "edge null plc=true",
+                "event^ ALARM",
+                "alarm~ ALARM FIRE",
+                "edge null plc=true",
+                "event_ WARN",
+                "edge null plc=true",
+                "event- end=5 peak=170.2",
+                "alarm- closed=false");
+        assertThat(engine.currentStage("TE-305")).isEqualTo(Stage.NORMAL);
+    }
+
+    @Test
+    void 엣지_CO_와_전류_저하는_같은_가스_경보로_묶인다() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        edge("AT-303", "P5-AT-303-1", EdgeStage.Phase.START, Stage.WARN, "HI", 18.0, null, null);
+        edge("IT-307", "P5-IT-307-1", EdgeStage.Phase.START, Stage.ALARM, "LO", 12.0, null, null);
+
+        assertThat(rec.log).filteredOn(l -> l.startsWith("alarm")).containsExactly(
+                "alarm+ unit=5 WARN GAS", "alarm~ ALARM GAS");
+        assertThat(rec.lowSide).containsExactly(false, true);
+    }
+
+    @Test
+    void END_가_빠지고_새_구간이_오면_앞_구간을_닫는다_모르는_END_는_DB_로() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        edge("TE-305", "A", EdgeStage.Phase.START, Stage.WARN, "HI", 151.0, null, null);
+        edge("TE-305", "B", EdgeStage.Phase.START, Stage.WARN, "HI", 152.0, null, null);
+        edge("TE-305", "C", EdgeStage.Phase.END, Stage.NORMAL, "HI", 140.0, 155.0, null);
+
+        assertThat(rec.log).filteredOn(l -> l.startsWith("event")).containsExactly(
+                "event+ 305 WARN start=0 detect=0 backlog=1",
+                "event- end=1 peak=151.0",
+                "event+ 305 WARN start=1 detect=1 backlog=1");
+        assertThat(rec.log).contains("edge-unknown C");
+    }
+
+    @Test
+    void 통신_끊김은_추이의_lost_n_으로() {
+        engine = new JudgementEngine(List.of(te), rec, JudgementEngine.Options.live());
+        edgeValue("TE-305", 140);
+        engine.acceptLost("TE-305", T0.plusSeconds(20));
+        engine.acceptLost("TE-305", T0.plusSeconds(75));  // 다음 분: 값 없이 끊김만
+        engine.flushTrends();
+
+        assertThat(rec.trends).hasSize(2);
+        assertThat(rec.trends.get(0).n()).isEqualTo(1);
+        assertThat(rec.trends.get(0).lostN()).isEqualTo(1);
+        assertThat(rec.trends.get(1).avg()).isNull();
+        assertThat(rec.trends.get(1).lostN()).isEqualTo(1);
+    }
+
     private void external(double value, Stage stage) {
         engine.acceptExternal(new SensorReading("IR-301", T0.plusSeconds(5L * tick), value), stage);
         tick++;
@@ -270,6 +362,21 @@ class JudgementEngineTest {
         @Override
         public void onEventEscalated(long eventKey, Stage stage, Instant at) {
             log.add("event^ " + stage);
+        }
+
+        @Override
+        public void onEdgeEvent(long eventKey, String edgeKey, Boolean plcOk) {
+            log.add("edge " + edgeKey + " plc=" + plcOk);
+        }
+
+        @Override
+        public void onEventStageLowered(long eventKey, Stage stage, Instant at) {
+            log.add("event_ " + stage);
+        }
+
+        @Override
+        public void onEdgeEventEndedUnknown(String edgeKey, Instant endedAt, Double peak) {
+            log.add("edge-unknown " + edgeKey);
         }
 
         @Override

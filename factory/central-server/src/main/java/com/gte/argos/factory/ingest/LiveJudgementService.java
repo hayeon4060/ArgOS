@@ -2,6 +2,7 @@ package com.gte.argos.factory.ingest;
 
 import com.gte.argos.factory.command.FanAutoService;
 import com.gte.argos.factory.common.time.DemoClock;
+import com.gte.argos.factory.judge.EdgeStage;
 import com.gte.argos.factory.judge.JudgementEngine;
 import com.gte.argos.factory.judge.SensorDef;
 import com.gte.argos.factory.judge.SensorReading;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,8 +30,13 @@ import org.springframework.transaction.annotation.Transactional;
  * 실시간 센서값 입구. 시연 시작(11/16 09:00) 이후의 값이 여기로 들어온다.
  *
  * <pre>
- * 입력 어댑터(지금: 개발용 POST, 다음: Redis 봇) → ingest() → 판정 엔진(실시간 모드)
- *   → DB 저장 + 메모리(LiveState: 지금 값, 최근 1시간) + 피드(LiveFeed: 연계 서버가 가져감)
+ * 입력 어댑터
+ *   개발용 POST(/dev/readings) → ingest() → 판정 엔진이 단계까지 판정
+ *   엣지 Kafka argos.edge.raw → ingestEdgeValue() → 1분 추이·현재값만 (판정 안 함)
+ *   엣지 Kafka argos.edge.stage → ingestEdgeStage() → 엣지 단계로 센서 이벤트, 관제 단위 조합 경보
+ *   VMS 열화상 → ingestExternal() → VMS 단계로 이벤트·경보
+ *   → DB 저장 + 메모리(LiveState: 지금 값, 최근 1시간) + 피드(LiveFeed: 중앙 서버가 가져감)
+ * 엣지·VMS 값의 시각은 받은 시각(서버 시계)으로 한다 (보낸 쪽 ts 는 쓰지 않음, 2026-11-20 결정)
  * </pre>
  *
  * 실시간 모드에서는 이벤트가 끝나도 경보를 닫지 않는다. 경보는 사람이 연계 서버에서 닫는다.
@@ -46,14 +53,17 @@ public class LiveJudgementService {
     private final LiveFeed feed;
     private final SensorDailyService daily;
     private final FanAutoService fanAuto;
+    private final ApplicationEventPublisher events;
 
     private JudgementEngine engine;
     private FeedingListener listener;
     private Map<String, Long> sensorIdByTag = Map.of();
 
     public LiveJudgementService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock,
-                                LiveState state, LiveFeed feed, SensorDailyService daily, FanAutoService fanAuto) {
+                                LiveState state, LiveFeed feed, SensorDailyService daily, FanAutoService fanAuto,
+                                ApplicationEventPublisher events) {
         this.jdbc = jdbc;
+        this.events = events;
         this.fanAuto = fanAuto;
         this.daily = daily;
         this.sensorLoader = sensorLoader;
@@ -113,6 +123,47 @@ public class LiveJudgementService {
         return true;
     }
 
+    /**
+     * 엣지(DAS) 1초 값 (Kafka argos.edge.raw). 시각은 받은 시각(서버 시계)으로 한다 (엣지 ts 는 쓰지 않음).
+     * 단계 판정은 하지 않는다 (엣지가 판정해 argos.edge.stage 로 보냄).
+     *
+     * @param value null 이거나 lost 면 통신 끊김(COMM_LOST)으로 센다
+     * @return 아는 태그면 true
+     */
+    @Transactional
+    public synchronized boolean ingestEdgeValue(String tag, Double value, boolean lost) {
+        JudgementEngine e = engine();
+        Long sensorId = sensorIdByTag.get(tag);
+        if (sensorId == null) {
+            return false;
+        }
+        java.time.Instant now = clock.now();
+        if (lost || value == null) {
+            e.acceptLost(tag, now);
+            listener.flush();
+            return true;
+        }
+        state.record(sensorId, now, value);
+        e.acceptValue(new SensorReading(tag, now, value));
+        listener.flush();
+        feed.append("SENSOR_VALUES", clock.nowOffset(),
+                Map.of("values", List.<Object[]>of(new Object[] {sensorId, odt(now), value})));
+        return true;
+    }
+
+    /**
+     * 엣지(DAS) 단계 변경 (Kafka argos.edge.stage) → 센서 이벤트, 관제 단위 조합 경보, 가스면 배기팬 자동 제어.
+     * s.ts() 는 받은 시각(서버 시계)이어야 한다.
+     */
+    @Transactional
+    public synchronized void ingestEdgeStage(EdgeStage s) {
+        engine().acceptEdgeStage(s);
+        listener.flush();
+        for (FeedingListener.GasAlarm g : listener.drainGasAlarms()) {
+            fanAuto.onGasAlarm(g.alarmId(), g.unitId(), g.stage());
+        }
+    }
+
     /** 이 센서의 지금 단계 (진행 중 이벤트 기준) */
     public synchronized Stage currentStage(String tag) {
         return engine().currentStage(tag);
@@ -148,6 +199,8 @@ public class LiveJudgementService {
 
     /** 센서·기준값을 바꾼 뒤 엔진에 반영한다. 진행 중 판정·경보는 그대로 이어진다 */
     public synchronized void reloadDefinitions() {
+        // 엣지로 기준값 다시 보내기 (Kafka 켜짐일 때 ThresholdPublisher 가 커밋 뒤에 받음)
+        events.publishEvent(new DefinitionsChanged());
         if (engine == null) {
             return; // 다음 값이 들어올 때 새 기준으로 만들어진다
         }
@@ -158,6 +211,10 @@ public class LiveJudgementService {
         }
         sensorIdByTag = ids;
         engine.updateDefinitions(sensors);
+    }
+
+    /** 센서·기준값이 바뀜 */
+    public record DefinitionsChanged() {
     }
 
     private JudgementEngine engine() {

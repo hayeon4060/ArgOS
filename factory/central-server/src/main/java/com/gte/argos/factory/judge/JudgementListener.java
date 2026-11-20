@@ -65,7 +65,28 @@ public interface JudgementListener {
     record Sample(Instant ts, double value) {
     }
 
-    /** 1분 추이 한 칸 (sensor_trend) */
-    record TrendPoint(long sensorId, Instant minute, double avg, double min, double max, int n) {
+    /**
+     * 엣지(DAS)가 판정한 이벤트의 엣지 정보. 이벤트를 연 직후 한 번(edgeKey 있음), 이후 PLC 결과가 올 때마다(edgeKey null)
+     *
+     * @param edgeKey 엣지 구간 키 (sensor_event.edge_key). null 이면 바꾸지 않음
+     * @param plcOk   PLC 단계 기록 성공 (sensor_event.plc_ok). null 이면 바꾸지 않음
+     */
+    default void onEdgeEvent(long eventKey, String edgeKey, Boolean plcOk) {
+    }
+
+    /** 이벤트 단계가 내려감 (엣지: 3 → 2). 경보 단계는 내려가지 않는다 */
+    default void onEventStageLowered(long eventKey, Stage stage, Instant at) {
+    }
+
+    /**
+     * 엔진이 모르는 엣지 이벤트의 끝 (서버가 이벤트 도중 다시 켜진 경우 등). DB 에 열린 채 남은 그 이벤트를 닫는다
+     *
+     * @param peak 엣지가 준 구간 최고값 (없으면 null)
+     */
+    default void onEdgeEventEndedUnknown(String edgeKey, Instant endedAt, Double peak) {
+    }
+
+    /** 1분 추이 한 칸 (sensor_trend). 값 없이 통신 끊김만 있던 분이면 avg·min·max 가 null */
+    record TrendPoint(long sensorId, Instant minute, Double avg, Double min, Double max, int n, int lostN) {
     }
 }

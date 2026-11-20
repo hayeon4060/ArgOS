@@ -37,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * - 값은 1분 추이 · 실시간 현재값에 들어간다. 1초 원시값 테이블은 없다
  * - 사진은 file_asset(THERMAL) 로 저장하고 sensor_event.image_file_id · roi, alarm.thermal_file 에 잇는다
  * - ② 가 유실돼도 ① 의 stage 로 이벤트·경보를 만든다 (사진만 빠짐)
- * - ts 는 시간대가 없으면 한국 시각으로 읽는다 (+09:00 이 붙어도 됨)
+ * - 시각은 받은 시각(서버 시계)으로 저장한다. 보낸 ts 는 형식만 확인 ('YYYY-MM-DD HH:MM:SS' 또는 +09:00)
  * </pre>
  */
 @Service
@@ -74,7 +74,9 @@ public class VmsService {
         }
         double value = ((Number) meta.get("value")).doubleValue();
         Stage stage = stage(meta.get("stage"));
-        Instant ts = parseTs(str(meta.get("ts")), clock);
+        // 시각은 받은 시각(서버 시계). VMS 가 보낸 ts 는 형식만 확인하고 쓰지 않는다 (2026-11-20 결정: 봇 CSV 시각 반복)
+        parseTs(str(meta.get("ts")), clock);
+        Instant ts = clock.now();
         List<Long> ids = jdbc.queryForList("SELECT sensor_id FROM sensor WHERE tag = ? AND sensor_type = 'IR'",
                 Long.class, serial);
         if (ids.isEmpty()) {
