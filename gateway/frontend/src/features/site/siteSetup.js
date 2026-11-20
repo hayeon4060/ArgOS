@@ -1,11 +1,12 @@
 /**
  * 아직 아무것도 설정하지 않은 사업장인지 (2026-11-20 재원님 요청: 새 사업장은 상단 메뉴에 '관리'만)
- * - 사업장별 공장 수를 한 번 불러와 기억함 (GET /sites/{siteId}/tree — 본사 관리자 · 공장 담당자 모두 부를 수 있음)
+ * - 사업장별 공장 수를 한 번 불러와 기억함 (getScopeTree — 본사 관리자는 /tree, 공장 담당자는 /factories · /processes)
+ *   (/tree 는 본사 관리자 전용이라 공장 담당자는 403 — 2026-11-20 고침)
  * - 공장 관리에서 공장을 추가하면 setFactoryCount 로 바로 고쳐서 메뉴가 다시 나타남
  * - 상단 메뉴(AppNav) · 사업장 선택(SiteSelectPage)이 씀
  */
 import { reactive } from 'vue'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
 
 /** { 사업장 id: 공장 수 } — 아직 모르면 값 없음 */
 const factoryCount = reactive({})
@@ -25,7 +26,7 @@ export function setFactoryCount(siteId, count) {
 export async function checkSite(siteId) {
   if (!siteId || siteId in factoryCount) return
   try {
-    const tree = await getSiteTree(siteId)
+    const tree = await getScopeTree(siteId)
     factoryCount[siteId] = tree.factories.length
   } catch {
     // 메뉴를 숨기지 않음

@@ -13,7 +13,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
 import { exportStats, getStatsAlarms, getStatsByProcess, getStatsSummary, getStatsTrend } from '@/api/stats'
 import { useAuthStore } from '@/stores/auth'
 import { ROLE } from '@/types/codes'
@@ -169,9 +169,9 @@ function applyQuery() {
 /* ───────── 처음 불러오기 ───────── */
 onMounted(async () => {
   try {
-    const tree = await getSiteTree(siteId.value)
-    const mine = auth.user?.scope?.factoryIds ?? []
-    factories.value = lockFactory.value ? tree.factories.filter((f) => mine.includes(f.id)) : tree.factories
+    // 공장 담당자는 담당 공장만 옴 (getScopeTree — 실서버 /tree 는 본사 관리자 전용)
+    const tree = await getScopeTree(siteId.value)
+    factories.value = tree.factories
     // 공장 담당자: 담당 공장 / 본사 관리자: 5공장(설계안 처음 값), 없으면 전체 공장
     const first = lockFactory.value ? factories.value[0] : factories.value.find((f) => f.id === 5)
     filter.factoryId = first ? String(first.id) : ''
