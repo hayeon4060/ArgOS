@@ -1,0 +1,147 @@
+/*
+ * 전역 기본 스타일
+ * - 브라우저 기본 여백 제거, 글꼴 적용, 공통 클래스 몇 개만 정의
+ * - 버튼·숫자 모양은 화면설계안(base.css 의 .btn, .num)과 같게
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * 화면을 오른쪽 끝까지 채우면서, 세로 스크롤바가 생겼다 사라져도 본문이 좌우로 튀지 않게
+ * - 본문(body) 폭을 '스크롤바를 포함한 화면 폭'으로 고정 → 스크롤바가 생겨도 본문 폭이 그대로
+ *   (스크롤바는 본문 오른쪽 여백 위에 겹쳐서 뜸. 여백이 16px 이상이라 내용은 가리지 않음)
+ * - 그만큼 본문이 화면보다 넓어지므로 가로 스크롤은 막음
+ * - 전에는 scrollbar-gutter: stable 로 스크롤바 자리를 늘 비워 둬서, 스크롤이 없는 화면에서도
+ *   오른쪽에 빈 띠가 남고 상단 바·주의 테두리가 화면 끝에서 끊겨 보였음 (2026-11-20 재원님 요청으로 바꿈)
+ */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  width: var(--screen-w); /* 화면 폭 (배율 반영, tokens.css) */
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* 숫자·센서값·코드 표시용 (자릿수 폭 고정) */
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+}
+
+/* 페이지 제목 (모든 페이지 공통) */
+.page-title {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* 기본 버튼 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+  font-weight: 700;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: var(--color-primary-hover);
+}
+
+/* 공통 애니메이션 (설계안 extra.css 와 같은 이름) */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes softin {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

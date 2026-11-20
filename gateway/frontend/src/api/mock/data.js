@@ -6,6 +6,8 @@
  * - 바뀌는 곳은 5공장 도장 공정 상도 건조로 센서 3개(processData.js)와 그 알림(아래 mockAlarms) 뿐,
  *   나머지 공장·공정은 늘 정상
  */
+import { addedFactoriesOf, ADDED, extraProcessesOf } from './addedScope'
+import { fanAutoOf } from './fanAuto'
 import { maxLevel, sensorsNow } from './processData'
 import { activeChecklist, designAt, scenario, workerName } from './scenario'
 import { LEVEL, ROLE } from '@/types/codes'
@@ -103,7 +105,7 @@ function paintProcess() {
     levelsByType: { CURRENT: typeLevels('CURRENT'), TEMP: typeLevels('TEMP'), CO: typeLevels('CO') },
     abnormal: sensors
       .filter((s) => s.level !== NORMAL)
-      .map((s) => ({ sensorId: s.id, sensorTag: s.tag, type: s.type, value: s.value, unit: s.unit, level: s.level })),
+      .map((s) => ({ sensorId: s.id, tag: s.tag, type: s.type, value: s.value, unit: s.unit, level: s.level })), // 서버 DashboardService.abnormal 과 같은 이름
     thermalMax: THERMAL_MAX[scenario.state],
     hasFloorplan: true,
   }
@@ -200,26 +202,36 @@ function plant5() {
 
 /** 사업장 펼치기 { 사업장 id: { siteId, factories } } (지금 상황) */
 export function mockSiteTrees() {
-  return {
+  const trees = {
     1: { siteId: 1, factories: [...ULSAN_BEFORE_5, plant5(), ULSAN_ENGINE] },
     2: { siteId: 2, factories: ASAN },
     3: { siteId: 3, factories: JEONJU },
   }
+  // 공장 관리에서 추가한 사업장 · 공장 · 공정 붙이기 (addedScope.js)
+  for (const site of ADDED.sites) trees[site.id] = { siteId: site.id, factories: [] }
+  for (const tree of Object.values(trees)) {
+    tree.factories = [...tree.factories, ...addedFactoriesOf(tree.siteId)].map((f) => ({
+      ...f,
+      processes: [...f.processes, ...extraProcessesOf(f.id)],
+    }))
+  }
+  return trees
 }
 
 /* ───────── 사업장 목록 (GET /sites) ───────── */
 
 const SITE_INFO = [
-  { id: 1, code: 'ULS-01', name: '울산공장', address: '울산광역시 북구 염포로 700', lat: 35.5438, lng: 129.3697, processCount: 22 },
-  { id: 2, code: 'ASN-01', name: '아산공장', address: '충청남도 아산시 인주면 현대로 1077', lat: 36.9237, lng: 126.9148, processCount: 6 },
-  { id: 3, code: 'JNJ-01', name: '전주공장', address: '전북특별자치도 완주군 봉동읍 완주산단5로 163', lat: 35.9198, lng: 127.1398, processCount: 7 },
+  { id: 1, code: 'USN', name: '울산공장', address: '울산광역시 북구 염포로 700', lat: 35.5438, lng: 129.3697, processCount: 22 },
+  { id: 2, code: 'ASN', name: '아산공장', address: '충청남도 아산시 인주면 현대로 1077', lat: 36.9237, lng: 126.9148, processCount: 6 },
+  { id: 3, code: 'JJU', name: '전주공장', address: '전북특별자치도 완주군 봉동읍 완주산단5로 163', lat: 35.9198, lng: 127.1398, processCount: 7 },
 ]
 
 /** 사업장 목록 (지금 상황): 단계·센서 개수는 공장 합, 울산 오늘 알림은 알림 목록에서 셈 (아산 1건은 고정) */
 export function mockSites() {
   const trees = mockSiteTrees()
   const ulsanAlarms = mockAlarms().filter((a) => a.siteId === 1).length
-  return SITE_INFO.map((info) => {
+  // 공장 관리에서 추가한 사업장은 주소 · 위경도 없이 목록 끝에 (addedScope.js)
+  return [...SITE_INFO, ...ADDED.sites].map((info) => {
     const factories = trees[info.id].factories
     const sensorLevels = totalOf(sumByType(factories.map((f) => f.levelsByType)))
     return {
@@ -228,7 +240,8 @@ export function mockSites() {
       factoryCount: factories.length,
       sensorCount: sensorLevels[NORMAL] + sensorLevels[LEVEL.WARN] + sensorLevels[LEVEL.ALARM],
       sensorLevels,
-      todayAlarmCount: { 1: ulsanAlarms, 2: 1, 3: 0 }[info.id],
+      processCount: factories.reduce((n, f) => n + f.processes.length, 0), // 공정 수 = 공장들의 공정 합 (추가한 공정도 셈)
+      todayAlarmCount: { 1: ulsanAlarms, 2: 1, 3: 0 }[info.id] ?? 0,
     }
   })
 }
@@ -248,6 +261,7 @@ const alarm = (id, factoryId, status, title, location, sensorTag, sensorType, va
   siteId: 1, factoryId, processId: factoryId === 5 ? 12 : null, id, level: LEVEL.WARN, status, title, location,
   equipmentId: id - 1000, sensorId: id - 900, sensorTag, sensorType, value, unit, threshold, raisedAt: todayAt(time),
   ackedBy: null, ackedAt: null, closedAt: null, checklist: null, assignee: null,
+  fanAuto: null, // 가스 알림 때 배기팬 자동 제어 결과 (fanAuto.js) — 그 밖의 알림은 null
   // 설비 이름 (백엔드 AlarmViews unitName) — 위치 마지막 칸에서 부품 이름을 뺀 것
   unitName: location.split(' · ').at(-1).replace(/ (배기팬|버너실|순환펌프)$/, ''),
 })
@@ -271,11 +285,18 @@ const PAST_ALARMS = [
 function topOvenAlarm() {
   const a = scenario.alarm
   if (!a) return null
-  const title = a.status === 'CLOSED' ? '전류 주의 해제' : '전류 주의 기준 초과'
-  const row = { ...alarm(1042, 5, a.status, title, '5공장 · 도장 공정 · 상도 건조로 배기팬', 'CT-17', 'CURRENT', 22.4, 'A', 21.6, a.raisedAt), equipmentId: 31 }
+  // 가스 주의(kind GAS, 2026-11-19 추가)면 버너실 CO-13 24 ppm, 아니면 그동안의 배기팬 전류 CT-17 22.4 A
+  const gas = a.kind === 'GAS'
+  const name = gas ? 'CO 주의' : '전류 주의'
+  const title = a.status === 'CLOSED' ? `${name} 해제` : `${name} 기준 초과`
+  const row = gas
+    ? { ...alarm(1042, 5, a.status, title, '5공장 · 도장 공정 · 상도 건조로 버너실', 'CO-13', 'CO', 24, 'ppm', 20, a.raisedAt), equipmentId: 31 }
+    : { ...alarm(1042, 5, a.status, title, '5공장 · 도장 공정 · 상도 건조로 배기팬', 'CT-17', 'CURRENT', 22.4, 'A', 21.6, a.raisedAt), equipmentId: 31 }
   const c = scenario.checklist
   return {
     ...row,
+    // 가스 알림이면 배기팬 자동 제어 결과 (서버가 알림을 만들 때 함께 정함, fanAuto.js)
+    fanAuto: gas ? fanAutoOf({ equipmentId: 31, level: LEVEL.WARN, at: row.raisedAt }) : null,
     ackedBy: a.ackedBy,
     ackedAt: a.ackedAt && todayAt(a.ackedAt),
     closedAt: a.closedAt && todayAt(a.closedAt),
@@ -302,6 +323,8 @@ function emergencyAlarms() {
     level,
     equipmentId: 31, // 상도 건조로
     closedAt: closed ? todayAt(inc.closedAt) : null,
+    // 가스(CO) 경보면 배기팬 자동 제어 결과 (100%), 그 밖에는 null
+    fanAuto: type === 'CO' ? fanAutoOf({ equipmentId: 31, level, at: todayAt(time) }) : null,
   })
   const list = [
     row(1051, LEVEL.ALARM, 'CO 경보 기준 초과', `${loc} 버너실`, 'CO-13', 'CO', 34, 'ppm', 30, designAt('16:52:08')), // 설계안 시각 → 지금 상황 기준 (scenario.js anchorAt)
@@ -320,10 +343,24 @@ function emergencyAlarms() {
   return list
 }
 
+/** '주의 1건 추가'로 넣은 알림 (중도 건조로 버너실 CO-12 22 ppm 가스 주의, scenario.extra) — 없으면 null */
+function extraAlarm() {
+  const e = scenario.extra
+  if (!e) return null
+  return {
+    ...alarm(e.id, 5, e.status, 'CO 주의 기준 초과', '5공장 · 도장 공정 · 중도 건조로 버너실', 'CO-12', 'CO', 22, 'ppm', 20, e.raisedAt),
+    equipmentId: 29, // 중도 건조로
+    hazard: 'GAS',
+    ackedBy: e.ackedBy,
+    ackedAt: e.ackedAt && todayAt(e.ackedAt),
+  }
+}
+
 /** 오늘 알림 (최근 순, 지금 상황) */
 export function mockAlarms() {
   const top = topOvenAlarm()
-  return [...emergencyAlarms(), ...(top ? [top] : []), ...PAST_ALARMS]
+  const extra = extraAlarm()
+  return [...(extra ? [extra] : []), ...emergencyAlarms(), ...(top ? [top] : []), ...PAST_ALARMS]
 }
 
 /** 진행 중인 체크리스트가 있는지 (상단 바 숫자) */

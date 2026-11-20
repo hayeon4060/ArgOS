@@ -1,0 +1,137 @@
+/*
+ * 알림 대응 창 공통 모양 (화면설계안 css/base.css .mh · .sect · .bx · .ck, css/views.css .vrow · .who · .lin)
+ * - 주의 상세·센서 확인·체크리스트 진행 창이 같이 씀 → 이름 앞에 m- 를 붙여 다른 화면 이름과 겹치지 않게
+ * - main.js 에서 한 번 불러옴
+ */
+
+/* 창 머리: 단계 배지 + 제목 + 위치 + 닫기 (72px) */
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.m-head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.m-head .loc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.m-close {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-weak);
+  cursor: pointer;
+  transition:
+    background var(--m-hover),
+    color var(--m-hover);
+}
+
+.m-close:hover {
+  background: #f1f5f9;
+  color: var(--color-text);
+}
+
+/* 작은 구역 제목 (아이콘 + 굵은 회색 글자) */
+.m-sect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-sub);
+  white-space: nowrap;
+}
+
+.m-sect small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-weak);
+}
+
+/* 테두리 상자 */
+.m-box {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+/* 작은 배지 (설계안 .chip) */
+.m-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.m-chip.ok {
+  background: var(--color-level-normal-soft);
+  color: var(--color-level-normal-text);
+}
+
+.m-chip.warn {
+  background: var(--color-level-warn-soft);
+  color: var(--color-level-warn-text);
+}
+
+.m-chip.alarm {
+  background: var(--color-level-alarm-soft);
+  color: var(--color-level-alarm-text);
+}
+
+.m-chip.info {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.m-chip.gray {
+  background: #f1f5f9;
+  color: var(--color-text-sub);
+}
+
+.m-chip.big {
+  padding: 4px 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* 버튼 줄 */
+.m-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* 버튼 안 돌아가는 고리 (보내는 중) */
+.m-spin {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 2.5px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite; /* base.css */
+}

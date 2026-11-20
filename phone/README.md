@@ -85,6 +85,9 @@ android\gradlew.bat -p android assembleDebug        # → android\app\build\outp
   PC 의 `http://` 주소에 붙으려고 `capacitor.config.json` 에 `server.androidScheme: http` · `cleartext: true` 를 둠 (실제 서버가 https 가 되면 `cleartext` 는 끌 것).
 - **비우면**: 앱 혼자 휴대폰 안 예시 데이터로 동작 (PC 필요 없음).
 - **실제 서버**: `.env` 에 `VITE_USE_MOCK=false`, `VITE_API_BASE_URL=https://연계서버/api/v1` 을 넣고 `npm run android`. 앱 안에서 `/api/v1` 은 휴대폰 자신을 가리키므로 주소를 꼭 적어야 합니다.
+  연계 서버에 CORS 설정이 없어서 `capacitor.config.json` 에 `CapacitorHttp.enabled: true` 를 둠 (요청을 앱 안 웹 화면이 아니라 Android 가 보냄 → CORS 에 안 걸림).
+  통합 시험(192.168.0.31) 주소는 `.env.production.local` 에 넣어 둠 — 계정 `worker12` / `Argos1234!`, 휴대폰도 같은 Wi-Fi(`smartfactory_5G`).
+  Android Studio 내장 JDK 가 25 면 Gradle 8.14 가 못 돌므로 JDK 21 로: `JAVA_HOME=JDK21경로 ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk gradlew assembleDebug`.
 
 **설치형 앱 알림(FCM)** — 앱이 꺼져 있거나 화면이 꺼져 있어도 옴. Firebase 파일 두 개가 있어야 켜짐:
 

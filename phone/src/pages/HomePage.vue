@@ -16,7 +16,7 @@ import { getProcessLayout, getProcessStatus } from '@/api/process'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import PaintMap from '@/features/process/PaintMap.vue'
-import { svgKeyOf } from '@/features/process/paintLayout'
+import { drawingOf } from '@/features/process/paintLayout'
 import { layoutPlacement } from '@/features/process/processEquipment'
 import { useAuthStore } from '@/stores/auth'
 import { LEVEL, LEVEL_META, SENSOR_STAGES } from '@/types/codes'
@@ -66,7 +66,7 @@ const equipment = computed(() => {
   return layout.value.equipment
     .map((e) => ({
       id: e.id,
-      key: svgKeyOf(e.code), // 배치도 그림 안 이름
+      ...drawingOf(e), // key(배치도 그림 안 이름) · shape — 공장 관리에서 추가한 설비도 그림에 (웹 processEquipment 와 같게)
       name: e.name,
       level: eqStatus[e.id]?.level ?? LEVEL.NORMAL,
       fan: eqStatus[e.id]?.fan ?? null,
@@ -166,8 +166,8 @@ const counts = computed(() =>
               :equipment="equipment"
               :positions="placement.positions"
               :inactive="placement.inactive"
+              :hidden="placement.hidden"
               @select="openEquipment"
-              @fan="openEquipment"
             />
           </div>
         </div>

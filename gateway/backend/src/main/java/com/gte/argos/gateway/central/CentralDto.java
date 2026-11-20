@@ -1,0 +1,214 @@
+package com.gte.argos.gateway.central;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 중앙 서버 연계 API(/api/v1/internal/**) 응답 모양. 중앙 서버 InternalDto 와 같아야 한다.
+ * 단계는 숫자(1 정상, 2 주의, 3 경보), 센서 종류는 DB 값(TE/IT/AT/IR) 그대로 온다. 화면용 변환은 Codes.
+ */
+public final class CentralDto {
+
+    private CentralDto() {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Envelope<T>(boolean success, T data, Map<String, Object> error) {
+    }
+
+    // 마스터 ------------------------------------------------------------
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Master(List<Plant> plants, List<Factory> factories, List<Process> processes,
+                         List<Equipment> equipment, List<Sensor> sensors, List<Unit> units) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Plant(long id, String code, String name, String address, Double lat, Double lng) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Factory(long id, long plantId, String code, String name, int sortOrder, String mapShape) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Process(long id, long factoryId, String code, String name, String tagPrefix, Long floorplanFileId) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Equipment(long id, long processId, String code, String name, String type, String shape,
+                            Double posX, Double posY, Double posZ, Double sizeW, Double sizeD, Double sizeH,
+                            boolean active, String runState, Integer fanRpm, Boolean fanAuto) {
+        // fanAuto: 배기팬 자동 제어 (배기팬 · 배기팬이 달린 건조로만, 나머지 null)
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    /** streamUrl: VMS 실시간 영상 주소 (열화상만) */
+    public record Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
+                         int sampleSec, Double setpoint, boolean active, Threshold threshold, String streamUrl) {
+
+        public Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
+                      int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+            this(id, tag, equipmentId, type, unit, connection, sampleSec, setpoint, active, threshold, null);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Threshold(long id, Double warn, Double alarm, Double lowWarn, Double lowAlarm,
+                            int warnSamples, int alarmSamples, String season, String basis, String note,
+                            OffsetDateTime validFrom) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Unit(long id, long processId, Long equipmentId, String name, boolean active, List<UnitMember> members) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record UnitMember(long sensorId, String hazard) {
+    }
+
+    // 현재 상태 ---------------------------------------------------------
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Status(OffsetDateTime at, List<SensorStatus> sensors, List<EquipmentStatus> equipment,
+                         Map<String, Map<Long, Integer>> levels) {
+
+        public int level(String scope, long id) {
+            Map<Long, Integer> m = levels == null ? null : levels.get(scope);
+            Integer v = m == null ? null : m.get(id);
+            return v == null ? 1 : v;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SensorStatus(long sensorId, String tag, String type, String unit, long equipmentId, long processId,
+                               Double value, OffsetDateTime valueAt, boolean live, int stage,
+                               Double warn, Double alarm, Double lowWarn, Double lowAlarm) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record EquipmentStatus(long equipmentId, long processId, String runState, Integer fanRpm, int stage) {
+    }
+
+    // 추이 · 이벤트 · 경보 ----------------------------------------------
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Series(String step, List<SensorSeries> series) {
+    }
+
+    /** points: [시각, 평균, 최소, 최대] */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SensorSeries(long sensorId, String tag, String unit, Double warn, Double alarm,
+                               Double lowWarn, Double lowAlarm, List<List<Object>> points) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Event(long eventId, long sensorId, String tag, String type, String unit, long equipmentId,
+                        long processId, int stage, String rule, OffsetDateTime startedAt, OffsetDateTime endedAt,
+                        Double peak, Long thresholdId, Double warn, Double alarm, Double lowWarn, Double lowAlarm) {
+
+        /** 하한 쪽(전류 저하 등)으로 벗어난 이벤트인지 */
+        public boolean lowSide() {
+            return peak != null && lowWarn != null && peak <= lowWarn && (warn == null || peak < warn);
+        }
+
+        /** 이 이벤트 단계의 기준값 */
+        public Double threshold() {
+            if (lowSide()) {
+                return stage >= 3 ? lowAlarm : lowWarn;
+            }
+            return stage >= 3 ? alarm : warn;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Sample(OffsetDateTime ts, Double value) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                        long factoryId, long plantId, int stage, String hazard, String status,
+                        OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                        Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                        boolean valueStillOver, List<Event> events, FanAuto fanAuto, String closeReason) {
+
+        /** closeReason: 종료 사유 AUTO_RECOVERED | ACTION_DONE | MANUAL (열려 있으면 null) */
+        public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                     long factoryId, long plantId, int stage, String hazard, String status,
+                     OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                     Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                     boolean valueStillOver, List<Event> events, FanAuto fanAuto) {
+            this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, fanAuto, null);
+        }
+
+        public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                     long factoryId, long plantId, int stage, String hazard, String status,
+                     OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                     Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                     boolean valueStillOver, List<Event> events) {
+            this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, null, null);
+        }
+
+        /** 화면에 대표로 보여줄 이벤트: 단계가 가장 높고, 같으면 먼저 시작한 것 */
+        public Event mainEvent() {
+            Event best = null;
+            if (events == null) {
+                return null;
+            }
+            for (Event e : events) {
+                if (best == null || e.stage() > best.stage()) {
+                    best = e;
+                }
+            }
+            return best;
+        }
+    }
+
+    /** 가스 알림의 배기팬 자동 제어 결과. status SENT | APPLIED | FAILED | SKIPPED | AWAITING | DENIED */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at, Long commandId) {
+
+        public FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                       Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+            this(equipmentId, fanEquipmentId, fanName, mode, percent, rpm, beforeRpm, status, at, null);
+        }
+    }
+
+    /** 알림 상세 그래프 (중앙 /internal/alarms/{id}/series) */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AlarmSeries(OffsetDateTime from, OffsetDateTime to, int intervalSec, List<AlarmSensorSeries> sensors) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AlarmSensorSeries(long sensorId, String tag, String type, String unit, Double warn, Double alarm,
+                                    Double lowWarn, Double lowAlarm, boolean trigger, List<List<Object>> points) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Page<T>(List<T> items, int page, int size, long total) {
+    }
+
+    // 피드 · 명령 · 시계 ------------------------------------------------
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FeedItem(long seq, String type, OffsetDateTime at, Map<String, Object> data) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FeedPage(String bootId, List<FeedItem> items, long next, long latest, boolean gap) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CommandResult(long commandId, long equipmentId, String command, String status, String runState,
+                                Integer fanRpm, Double value, String source) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Clock(OffsetDateTime now, OffsetDateTime simStart, String zone) {
+    }
+}

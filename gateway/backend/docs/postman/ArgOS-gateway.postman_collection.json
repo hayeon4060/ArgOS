@@ -1,0 +1,3709 @@
+{
+  "info": {
+    "name": "ArgOS 연계 서버 API",
+    "description": "화면(웹·앱) → 연계 서버 API. 응답은 `{ success, data }` 형식.\n1. `POST /api/v1/auth/login` 으로 로그인해서 `accessToken` 을 받는다.\n2. 오른쪽 위 **Authorize** 에 토큰을 넣으면 나머지 API 를 부를 수 있다.\n명세서와 다른 점은 `docs/API_IMPLEMENTED.md` 참고.\n\n먼저 '01 로그인 · 내 정보' 의 POST /auth/login 을 보내면 토큰이 저장된다. 서버 주소는 컬렉션 변수 baseUrl 에서 바꾼다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 로그인 · 내 정보",
+      "item": [
+        {
+          "name": "POST /auth/extend",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "extend"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /auth/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginId\": \"admin\",\n  \"password\": \"Argos1234!\",\n  \"client\": \"WEB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.accessToken) { pm.collectionVariables.set('accessToken', d.accessToken); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "GET /me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PUT /me/password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "password"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"\",\n  \"newPassword\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 대시보드 · 공정 현황",
+      "item": [
+        {
+          "name": "GET /equipment/{equipmentId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /equipment/{equipmentId}/events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId",
+                "events"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /factories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/factories?siteId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "factories"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "siteId",
+                  "value": "1",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /factories/{factoryId}/overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/factories/:factoryId/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "factories",
+                ":factoryId",
+                "overview"
+              ],
+              "variable": [
+                {
+                  "key": "factoryId",
+                  "value": "5"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /processes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes?factoryId=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /processes/{processId}/layout",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/layout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "layout"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /processes/{processId}/status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /sensors/series",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sensors/series?ids=[1]",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sensors",
+                "series"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "[1]",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-11-16T09:00:00+09:00",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16T09:00:00+09:00",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "step",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "compare",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /sites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sites"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /sites/{siteId}/overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sites/:siteId/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sites",
+                ":siteId",
+                "overview"
+              ],
+              "variable": [
+                {
+                  "key": "siteId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /sites/{siteId}/tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sites/:siteId/tree",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sites",
+                ":siteId",
+                "tree"
+              ],
+              "variable": [
+                {
+                  "key": "siteId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /system/clock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/clock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "clock"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 알림",
+      "item": [
+        {
+          "name": "GET /alarms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "siteId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "date",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-11-16T09:00:00+09:00",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16T09:00:00+09:00",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "minLevel",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /alarms/hourly",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/hourly",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                "hourly"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "siteId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "date",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /alarms/{alarmId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/:alarmId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                ":alarmId"
+              ],
+              "variable": [
+                {
+                  "key": "alarmId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /alarms/{alarmId}/ack",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/:alarmId/ack",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                ":alarmId",
+                "ack"
+              ],
+              "variable": [
+                {
+                  "key": "alarmId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /alarms/{alarmId}/close",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/:alarmId/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                ":alarmId",
+                "close"
+              ],
+              "variable": [
+                {
+                  "key": "alarmId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"result\": \"\",\n  \"followUp\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /alarms/{alarmId}/detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/:alarmId/detail",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                ":alarmId",
+                "detail"
+              ],
+              "variable": [
+                {
+                  "key": "alarmId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /alarms/{alarmId}/response",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/alarms/:alarmId/response",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alarms",
+                ":alarmId",
+                "response"
+              ],
+              "variable": [
+                {
+                  "key": "alarmId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /notifications/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "summary"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 설비 명령",
+      "item": [
+        {
+          "name": "POST /equipment/{equipmentId}/fan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId/fan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId",
+                "fan"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"power\": \"\",\n  \"rpm\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /equipment/{equipmentId}/shutdown",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId/shutdown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId",
+                "shutdown"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alarmId\": 1,\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /processes/{processId}/call-workers",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/call-workers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "call-workers"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alarmId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /processes/{processId}/shutdown",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/shutdown",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "shutdown"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alarmId\": 1,\n  \"equipmentIds\": [\n    1\n  ],\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 체크리스트",
+      "item": [
+        {
+          "name": "GET /checklist-templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklist-templates?sensorType=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklist-templates"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "equipmentType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /checklists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /checklists",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alarmId\": 1,\n  \"templateId\": 1,\n  \"assigneeId\": 1,\n  \"items\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /checklists/{checklistId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PATCH /checklists/{checklistId}/assignee",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId/assignee",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId",
+                "assignee"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigneeId\": 1,\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /checklists/{checklistId}/confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId",
+                "confirm"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"result\": \"\",\n  \"memo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PATCH /checklists/{checklistId}/items/{itemId}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId/items/:itemId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId",
+                "items",
+                ":itemId"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                },
+                {
+                  "key": "itemId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"done\": false,\n  \"result\": \"\",\n  \"memo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /checklists/{checklistId}/remind",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId/remind",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId",
+                "remind"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /checklists/{checklistId}/report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/checklists/:checklistId/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "checklists",
+                ":checklistId",
+                "report"
+              ],
+              "variable": [
+                {
+                  "key": "checklistId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /me/checklists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/checklists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "checklists"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /me/push-token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/push-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "push-token"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fcmToken\": \"\",\n  \"platform\": \"\",\n  \"appVersion\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /me/push-token",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/push-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "push-token"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /processes/{processId}/workers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/workers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "workers"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 화재",
+      "item": [
+        {
+          "name": "GET /fires",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fires",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fires"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "siteId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /fires/{fireId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fires/:fireId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fires",
+                ":fireId"
+              ],
+              "variable": [
+                {
+                  "key": "fireId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /fires/{fireId}/approve-unlock",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fires/:fireId/approve-unlock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fires",
+                ":fireId",
+                "approve-unlock"
+              ],
+              "variable": [
+                {
+                  "key": "fireId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /fires/{fireId}/clear",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fires/:fireId/clear",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fires",
+                ":fireId",
+                "clear"
+              ],
+              "variable": [
+                {
+                  "key": "fireId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\",\n  \"memo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /fires/{fireId}/evacuated",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fires/:fireId/evacuated",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fires",
+                ":fireId",
+                "evacuated"
+              ],
+              "variable": [
+                {
+                  "key": "fireId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 열화상",
+      "item": [
+        {
+          "name": "GET /thermal/{cameraId}/latest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/thermal/:cameraId/latest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "thermal",
+                ":cameraId",
+                "latest"
+              ],
+              "variable": [
+                {
+                  "key": "cameraId",
+                  "value": "1"
+                }
+              ],
+              "query": [
+                {
+                  "key": "equipmentId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 기준값 관리",
+      "item": [
+        {
+          "name": "GET /equipment/tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/tree?factoryId=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                "tree"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /equipment/{equipmentId}/thresholds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId/thresholds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId",
+                "thresholds"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PUT /equipment/{equipmentId}/thresholds",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/equipment/:equipmentId/thresholds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "equipment",
+                ":equipmentId",
+                "thresholds"
+              ],
+              "variable": [
+                {
+                  "key": "equipmentId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"\",\n  \"fields\": [\n    {}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /sensors/{sensorId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sensors/:sensorId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sensors",
+                ":sensorId"
+              ],
+              "variable": [
+                {
+                  "key": "sensorId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PUT /sensors/{sensorId}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sensors/:sensorId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sensors",
+                ":sensorId"
+              ],
+              "variable": [
+                {
+                  "key": "sensorId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\",\n  \"sampleSec\": 1,\n  \"active\": false,\n  \"threshold\": {\n    \"warn\": 1.0,\n    \"alarm\": 1.0,\n    \"lowWarn\": 1.0,\n    \"lowAlarm\": 1.0,\n    \"warnHoldSec\": 1,\n    \"alarmHoldSec\": 1\n  },\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /thresholds/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/thresholds/history?equipmentId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "thresholds",
+                "history"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "equipmentId",
+                  "value": "1",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "season",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /thresholds/simulate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/thresholds/simulate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "thresholds",
+                "simulate"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sensorId\": 1,\n  \"warn\": 1.0,\n  \"alarm\": 1.0,\n  \"lowWarn\": 1.0,\n  \"lowAlarm\": 1.0,\n  \"warnHoldSec\": 1,\n  \"alarmHoldSec\": 1,\n  \"days\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 통계 · 이력",
+      "item": [
+        {
+          "name": "GET /stats/alarms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/alarms?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "alarms"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /stats/by-process",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/by-process?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "by-process"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /stats/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/export?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "export"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "format",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /stats/heatmap",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/heatmap?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "heatmap"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /stats/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/summary?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "summary"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /stats/trend",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/trend?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "trend"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "sensorType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "shift",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "unit",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 월간 보고서",
+      "item": [
+        {
+          "name": "GET /reports/monthly",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/monthly?factoryId=5&month=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "monthly"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "month",
+                  "value": "",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 점검 · OCR",
+      "item": [
+        {
+          "name": "GET /doc-forms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/doc-forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "doc-forms"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /inspections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "formType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /inspections",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "formType",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /inspections/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                "summary"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /inspections/today",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/today?processId=12",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                "today"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PUT /inspections/{inspectionId}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/:inspectionId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                ":inspectionId"
+              ],
+              "variable": [
+                {
+                  "key": "inspectionId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"\",\n  \"fields\": [\n    {}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /inspections/{inspectionId}/file",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/:inspectionId/file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                ":inspectionId",
+                "file"
+              ],
+              "variable": [
+                {
+                  "key": "inspectionId",
+                  "value": "1"
+                }
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /inspections/{inspectionId}/ocr",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/:inspectionId/ocr",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                ":inspectionId",
+                "ocr"
+              ],
+              "variable": [
+                {
+                  "key": "inspectionId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /inspections/{inspectionId}/ocr",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inspections/:inspectionId/ocr",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inspections",
+                ":inspectionId",
+                "ocr"
+              ],
+              "variable": [
+                {
+                  "key": "inspectionId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 사용자 관리",
+      "item": [
+        {
+          "name": "PUT /me",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"phone\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "active",
+                  "value": "false",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"loginId\": \"\",\n  \"phone\": \"\",\n  \"role\": \"\",\n  \"scope\": {\n    \"siteId\": 1,\n    \"factoryIds\": [],\n    \"processIds\": []\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "GET /users/check-login-id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/check-login-id?loginId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "check-login-id"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "loginId",
+                  "value": "",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /users/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PUT /users/{id}",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"loginId\": \"\",\n  \"phone\": \"\",\n  \"role\": \"\",\n  \"scope\": {\n    \"siteId\": 1,\n    \"factoryIds\": [],\n    \"processIds\": []\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "DELETE /users/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /users/{id}/reset-password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/:id/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id",
+                "reset-password"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "PATCH /users/{id}/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 이용 로그",
+      "item": [
+        {
+          "name": "GET /logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/logs?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "logs"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /logs/export",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/logs/export?from=2026-11-16&to=2026-11-16",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "logs",
+                "export"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-16",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "factoryId",
+                  "value": "5",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "processId",
+                  "value": "12",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 공장 관리",
+      "item": [
+        {
+          "name": "POST /factories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/factories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "factories"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /processes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /processes/{processId}/floorplan",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/floorplan?widthM=1.0&depthM=1.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "floorplan"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": [
+                {
+                  "key": "widthM",
+                  "value": "1.0",
+                  "disabled": false,
+                  "description": "필수"
+                },
+                {
+                  "key": "depthM",
+                  "value": "1.0",
+                  "disabled": false,
+                  "description": "필수"
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /processes/{processId}/layout",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/processes/:processId/layout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "processes",
+                ":processId",
+                "layout"
+              ],
+              "variable": [
+                {
+                  "key": "processId",
+                  "value": "12"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /sites",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sites"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 채팅",
+      "item": [
+        {
+          "name": "GET /chat/rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "rooms"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "GET /chat/rooms/{roomId}/messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat/rooms/:roomId/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "rooms",
+                ":roomId",
+                "messages"
+              ],
+              "variable": [
+                {
+                  "key": "roomId",
+                  "value": "1"
+                }
+              ],
+              "query": [
+                {
+                  "key": "before",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "size",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "POST /chat/rooms/{roomId}/messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat/rooms/:roomId/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "rooms",
+                ":roomId",
+                "messages"
+              ],
+              "variable": [
+                {
+                  "key": "roomId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alarmId\": 1,\n  \"templateId\": 1,\n  \"assigneeId\": 1,\n  \"items\": [\n    \"\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "POST /chat/rooms/{roomId}/read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat/rooms/:roomId/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat",
+                "rooms",
+                ":roomId",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "roomId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lastReadMessageId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 파일",
+      "item": [
+        {
+          "name": "GET /files/{fileId}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/files/:fileId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "files",
+                ":fileId"
+              ],
+              "variable": [
+                {
+                  "key": "fileId",
+                  "value": "1"
+                }
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 실시간 (SSE)",
+      "item": [
+        {
+          "name": "GET /stream",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stream"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "scope",
+                  "value": "",
+                  "disabled": true,
+                  "description": "선택"
+                },
+                {
+                  "key": "thermal",
+                  "value": "1",
+                  "disabled": true,
+                  "description": "선택"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 시스템",
+      "item": [
+        {
+          "name": "GET /system/info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "info"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

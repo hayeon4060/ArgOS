@@ -45,7 +45,7 @@ export function login({ loginId, password, client = 'WEB' }) {
 /**
  * 로그인 유지 연장 (남은 시간에 1시간 더함)
  * @param {number} currentExpiresAt 지금 만료 시각(ms) — 예시 데이터 모드에서만 사용 (실제로는 서버가 계산)
- * @returns {Promise<{ sessionExpiresAt: string }>}
+ * @returns {Promise<{ sessionExpiresAt: string, accessToken?: string, expiresIn?: number }>} 실제 서버는 새 토큰도 줌 (stores/auth.js 가 바꿔 끼움)
  */
 export function extendSession(currentExpiresAt) {
   if (USE_MOCK) {

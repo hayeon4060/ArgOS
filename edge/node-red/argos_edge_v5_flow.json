@@ -1,0 +1,1174 @@
+[
+  {
+    "id": "892504963b1fda76",
+    "type": "tab",
+    "label": "ArgOS 엣지 (v5)",
+    "disabled": false,
+    "info": "ERD v5 기준 — 센서 1초 수집 · 센서별 단계 판정 · PLC 기록 · Kafka 송수신. 배기팬 제어는 서버 명령(자동·수동 승인·복귀·화면 직접)만 실행"
+  },
+  {
+    "id": "f30c000000000001",
+    "type": "kafkajs-client",
+    "z": "892504963b1fda76",
+    "name": "argos-kafka",
+    "brokers": "192.168.0.14:9092",
+    "clientid": "argos-edge-p5",
+    "connectiontimeout": 3000,
+    "requesttimeout": 25000,
+    "advancedretry": false,
+    "maxretrytime": 30000,
+    "initialretrytime": 300,
+    "factor": 0.2,
+    "multiplier": 2,
+    "retries": 5,
+    "auth": "none",
+    "tlsselfsign": false,
+    "tlscacert": "",
+    "tlsclientcert": "",
+    "tlsprivatekey": "",
+    "tlspassphrase": "",
+    "saslssl": true,
+    "saslmechanism": "plain",
+    "loglevel": "error"
+  },
+  {
+    "id": "f30c000000000004",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "⓪ 기준값",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 830,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000005",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "기준값 적용",
+    "func": "let t;\ntry { t = JSON.parse(msg.payload.value); } catch (e) { node.warn('JSON 아님'); return null; }\nconst errs = [];\nif (!t.tag) errs.push('tag 없음');\nif (t.warn_value == null && t.alarm_value == null && t.low_warn == null && t.low_alarm == null) errs.push('기준값 없음');\nif (t.warn_value != null && t.alarm_value != null && !(t.warn_value < t.alarm_value)) errs.push('warn ≥ alarm');\nif (t.low_warn != null && t.low_alarm != null && !(t.low_warn > t.low_alarm)) errs.push('low_warn ≤ low_alarm');\nif (errs.length) {\n    node.status({ fill: 'red', shape: 'ring', text: `${t.tag} 거부: ${errs.join(', ')}` });\n    return { payload: { ok: false, tag: t.tag, errors: errs } };\n}\nconst th = flow.get('thresholds') || {};\nth[t.tag] = t;\nflow.set('thresholds', th);\nconst st = flow.get('stage') || {};\nif (st[t.tag]) { Object.assign(st[t.tag], { c2: 0, c3: 0, cRel: 0, cLow3: 0 }); flow.set('stage', st); }\nnode.status({ fill: 'green', shape: 'dot', text: `${Object.keys(th).length}개 적용 · ${t.tag} #${t.threshold_id}` });\nreturn { payload: { ok: true, applied: t } };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 80,
+    "wires": [
+      [
+        "f30c000000000004"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000006",
+    "type": "kafkajs-consumer",
+    "z": "892504963b1fda76",
+    "name": "argos.config.threshold",
+    "client": "f30c000000000001",
+    "groupid": "",
+    "topic": "argos.config.threshold",
+    "advancedoptions": true,
+    "autocommitinterval": 5000,
+    "autocommitthreshold": 100,
+    "sessiontimeout": 30000,
+    "rebalancetimeout": 60000,
+    "heartbeatinterval": 3000,
+    "metadatamaxage": 300000,
+    "maxbytesperpartition": 1048576,
+    "minbytes": 1,
+    "maxbytes": 10485760,
+    "maxwaittimeinms": 5000,
+    "frombeginning": true,
+    "clearoffsets": false,
+    "allowautotopiccreation": false,
+    "x": 200,
+    "y": 80,
+    "wires": [
+      [
+        "f30c000000000005"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000008",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "① 마지막 수신",
+    "active": true,
+    "tosidebar": false,
+    "console": false,
+    "tostatus": true,
+    "complete": "topic",
+    "targetType": "msg",
+    "statusVal": "topic",
+    "statusType": "auto",
+    "x": 620,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000009",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ①-b",
+    "mode": "link",
+    "links": [
+      "f30c00000000000f"
+    ],
+    "x": 580,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000000a",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ②",
+    "mode": "link",
+    "links": [
+      "f30c000000000014"
+    ],
+    "x": 660,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000000b",
+    "type": "mqtt in",
+    "z": "892504963b1fda76",
+    "name": "argos/#",
+    "topic": "argos/#",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "4e34aa9be0197b8a",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 220,
+    "wires": [
+      [
+        "f30c000000000008",
+        "f30c000000000009",
+        "f30c00000000000a"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000000d",
+    "type": "kafkajs-producer",
+    "z": "892504963b1fda76",
+    "name": "→ argos.edge.raw",
+    "client": "f30c000000000001",
+    "topic": "argos.edge.raw",
+    "advancedoptions": false,
+    "acknowledge": "all",
+    "partition": null,
+    "headeritems": {},
+    "key": null,
+    "responsetimeout": 30000,
+    "transactiontimeout": 60000,
+    "metadatamaxage": 300000,
+    "allowautotopiccreation": false,
+    "x": 600,
+    "y": 330,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000000e",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "raw 메시지",
+    "func": "const iso = t => {\n    if (typeof t === 'string' && /[+-]\\d\\d:\\d\\d$|Z$/.test(t)) return t;\n    if (typeof t === 'string') return t.replace(' ', 'T') + '+09:00';\n    const ms = t || (Date.now() + (flow.get('clockOffset') || 0));\n    return new Date(ms + 9 * 3600e3).toISOString().replace(/\\.\\d+Z$/, '+09:00');\n};\nconst s = msg.payload;\nif (!s || !s.serial || s.value === undefined) return null;\nconst data = { tag: s.serial, ts: iso(s.ts), value: Number(s.value), quality: s.quality || 'GOOD' };\nif (data.quality === 'GOOD') flow.set('clockOffset', Date.parse(data.ts) - Date.now());\nconst n = (context.get('n') || 0) + 1;\ncontext.set('n', n);\nnode.status({ fill: 'green', shape: 'dot', text: `${n}건 · ${data.tag} ${data.value}` });\nreturn { key: data.tag, payload: JSON.stringify(data) };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 330,
+    "wires": [
+      [
+        "f30c00000000000d"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000000f",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "①-b",
+    "links": [
+      "f30c000000000009"
+    ],
+    "x": 130,
+    "y": 330,
+    "wires": [
+      [
+        "f30c00000000000e"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000011",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "② 단계 변경",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 860,
+    "y": 420,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000012",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ③",
+    "mode": "link",
+    "links": [
+      "f30c00000000001f"
+    ],
+    "x": 820,
+    "y": 460,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000013",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "센서별 단계 판정",
+    "func": "const iso = t => {\n    if (typeof t === 'string' && /[+-]\\d\\d:\\d\\d$|Z$/.test(t)) return t;\n    if (typeof t === 'string') return t.replace(' ', 'T') + '+09:00';\n    const ms = t || (Date.now() + (flow.get('clockOffset') || 0));\n    return new Date(ms + 9 * 3600e3).toISOString().replace(/\\.\\d+Z$/, '+09:00');\n};\nconst DEFAULTS = {\n    'AT-301': { warn_value: 15,  alarm_value: 30,  immediate_value: 200 },\n    'AT-303': { warn_value: 15,  alarm_value: 30,  immediate_value: 200 },\n    'IT-303': { low_warn: 17.85, low_alarm: 5.0 },\n    'IT-307': { low_warn: 17.85, low_alarm: 5.0 },\n    'TE-303': { warn_value: 190, alarm_value: 200 },\n    'TE-305': { warn_value: 150, alarm_value: 160 }\n};\nconst BASE = { threshold_id: null, warn_samples: 15, alarm_samples: 15, release_samples: 15, release_margin: 0 };\nconst PLC = { 'AT-301': 'D300', 'IT-303': 'D302', 'TE-303': 'D304', 'AT-303': 'D306', 'IT-307': 'D308', 'TE-305': 'D310' };\nconst NAME = { 1: '정상', 2: '주의', 3: '경고' };\n\nconst s = msg.payload;\nconst tag = s && s.serial;\nconst ths = flow.get('thresholds') || {};\nif (!tag || (!ths[tag] && !DEFAULTS[tag])) return null;\nconst v = Number(s.value);\nif (!Number.isFinite(v)) return null;\nconst t = { ...BASE, ...(DEFAULTS[tag] || {}), ...(ths[tag] || {}) };\nconst m = Number(t.release_margin) || 0;\n\nlet raw = 1, rule = 'HI', immediate = false;\nif (t.alarm_value != null && v >= t.alarm_value) raw = 3;\nelse if (t.warn_value != null && v >= t.warn_value) raw = 2;\nif (t.low_warn != null || t.low_alarm != null) {\n    let lr = 1;\n    if (t.low_alarm != null && v <= t.low_alarm) lr = 3;\n    else if (t.low_warn != null && v <= t.low_warn) lr = 2;\n    if (lr > raw || (t.warn_value == null && t.alarm_value == null)) { raw = Math.max(raw, lr); rule = 'LO'; }\n}\nif (t.immediate_value != null && v >= t.immediate_value) { raw = 3; immediate = true; rule = 'IMMEDIATE'; }\nconst released = (t.warn_value == null || v < t.warn_value - m) && (t.low_warn == null || v > t.low_warn + m);\n\nconst all = flow.get('stage') || {};\nconst cur = all[tag] || { stage: 1, c2: 0, c3: 0, cRel: 0, cLow3: 0 };\nObject.assign(cur, { value: v, ts: iso(s.ts), type: s.type, seen: Date.now(), threshold_id: t.threshold_id });\ncur.c2 = raw >= 2 ? cur.c2 + 1 : 0;\ncur.c3 = raw >= 3 ? cur.c3 + 1 : 0;\ncur.cRel = released ? cur.cRel + 1 : 0;\ncur.cLow3 = raw < 3 ? cur.cLow3 + 1 : 0;\nif (cur.stage >= 2) cur.peak = rule === 'LO' ? Math.min(cur.peak, v) : Math.max(cur.peak, v);\n\nlet ns = cur.stage;\nif (immediate || cur.c3 >= t.alarm_samples) ns = 3;\nelse if (cur.stage === 1 && cur.c2 >= t.warn_samples) ns = 2;\nelse if (cur.stage >= 2 && cur.cRel >= t.release_samples) ns = 1;\nelse if (cur.stage === 3 && cur.cLow3 >= t.release_samples) ns = 2;\n\nlet ev = null;\nif (ns !== cur.stage) {\n    const prev = cur.stage;\n    let phase;\n    if (prev === 1) {\n        phase = 'START';\n        cur.edge_key = `P5-${tag}-${cur.ts.replace(/[-:]/g, '').slice(0, 15)}`;\n        cur.max_stage = ns;\n        cur.peak = v;\n    } else if (ns === 1) phase = 'END';\n    else { phase = 'UPDATE'; cur.max_stage = Math.max(cur.max_stage, ns); }\n    cur.stage = ns;\n    ev = { edge_key: cur.edge_key, phase, tag, threshold_id: cur.threshold_id, stage: ns, stage_name: NAME[ns],\n           prev_stage: prev, max_stage: cur.max_stage, rule, reason: ns > prev ? '악화' : '완화·복귀',\n           ts: cur.ts, value: v, plc: PLC[tag] || null };\n    if (phase === 'END') { ev.peak_value = cur.peak; delete cur.edge_key; delete cur.max_stage; delete cur.peak; }\n}\nall[tag] = cur;\nflow.set('stage', all);\n\nconst bad = Object.entries(all).filter(([, x]) => x.stage >= 2).map(([k, x]) => `${k} ${NAME[x.stage]}`);\nnode.status(bad.length ? { fill: 'red', shape: 'dot', text: bad.join(' · ') }\n                       : { fill: 'green', shape: 'dot', text: `전체 정상 (${Object.keys(all).length}개)` });\nif (!ev) return null;\nreturn [{ payload: ev }, { payload: ev }];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 450,
+    "wires": [
+      [
+        "f30c000000000011"
+      ],
+      [
+        "f30c000000000012"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000014",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "②",
+    "links": [
+      "f30c00000000000a"
+    ],
+    "x": 130,
+    "y": 450,
+    "wires": [
+      [
+        "f30c000000000013"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000015",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "② 판정 상태",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 890,
+    "y": 520,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000016",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "판정 상태 정리",
+    "func": "const NAME = { 1: '정상', 2: '주의', 3: '경고' };\nconst th = flow.get('thresholds') || {};\nconst all = flow.get('stage') || {};\nconst now = Date.now();\nconst rows = {};\nfor (const [tag, c] of Object.entries(all).sort()) {\n    rows[tag] = `${NAME[c.stage]} | 값 ${c.value} | 주의 연속 ${c.c2} · 경고 연속 ${c.c3} · 정상 연속 ${c.cRel}`\n              + ` | 기준 ${th[tag] ? '#' + th[tag].threshold_id : '기본값'} | ${Math.round((now - c.seen) / 1000)}초 전 ${c.ts}`;\n}\nreturn { payload: rows };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 520,
+    "wires": [
+      [
+        "f30c000000000015"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000017",
+    "type": "inject",
+    "z": "892504963b1fda76",
+    "name": "판정 상태 보기",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 310,
+    "y": 500,
+    "wires": [
+      [
+        "f30c000000000016"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000019",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ④",
+    "mode": "link",
+    "links": [
+      "f30c000000000023"
+    ],
+    "x": 1270,
+    "y": 580,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000001a",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "쓰기 결과",
+    "func": "msg.plcOk = !msg.error;\nnode.status(msg.plcOk ? { fill: 'green', shape: 'dot', text: `${msg.address} = [${msg.plcData}]` }\n                      : { fill: 'red', shape: 'ring', text: `실패 ${msg.address}` });\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1050,
+    "y": 580,
+    "wires": [
+      [
+        "f30c000000000019",
+        "9b3121e5a29c6089"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000001b",
+    "type": "Ind MC Write",
+    "z": "892504963b1fda76",
+    "name": "PLC 쓰기",
+    "topic": "",
+    "connection": "4fd6339e909580e6",
+    "data": "payload",
+    "address": "address",
+    "addressType": "msg",
+    "dataType": "msg",
+    "errorHandling": "msg",
+    "outputs": 1,
+    "x": 820,
+    "y": 580,
+    "wires": [
+      [
+        "f30c00000000001a"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000001c",
+    "type": "delay",
+    "z": "892504963b1fda76",
+    "name": "0.5초 간격",
+    "pauseType": "rate",
+    "timeout": "5",
+    "timeoutUnits": "seconds",
+    "rate": "2",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 640,
+    "y": 580,
+    "wires": [
+      [
+        "f30c00000000001b"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000001d",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ④",
+    "mode": "link",
+    "links": [
+      "f30c000000000023"
+    ],
+    "x": 580,
+    "y": 620,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000001e",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "PLC 쓰기 준비",
+    "func": "const e = msg.payload;\nmsg.ev = e;\nif (!e.plc) return [null, msg];\nmsg.address = `${e.plc},2`;\nmsg.plcData = [e.stage, Math.round(e.value * 10)];\nmsg.payload = msg.plcData;\nreturn [msg, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 580,
+    "wires": [
+      [
+        "f30c00000000001c"
+      ],
+      [
+        "f30c00000000001d"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000001f",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "③",
+    "links": [
+      "f30c000000000012"
+    ],
+    "x": 130,
+    "y": 580,
+    "wires": [
+      [
+        "f30c00000000001e"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000021",
+    "type": "kafkajs-producer",
+    "z": "892504963b1fda76",
+    "name": "→ argos.edge.stage",
+    "client": "f30c000000000001",
+    "topic": "argos.edge.stage",
+    "advancedoptions": false,
+    "acknowledge": "all",
+    "partition": null,
+    "headeritems": {},
+    "key": null,
+    "responsetimeout": 30000,
+    "transactiontimeout": 60000,
+    "metadatamaxage": 300000,
+    "allowautotopiccreation": false,
+    "x": 600,
+    "y": 700,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000022",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "stage 메시지",
+    "func": "const e = msg.ev;\nconst data = {\n    edge_key: e.edge_key, phase: e.phase, tag: e.tag, threshold_id: e.threshold_id,\n    stage: e.stage, prev_stage: e.prev_stage, max_stage: e.max_stage, rule: e.rule, reason: e.reason,\n    ts: e.ts, value: e.value, ...(e.phase === 'END' ? { peak_value: e.peak_value } : {}),\n    plc_address: msg.address || null, plc_written: msg.plcData || null, plc_ok: msg.plcOk ?? null\n};\nnode.status({ fill: e.phase === 'END' ? 'green' : 'red', shape: 'dot', text: `${e.phase} ${e.tag} ${e.stage_name}` });\nreturn { key: e.tag, payload: JSON.stringify(data) };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 700,
+    "wires": [
+      [
+        "f30c000000000021"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000023",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "④",
+    "links": [
+      "f30c000000000019",
+      "f30c00000000001d"
+    ],
+    "x": 130,
+    "y": 700,
+    "wires": [
+      [
+        "f30c000000000022"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000025",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ⑤-x 실행",
+    "mode": "link",
+    "links": [
+      "f30c00000000002e"
+    ],
+    "x": 830,
+    "y": 780,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000026",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ⑥-b 결과",
+    "mode": "link",
+    "links": [
+      "f30c00000000003e"
+    ],
+    "x": 830,
+    "y": 820,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000027",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "명령 검증",
+    "func": "const iso = t => {\n    if (typeof t === 'string' && /[+-]\\d\\d:\\d\\d$|Z$/.test(t)) return t;\n    if (typeof t === 'string') return t.replace(' ', 'T') + '+09:00';\n    const ms = t || (Date.now() + (flow.get('clockOffset') || 0));\n    return new Date(ms + 9 * 3600e3).toISOString().replace(/\\.\\d+Z$/, '+09:00');\n};\n// equipment_id(중앙 서버 시드) 또는 equipment_code 로 인버터 연결 설비를 찾음\nconst INVERTERS = { 36: { code: 'ED-FAN', name: '전착 건조로 배기팬', min: 20, max: 60 } };\nlet c;\ntry { c = JSON.parse(msg.payload.value); } catch (e) { node.warn('JSON 아님'); return null; }\nconst now = Date.now() + (flow.get('clockOffset') || 0);\nconst reply = (result, message) => [null, { payload: { command_id: c.command_id, equipment_id: c.equipment_id,\n    command: c.command, value: c.value, source: c.source, result, completed_at: iso(), detail: { message } } }];\n\nconst done = flow.get('cmdDone') || [];\nif (done.includes(c.command_id)) return reply('DUPLICATE', '이미 처리한 명령');\ndone.push(c.command_id);\nflow.set('cmdDone', done.slice(-200));\nif (c.expires_at && Date.parse(c.expires_at) < now) return reply('EXPIRED', `만료 ${c.expires_at}`);\nconst inv = INVERTERS[c.equipment_id] || Object.values(INVERTERS).find(v => v.code === c.equipment_code);\nif (!inv) return reply('REJECTED', `equipment_id ${c.equipment_id} 인버터 없음`);\nif (c.command === 'FAN_HZ' && !(Number(c.value) >= inv.min && Number(c.value) <= inv.max))\n    return reply('REJECTED', `범위 밖 ${c.value}Hz`);\nif (c.command !== 'FAN_HZ' && c.command !== 'FAN_STOP') return reply('REJECTED', `지원하지 않는 명령 ${c.command}`);\nnode.status({ fill: 'blue', shape: 'dot', text: `#${c.command_id} ${c.command} ${c.value ?? ''} (${c.source || 'USER'})` });\nreturn [{ cmd: c }, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 800,
+    "wires": [
+      [
+        "f30c000000000025"
+      ],
+      [
+        "f30c000000000026"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000028",
+    "type": "kafkajs-consumer",
+    "z": "892504963b1fda76",
+    "name": "argos.edge.cmd",
+    "client": "f30c000000000001",
+    "groupid": "",
+    "topic": "argos.edge.cmd",
+    "advancedoptions": false,
+    "autocommitinterval": 5000,
+    "autocommitthreshold": 100,
+    "sessiontimeout": 30000,
+    "rebalancetimeout": 60000,
+    "heartbeatinterval": 3000,
+    "metadatamaxage": 300000,
+    "maxbytesperpartition": 1048576,
+    "minbytes": 1,
+    "maxbytes": 10485760,
+    "maxwaittimeinms": 5000,
+    "frombeginning": false,
+    "clearoffsets": false,
+    "allowautotopiccreation": false,
+    "x": 200,
+    "y": 800,
+    "wires": [
+      [
+        "f30c000000000027"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000002a",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ⑥",
+    "mode": "link",
+    "links": [
+      "f30c000000000038"
+    ],
+    "x": 1060,
+    "y": 930,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000002b",
+    "type": "modbus-write",
+    "z": "892504963b1fda76",
+    "name": "주파수 (주소 4)",
+    "showStatusActivities": true,
+    "showErrors": true,
+    "showWarnings": true,
+    "unitid": "1",
+    "dataType": "MHoldingRegisters",
+    "adr": "4",
+    "quantity": "1",
+    "server": "c0446597f0092050",
+    "emptyMsgOnFail": false,
+    "keepMsgProperties": true,
+    "delayOnStart": false,
+    "startDelayTime": "",
+    "x": 830,
+    "y": 890,
+    "wires": [
+      [],
+      []
+    ]
+  },
+  {
+    "id": "f30c00000000002c",
+    "type": "modbus-write",
+    "z": "892504963b1fda76",
+    "name": "운전 지령 (주소 5)",
+    "showStatusActivities": true,
+    "showErrors": true,
+    "showWarnings": true,
+    "unitid": "1",
+    "dataType": "MHoldingRegisters",
+    "adr": "5",
+    "quantity": "1",
+    "server": "c0446597f0092050",
+    "emptyMsgOnFail": false,
+    "keepMsgProperties": true,
+    "delayOnStart": false,
+    "startDelayTime": "",
+    "x": 830,
+    "y": 930,
+    "wires": [
+      [
+        "f30c00000000002a"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "f30c00000000002d",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "인버터 지령",
+    "func": "const c = msg.cmd;\nconst stop = c.command === 'FAN_STOP';\nconst hz = stop ? 0 : Number(c.value);\nconst motor = flow.get('motor') || {};\nmotor[c.equipment_id] = { hz, source: c.source, at: Date.now() };\nflow.set('motor', motor);\nconst info = { ...c, target_hz: hz };\nnode.status({ fill: stop ? 'grey' : 'blue', shape: 'dot', text: `설비 ${c.equipment_id} → ${stop ? '정지' : hz + 'Hz'} (${c.source || 'USER'})` });\nif (stop) return [null, { payload: [5057], cmd: info }];\nreturn [{ payload: [Math.round(hz * 100)], cmd: info }, { payload: [5058], cmd: info }];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 910,
+    "wires": [
+      [
+        "f30c00000000002b"
+      ],
+      [
+        "f30c00000000002c"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000002e",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "⑤-x",
+    "links": [
+      "f30c000000000025"
+    ],
+    "x": 140,
+    "y": 910,
+    "wires": [
+      [
+        "f30c00000000002d"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000030",
+    "type": "modbus-write",
+    "z": "892504963b1fda76",
+    "name": "운전 지령 (주소 5) — 정지",
+    "showStatusActivities": true,
+    "showErrors": true,
+    "showWarnings": true,
+    "unitid": "1",
+    "dataType": "MHoldingRegisters",
+    "adr": "5",
+    "quantity": "1",
+    "server": "c0446597f0092050",
+    "emptyMsgOnFail": false,
+    "keepMsgProperties": true,
+    "delayOnStart": false,
+    "startDelayTime": "",
+    "x": 830,
+    "y": 1020,
+    "wires": [
+      [],
+      []
+    ]
+  },
+  {
+    "id": "f30c000000000031",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "현장 정지",
+    "func": "const motor = flow.get('motor') || {};\nfor (const k of Object.keys(motor)) motor[k].hz = 0;\nflow.set('motor', motor);\nnode.status({ fill: 'red', shape: 'dot', text: '현장 정지 ' + new Date().toLocaleTimeString() });\nreturn { payload: [5057] };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 1020,
+    "wires": [
+      [
+        "f30c000000000030"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000032",
+    "type": "inject",
+    "z": "892504963b1fda76",
+    "name": "■ 현장 비상 정지",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 160,
+    "y": 1020,
+    "wires": [
+      [
+        "f30c000000000031"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000034",
+    "type": "link out",
+    "z": "892504963b1fda76",
+    "name": "→ ⑥-b 결과",
+    "mode": "link",
+    "links": [
+      "f30c00000000003e"
+    ],
+    "x": 1060,
+    "y": 1130,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000035",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "도달 확인",
+    "func": "const d = msg.payload;\nconst c = msg.cmd || {};\nconst base = { command_id: c.command_id ?? null, equipment_id: c.equipment_id, command: c.command,\n               value: c.value, source: c.source };\nif (!Array.isArray(d) || d.length < 6) {\n    node.status({ fill: 'red', shape: 'ring', text: '읽기 실패' });\n    return c.equipment_id == null ? null : { payload: { ...base, result: 'FAILED', detail: { message: '인버터 읽기 실패' } } };\n}\nconst s = { cmd_hz: d[0] / 100, run_cmd: d[1], output_hz: d[5] / 100, current_a: d[4] / 10 };\nif (c.equipment_id == null) {\n    node.status({ fill: 'grey', shape: 'dot', text: `현재 ${s.output_hz}Hz / ${s.current_a}A` });\n    return null;\n}\nlet ok, result, message;\nif (c.target_hz === 0) {\n    ok = s.output_hz === 0;\n    result = ok || s.run_cmd === 5057 ? 'DONE' : 'FAILED';\n    message = ok ? '정지 완료' : result === 'DONE' ? `감속 정지 중 ${s.output_hz}Hz` : '정지 안 됨';\n} else {\n    ok = Math.abs(s.output_hz - c.target_hz) < 0.5;\n    result = ok || (s.cmd_hz === c.target_hz && s.output_hz > 0) ? 'DONE' : 'FAILED';\n    message = ok ? `${c.target_hz}Hz 도달` : result === 'DONE' ? `변속 중 ${s.output_hz} → ${c.target_hz}Hz` : `지령 불일치 (${s.cmd_hz}Hz)`;\n}\nnode.status({ fill: ok ? 'green' : result === 'DONE' ? 'yellow' : 'red', shape: 'dot', text: `${c.source || 'USER'} ${message}` });\nreturn { payload: { ...base, result, detail: { target_hz: c.target_hz, ...s, fan_rpm: Math.round(s.output_hz * 30), message } } };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 830,
+    "y": 1130,
+    "wires": [
+      [
+        "f30c000000000034"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000036",
+    "type": "modbus-getter",
+    "z": "892504963b1fda76",
+    "name": "인버터 읽기 (4~9)",
+    "showStatusActivities": true,
+    "showErrors": true,
+    "showWarnings": true,
+    "logIOActivities": false,
+    "unitid": "1",
+    "dataType": "HoldingRegister",
+    "adr": "4",
+    "quantity": "6",
+    "server": "c0446597f0092050",
+    "useIOFile": false,
+    "ioFile": "",
+    "useIOForPayload": false,
+    "emptyMsgOnFail": false,
+    "keepMsgProperties": true,
+    "delayOnStart": false,
+    "startDelayTime": "",
+    "x": 590,
+    "y": 1130,
+    "wires": [
+      [
+        "f30c000000000035"
+      ],
+      []
+    ]
+  },
+  {
+    "id": "f30c000000000037",
+    "type": "delay",
+    "z": "892504963b1fda76",
+    "name": "5초 대기",
+    "pauseType": "delay",
+    "timeout": "5",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 350,
+    "y": 1130,
+    "wires": [
+      [
+        "f30c000000000036"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000038",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "⑥",
+    "links": [
+      "f30c00000000002a"
+    ],
+    "x": 140,
+    "y": 1130,
+    "wires": [
+      [
+        "f30c000000000037"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000039",
+    "type": "inject",
+    "z": "892504963b1fda76",
+    "name": "인버터 상태 읽기",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 350,
+    "y": 1170,
+    "wires": [
+      [
+        "f30c000000000036"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000003b",
+    "type": "kafkajs-producer",
+    "z": "892504963b1fda76",
+    "name": "→ argos.edge.cmd.result",
+    "client": "f30c000000000001",
+    "topic": "argos.edge.cmd.result",
+    "advancedoptions": false,
+    "acknowledge": "all",
+    "partition": null,
+    "headeritems": {},
+    "key": null,
+    "responsetimeout": 30000,
+    "transactiontimeout": 60000,
+    "metadatamaxage": 300000,
+    "allowautotopiccreation": false,
+    "x": 610,
+    "y": 1230,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000003c",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "⑥ 제어 결과",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "sent",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 630,
+    "y": 1270,
+    "wires": []
+  },
+  {
+    "id": "f30c00000000003d",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "result 메시지",
+    "func": "const iso = t => {\n    if (typeof t === 'string' && /[+-]\\d\\d:\\d\\d$|Z$/.test(t)) return t;\n    if (typeof t === 'string') return t.replace(' ', 'T') + '+09:00';\n    const ms = t || (Date.now() + (flow.get('clockOffset') || 0));\n    return new Date(ms + 9 * 3600e3).toISOString().replace(/\\.\\d+Z$/, '+09:00');\n};\nconst r = { ...msg.payload, completed_at: msg.payload.completed_at || iso() };\nnode.status({ fill: r.result === 'DONE' ? 'green' : 'yellow', shape: 'dot',\n              text: `#${r.command_id} ${r.source || ''} ${r.result}` });\nreturn { key: String(r.equipment_id), payload: JSON.stringify(r), sent: r };",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 1250,
+    "wires": [
+      [
+        "f30c00000000003b",
+        "f30c00000000003c"
+      ]
+    ]
+  },
+  {
+    "id": "f30c00000000003e",
+    "type": "link in",
+    "z": "892504963b1fda76",
+    "name": "⑥-b",
+    "links": [
+      "f30c000000000026",
+      "f30c000000000034"
+    ],
+    "x": 140,
+    "y": 1250,
+    "wires": [
+      [
+        "f30c00000000003d"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000040",
+    "type": "kafkajs-producer",
+    "z": "892504963b1fda76",
+    "name": "→ argos.edge.raw",
+    "client": "f30c000000000001",
+    "topic": "argos.edge.raw",
+    "advancedoptions": false,
+    "acknowledge": "all",
+    "partition": null,
+    "headeritems": {},
+    "key": null,
+    "responsetimeout": 30000,
+    "transactiontimeout": 60000,
+    "metadatamaxage": 300000,
+    "allowautotopiccreation": false,
+    "x": 610,
+    "y": 1370,
+    "wires": []
+  },
+  {
+    "id": "f30c000000000041",
+    "type": "function",
+    "z": "892504963b1fda76",
+    "name": "통신 감시",
+    "func": "const iso = t => {\n    if (typeof t === 'string' && /[+-]\\d\\d:\\d\\d$|Z$/.test(t)) return t;\n    if (typeof t === 'string') return t.replace(' ', 'T') + '+09:00';\n    const ms = t || (Date.now() + (flow.get('clockOffset') || 0));\n    return new Date(ms + 9 * 3600e3).toISOString().replace(/\\.\\d+Z$/, '+09:00');\n};\nconst TIMEOUT_MS = 10000;\nconst all = flow.get('stage') || {};\nconst lost = flow.get('commLost') || {};\nconst now = Date.now();\nconst out = [];\nfor (const [tag, cur] of Object.entries(all)) {\n    const isLost = now - cur.seen > TIMEOUT_MS;\n    if (isLost && !lost[tag]) {\n        lost[tag] = now;\n        out.push({ key: tag, payload: JSON.stringify({ tag, ts: iso(), value: cur.value, quality: 'COMM_LOST' }) });\n    } else if (!isLost && lost[tag]) delete lost[tag];\n}\nflow.set('commLost', lost);\nconst n = Object.keys(lost).length;\nnode.status(n ? { fill: 'red', shape: 'dot', text: `끊김 ${n}개: ${Object.keys(lost).join(', ')}` }\n              : { fill: 'green', shape: 'ring', text: `정상 수신 ${Object.keys(all).length}개` });\nreturn [out];",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 1370,
+    "wires": [
+      [
+        "f30c000000000040"
+      ]
+    ]
+  },
+  {
+    "id": "f30c000000000042",
+    "type": "inject",
+    "z": "892504963b1fda76",
+    "name": "2초마다",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "2",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 160,
+    "y": 1370,
+    "wires": [
+      [
+        "f30c000000000041"
+      ]
+    ]
+  },
+  {
+    "id": "9b3121e5a29c6089",
+    "type": "debug",
+    "z": "892504963b1fda76",
+    "name": "PLC 쓰기 결과 확인",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1330,
+    "y": 660,
+    "wires": []
+  },
+  {
+    "id": "4e34aa9be0197b8a",
+    "type": "mqtt-broker",
+    "name": "",
+    "broker": "127.0.0.1",
+    "port": 1883,
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "c0446597f0092050",
+    "type": "modbus-client",
+    "name": "서버PC",
+    "clienttype": "tcp",
+    "bufferCommands": true,
+    "stateLogEnabled": false,
+    "queueLogEnabled": false,
+    "failureLogEnabled": true,
+    "tcpHost": "192.168.0.100",
+    "tcpPort": 502,
+    "tcpType": "DEFAULT",
+    "serialPort": "/dev/ttyUSB",
+    "serialType": "RTU-BUFFERD",
+    "serialBaudrate": 9600,
+    "serialDatabits": 8,
+    "serialStopbits": 1,
+    "serialParity": "none",
+    "serialConnectionDelay": 100,
+    "serialAsciiResponseStartDelimiter": "0x3A",
+    "unit_id": 1,
+    "commandDelay": 1,
+    "clientTimeout": 1000,
+    "reconnectOnTimeout": true,
+    "reconnectTimeout": 2000,
+    "parallelUnitIdsAllowed": true,
+    "showErrors": false,
+    "showWarnings": true,
+    "showLogs": true
+  },
+  {
+    "id": "4fd6339e909580e6",
+    "type": "Ind MC Protocol Connection",
+    "name": "PLC",
+    "host": "192.168.0.50",
+    "port": "8004",
+    "protocol": "TCP",
+    "frame": "3E",
+    "plcType": "Q",
+    "ascii": false,
+    "PLCStation": "",
+    "PCStation": "",
+    "PLCModuleNo": "",
+    "network": "",
+    "octalInputOutput": false,
+    "timeout": 1000,
+    "autoConnect": true
+  }
+]

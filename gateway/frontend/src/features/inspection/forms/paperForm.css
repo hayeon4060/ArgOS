@@ -1,0 +1,127 @@
+/*
+ * 서류 양식 종이 모양 (팀 양식 원본 ArgOS_서류양식 의 CSS 를 그대로 옮김)
+ * - 모든 규칙을 .af 아래로 묶어 앱의 다른 화면에 새지 않게 함
+ *   (원본의 .page 는 앱의 .page 와 겹쳐 .af-page 로, *, body, @page 규칙과 Google 글꼴은 뺌)
+ * - 크기는 원본처럼 mm · pt (A4 210 × 297mm)
+ * - 추가: 적은 글씨(.hw 파란 손글씨 색), 고른 네모(.cb.on V 표시), 작성 칸(.ed 노란 바탕), 스캔본 모양(.scan)
+ */
+.af {
+  display: flex;
+  justify-content: center;
+  color: #000;
+  font-size: 8.8pt;
+  line-height: 1.3;
+}
+
+.af *,
+.af *::before,
+.af *::after {
+  box-sizing: border-box;
+}
+
+.af .af-page {
+  flex: none;
+  width: 210mm;
+  height: 297mm;
+  padding: 11mm 12mm 9mm;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
+  font-family: var(--font-sans);
+}
+
+/* 스캔 정렬용 모서리 표시 */
+.af .mk {
+  position: absolute;
+  width: 5mm;
+  height: 5mm;
+  background: #000;
+}
+.af .mk.tl { top: 4mm; left: 4mm; }
+.af .mk.tr { top: 4mm; right: 4mm; }
+.af .mk.bl { bottom: 4mm; left: 4mm; }
+.af .mk.br { bottom: 4mm; right: 4mm; }
+
+.af .head {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 2.2px solid #000;
+  padding-bottom: 2.2mm;
+  margin-bottom: 3mm;
+}
+.af .head .ttl { flex: 1; }
+.af .head .sys { font-size: 7.5pt; letter-spacing: 0.3px; color: #333; }
+.af .head h1 { margin: 0.6mm 0 0; font-size: 19pt; font-weight: 900; letter-spacing: 1px; }
+.af .head .sub { font-size: 8pt; color: #333; margin-top: 0.3mm; }
+.af .code { border: 2px solid #000; width: 34mm; display: flex; flex-direction: column; text-align: center; }
+.af .code b { font-size: 15pt; font-weight: 900; letter-spacing: 0.5px; padding: 1.2mm 0 0.4mm; }
+.af .code > span { border-top: 1px solid #000; font-size: 7.5pt; padding: 0.6mm 0; }
+.af .appr { margin-left: 3mm; border-collapse: collapse; }
+.af .appr td,
+.af .appr th { border: 1px solid #000; text-align: center; }
+.af .appr th.v { width: 6mm; font-size: 7.5pt; writing-mode: vertical-rl; letter-spacing: 3px; font-weight: 700; background: #fff; }
+.af .appr .r1 td { height: 5mm; width: 17mm; font-size: 7.5pt; font-weight: 700; }
+.af .appr .r2 td { height: 13mm; }
+
+.af h2 { font-size: 10pt; font-weight: 700; margin: 2.6mm 0 1.2mm; display: flex; align-items: center; gap: 1.6mm; }
+.af h2 .n { display: inline-flex; width: 5mm; height: 5mm; background: #000; color: #fff; font-size: 8pt; align-items: center; justify-content: center; }
+.af h2 small { font-weight: 400; font-size: 7.5pt; color: #333; margin-left: 1mm; }
+
+.af table.f { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1.8px solid #000; }
+.af table.f th,
+.af table.f td { border: 1px solid #000; padding: 0.8mm 1.6mm; vertical-align: middle; }
+.af table.f th { font-weight: 700; text-align: center; background: #fff; font-size: 8.3pt; }
+.af .h7 td, .af .h7 th { height: 7.6mm; }
+.af .h8 td, .af .h8 th { height: 8.4mm; }
+.af .c { text-align: center; white-space: nowrap; }
+.af .gray { background: #eee; }
+.af .blank { color: #555; letter-spacing: 1px; }
+.af .cb { display: inline-block; width: 3.3mm; height: 3.3mm; border: 1.2px solid #000; vertical-align: -0.5mm; margin-right: 0.9mm; position: relative; }
+.af .opt { margin-right: 3mm; white-space: nowrap; }
+.af .unit { flex: none; margin-left: auto; color: #333; font-size: 7.5pt; }
+.af .foot { margin-top: auto; padding-top: 2mm; border-top: 1px solid #000; display: flex; justify-content: space-between; font-size: 7pt; color: #333; }
+.af .note { font-size: 7.2pt; color: #333; margin-top: 1mm; line-height: 1.4; }
+
+/* ───────── 추가: 적은 값 · V 표시 ───────── */
+/* 칸 안: 값(또는 입력칸) + 단위를 한 줄로 */
+.af .cell { display: flex; align-items: center; gap: 1mm; min-height: 4mm; }
+.af td.c .cell { justify-content: center; }
+.af .hw { color: #1d4ed8; font-weight: 500; font-size: 9.5pt; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af .cb.on::after {
+  content: '';
+  position: absolute;
+  left: 0.7mm;
+  top: -1.4mm;
+  width: 1.5mm;
+  height: 3.4mm;
+  border: solid #1d4ed8;
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg);
+}
+
+/* ───────── 작성 (빈칸을 눌러 적고, 네모를 눌러 V) ───────── */
+.af.edit .cb,
+.af.edit .opt { cursor: pointer; }
+.af.edit .cb:hover { background: #dbeafe; }
+.af .ed {
+  flex: 1;
+  min-width: 0;
+  height: 5.6mm;
+  padding: 0 1mm;
+  border: none;
+  border-radius: 2px;
+  outline: none;
+  background: #fffbeb;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 9.5pt;
+  font-weight: 500;
+}
+.af .ed:focus { background: #fff; box-shadow: inset 0 0 0 1.5px #2563eb; }
+
+/* ───────── 스캔 원본처럼 (예시 모드의 스캔 미리보기) ───────── */
+.af.scan .af-page { background: #fbfaf6; transform: rotate(-0.4deg); filter: contrast(1.05) saturate(0.85); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.af.scan .hw { font-style: italic; font-size: 11pt; color: #1e3a8a; }

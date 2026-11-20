@@ -1,0 +1,93 @@
+spring:
+  application:
+    name: gateway-backend
+  datasource:
+    url: jdbc:postgresql://${GATEWAY_DB_HOST:localhost}:${GATEWAY_DB_PORT:5433}/${GATEWAY_DB_NAME:argos_gateway}
+    username: ${GATEWAY_DB_USERNAME:argos_gateway}
+    password: ${GATEWAY_DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  flyway:
+    enabled: true
+  # 점검 서류 20MB · 배치도 10MB (서비스에서 다시 확인)
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  # 데이터 수집 서버 ↔ 중앙 서버 Redis (argos.redis.enabled=true 일 때만 연결)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false
+
+server:
+  port: ${GATEWAY_SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  health:
+    redis:
+      enabled: ${ARGOS_REDIS_ENABLED:false}
+
+argos:
+  auth:
+    jwt-secret-base64: ${GATEWAY_JWT_SECRET_BASE64}
+    # 로그인 유지 13시간 (A안 확정, 리프레시 토큰 없음)
+    access-seconds: 46800
+    session-seconds: 46800
+    cookie-secure: ${GATEWAY_COOKIE_SECURE:true}
+    cookie-same-site: Strict
+
+  # 중앙 서버 연계 (연계 → 중앙은 HTTP)
+  central:
+    base-url: ${CENTRAL_SERVER_BASE_URL:http://localhost:8081}
+    api-key: ${CENTRAL_API_KEY:}
+    feed-enabled: ${CENTRAL_FEED_ENABLED:true}
+
+  # Redis 로 수집 서버와 주고받기 (실시간 변화 argos:feed 받기 · 제어 명령 argos:cmd 보내기).
+  # false 면 지금처럼 HTTP 폴링 · HTTP 명령. 조회는 켜도 HTTP
+  redis:
+    enabled: ${ARGOS_REDIS_ENABLED:false}
+
+  # 올린 파일 (점검 서류 스캔, 배치도, 월간 보고서)
+  files:
+    dir: ${ARGOS_FILES_DIR:./data/files}
+
+  # CLOVA OCR. 비워 두면 시연용 인식기(SampleOcrEngine)가 값을 채움
+  ocr:
+    clova:
+      url: ${CLOVA_OCR_URL:}
+      secret: ${CLOVA_OCR_SECRET:}
+
+  # 월간 보고서 한글 글꼴 (.ttf). 비우면 맑은 고딕 · 나눔고딕 · Noto 순서로 찾음
+  report:
+    font: ${ARGOS_REPORT_FONT:}
+
+  # FCM 실제 전송: Firebase 서비스 계정 JSON 경로. 비우면 로그만
+  fcm:
+    credentials: ${FCM_CREDENTIALS_PATH:}
+
+  # 방송 시스템 REST API 주소. 비우면 로그만
+  broadcast:
+    url: ${BROADCAST_API_URL:}
+
+# API 명세서. 운영에서 숨기려면 ARGOS_API_DOCS=false
+springdoc:
+  api-docs:
+    enabled: ${ARGOS_API_DOCS:true}
+  swagger-ui:
+    enabled: ${ARGOS_API_DOCS:true}
+    tags-sorter: alpha
+    operations-sorter: alpha
+    persist-authorization: true

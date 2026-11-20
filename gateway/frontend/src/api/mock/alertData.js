@@ -5,11 +5,12 @@
  *   GET /alarms/{id}/detail   : 주의 상세 (원인, 그때 센서값, 열화상 1장, 추이, 원인 후보)
  *   GET /checklists/{id}      : 체크리스트 한 건
  */
-import { alarmTrendPoints } from './equipmentSeries'
+import { alarmTrendPoints, alarmTrendPointsOf } from './equipmentSeries'
 import { mockAlarms, todayAt } from './data'
 import { THERMAL_BY_STATE, mockEquipmentEvents } from './equipmentData'
 import { EQUIPMENT, equipmentLevel, runStateOf, sensorsNow } from './processData'
-import { TOP_OVEN_VALUES, designAt, scenario, scenarioNow, workerName } from './scenario'
+import { fanAutoOf } from './fanAuto'
+import { GAS_WARN_VALUES, TOP_OVEN_VALUES, designAt, scenario, scenarioNow, workerName } from './scenario'
 import { LEVEL } from '@/types/codes'
 import irWarn from '@/assets/images/thermal/ir_warn.jpg'
 
@@ -105,8 +106,10 @@ export function alarmTimeline(alarmId) {
 
 /* ───────── GET /alarms/{id}/detail : 주의 상세 (상도 건조로 1042 만) ───────── */
 export function alarmDetail(alarmId) {
+  if (Number(alarmId) === scenario.extra?.id) return extraAlarmDetail(scenario.extra)
   const a = scenario.alarm
   if (Number(alarmId) !== 1042 || !a) return null
+  if (a.kind === 'GAS') return gasAlarmDetail(a)
   const v = TOP_OVEN_VALUES[LEVEL.WARN] // 주의가 걸린 그 순간 값 (지금 값이 아님)
   return {
     id: 1042,
@@ -134,12 +137,102 @@ export function alarmDetail(alarmId) {
       cameraTag: 'IR-01',
     },
     trend: { sensorId: 117, tag: 'CT-17', unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
+    // 센서별 추이 (2026-11-19 추가, 백엔드 요청 docs/api/warn-detail-trends.md) — 화면은 화재면 온도·전류를 고름
+    trends: [
+      { sensorId: 117, tag: 'CT-17', type: 'CURRENT', unit: 'A', warn: 21.6, alarm: 27, points: alarmTrendPoints() },
+      { sensorId: 215, tag: 'TE-15', type: 'TEMP', unit: '℃', warn: 160, alarm: 180, points: alarmTrendPointsOf('TEMP', v[215]) },
+      { sensorId: 313, tag: 'CO-13', type: 'CO', unit: 'ppm', warn: 20, alarm: 30, points: alarmTrendPointsOf('CO', v[313]) },
+    ],
     causeCandidates: ['베어링 마모', '구동 벨트 장력 이상', '배기 덕트 댐퍼 막힘'],
     equipmentType: 'OVEN',
     sensorType: 'CURRENT',
+    hazard: 'FIRE', // 전류·온도 → 화재 (백엔드 alarm.hazard)
     processId: 12,
     equipmentId: 31,
   }
+}
+
+/**
+ * 가스 주의 상세 (상도 건조로 버너실 CO-13 24 ppm, 2026-11-19 추가)
+ * - 모양은 전류 주의와 같고, 배기팬 자동 제어 결과(fanAuto)를 같이 줌
+ */
+function gasAlarmDetail(a) {
+  const v = GAS_WARN_VALUES
+  const raisedAt = todayAt(a.raisedAt)
+  return {
+    id: 1042,
+    level: LEVEL.WARN,
+    status: a.status,
+    location: '울산공장 · 5공장 · 도장 공정 · 상도 건조로 버너실',
+    raisedAt,
+    cause: '버너실 CO 농도가 주의 기준(20 ppm)을 넘었습니다.',
+    rule: { sensorTag: 'CO-13', warn: 20, alarm: 30, holdSec: 10, max: 40 },
+    usual: 6,
+    sensors: [
+      { tag: 'CT-17', type: 'CURRENT', value: v[117], unit: 'A', warn: 21.6, alarm: 27, level: LEVEL.NORMAL },
+      { tag: 'TE-15', type: 'TEMP', value: v[215], unit: '℃', warn: 160, alarm: 180, level: LEVEL.NORMAL },
+      { tag: 'CO-13', type: 'CO', value: v[313], unit: 'ppm', warn: 20, alarm: 30, level: LEVEL.WARN },
+    ],
+    thermal: {
+      imageUrl: irWarn,
+      capturedAt: raisedAt,
+      max: 78.4,
+      min: 22.8,
+      avg: 41.3,
+      usualAtMax: 52.0,
+      maxPoint: { x: 0.62, y: 0.13 },
+      zoneName: '버너실 앞',
+      cameraTag: 'IR-01',
+    },
+    // 추이: 16:00 부터 6 ppm 근처 → 마지막에 24 ppm 으로 오름 (예시)
+    trend: { sensorId: 313, tag: 'CO-13', unit: 'ppm', warn: 20, alarm: 30, points: gasTrendPoints() },
+    // 센서별 추이 — 화면은 가스면 CO·전류를 고름 (가스 주의 때 전류는 평소 값 18 A 근처)
+    trends: [
+      { sensorId: 117, tag: 'CT-17', type: 'CURRENT', unit: 'A', warn: 21.6, alarm: 27, points: usualTrendPoints(18, 0.4, v[117]) },
+      { sensorId: 215, tag: 'TE-15', type: 'TEMP', unit: '℃', warn: 160, alarm: 180, points: alarmTrendPointsOf('TEMP', v[215]) },
+      { sensorId: 313, tag: 'CO-13', type: 'CO', unit: 'ppm', warn: 20, alarm: 30, points: gasTrendPoints() },
+    ],
+    causeCandidates: ['버너 공연비 이상 (불완전 연소)', '배기 덕트 댐퍼 막힘', '배기팬 회전수 부족'],
+    equipmentType: 'OVEN',
+    sensorType: 'CO',
+    hazard: 'GAS', // CO → 가스
+    processId: 12,
+    equipmentId: 31,
+    fanAuto: fanAutoOf({ equipmentId: 31, level: LEVEL.WARN, at: raisedAt }),
+  }
+}
+
+/**
+ * '주의 1건 추가'로 넣은 알림(1043, 중도 건조로 버너실 CO-12 22 ppm)의 주의 상세
+ * - 가스 주의 상세와 같은 모양에 위치·센서 이름만 바꿈 (상단 바 목록에서 골라 여는 흐름 확인용)
+ */
+function extraAlarmDetail(e) {
+  const d = gasAlarmDetail(e)
+  const tags = { 'CT-17': 'CT-16', 'TE-15': 'TE-14', 'CO-13': 'CO-12' }
+  return {
+    ...d,
+    id: e.id,
+    location: '울산공장 · 5공장 · 도장 공정 · 중도 건조로 버너실',
+    rule: { ...d.rule, sensorTag: 'CO-12' },
+    sensors: d.sensors.map((s) => ({ ...s, tag: tags[s.tag], value: s.type === 'CO' ? 22 : s.value })),
+    trend: { ...d.trend, sensorId: 312, tag: 'CO-12' },
+    trends: d.trends.map((t) => ({ ...t, tag: tags[t.tag] })),
+    equipmentId: 29,
+    fanAuto: null,
+  }
+}
+
+/** 가스 주의 추이 (전류 추이 시각을 그대로 쓰고 값만 CO 로) */
+function gasTrendPoints() {
+  const pts = alarmTrendPoints()
+  const n = pts.length
+  return pts.map(([t], k) => [t, k < n - 8 ? 6 + ((k * 7) % 3) : Math.round(6 + ((k - (n - 8)) / 7) * 18)])
+}
+
+/** 평소 값 근처에서 조금씩 흔들리는 추이 (마지막 값은 last) */
+function usualTrendPoints(base, amp, last) {
+  const pts = alarmTrendPoints()
+  return pts.map(([t], k) => [t, k === pts.length - 1 ? last : Math.round((base + Math.sin(k * 1.3) * amp) * 10) / 10])
 }
 
 /* ───────── GET /checklists/{id} ───────── */
@@ -154,11 +247,14 @@ export function checklistView(checklistId) {
     level: LEVEL.WARN,
     processId: 12,
     equipmentId: 31,
-    equipmentName: '상도 건조로 배기팬',
-    sensorTag: 'CT-17',
-    valueAtAlarm: 22.4,
-    unit: 'A',
+    // 가스 주의면 버너실 CO-13, 아니면 배기팬 전류 CT-17
+    ...(scenario.alarm?.kind === 'GAS'
+      ? { equipmentName: '상도 건조로 버너실', sensorTag: 'CO-13', valueAtAlarm: 24, unit: 'ppm' }
+      : { equipmentName: '상도 건조로 배기팬', sensorTag: 'CT-17', valueAtAlarm: 22.4, unit: 'A' }),
     assignee: { id: c.assigneeId, name: workerName(c.assigneeId) },
+    // 진행 수 — 서버 목록(GET /checklists) 줄은 items 없이 이 두 값만 줌 (ChecklistService.listRow)
+    doneCount: c.doneTimes.length,
+    totalCount: c.items.length,
     sentBy: c.sentBy,
     sentAt: todayAt(c.sentAt),
     remindCount: c.remindCount,
@@ -216,9 +312,10 @@ export function alarmResponse(alarmId) {
   return {
     id,
     level: fire ? LEVEL.FIRE : LEVEL.ALARM,
+    hazard: fire ? 'FIRE' : 'GAS', // 경보 예시는 CO 경보 기준 초과 → 가스
     status: fire ? (scenario.fire.status === 'CLEARED' ? 'CLOSED' : 'OPEN') : inc.status,
     fireId: fire ? scenario.fire.id : null,
-    title: fire ? '상도 건조로 버너실에서 화재가 감지되었습니다' : '상도 건조로에서 경보가 발생했습니다',
+    title: fire ? '상도 건조로 버너실에서 화재가 감지되었습니다' : '상도 건조로에서 가스 경보가 발생했습니다',
     location: '울산공장 · 5공장 · 도장 공정 · 상도 건조로' + (fire ? ' 버너실' : ''),
     raisedAt: todayAt(fire ? scenario.fire.detectedAt : inc.raisedAt),
     reason: fire
@@ -240,6 +337,8 @@ export function alarmResponse(alarmId) {
     })),
     logs,
     shutdown: shutdownView(),
+    // 가스(CO) 경보 때 배기팬 자동 제어 결과 (100%) — 화재 창에서는 쓰지 않음 (화재는 자동 셧다운)
+    fanAuto: fire ? null : fanAutoOf({ equipmentId: 31, level: LEVEL.ALARM, at: todayAt(inc.raisedAt) }),
     valueStillOver: sensors.some((s) => s.level === LEVEL.ALARM),
   }
 }

@@ -1,0 +1,94 @@
+/*
+ * 디자인 토큰 (색·글꼴·모서리·간격)
+ * - 값은 화면설계안(_design/화면설계안_소스/css/base.css :root)과 같게 맞춤
+ * - 색과 크기는 이 파일에서만 정의하고, 화면 코드에서는 var(--토큰명) 으로만 사용
+ * - 화이트 모드만 지원 (다크 모드 없음)
+ */
+:root {
+  /* 글꼴: 본문 Pretendard, 숫자·코드 Fira Code */
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', sans-serif;
+  --font-mono: 'Fira Code', Consolas, monospace;
+
+  /* 기본 색 */
+  --color-bg: #f3f4f6;          /* 페이지 배경 */
+  --color-surface: #ffffff;     /* 카드·상단 바 배경 */
+  --color-surface-sub: #f8fafc; /* 표 머리줄 등 옅은 배경 */
+  --color-border: #e2e8f0;      /* 구분선 */
+  --color-border-card: #dde2e8; /* 카드 테두리 */
+  --color-border-strong: #cbd5e1; /* 입력칸·버튼 테두리 */
+  --color-text: #0f172a;        /* 본문 글자 */
+  --color-text-sub: #475569;    /* 보조 글자 */
+  --color-text-weak: #94a3b8;   /* 흐린 글자 */
+  --color-primary: #2563eb;     /* 주요 버튼·선택 표시 */
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+  --color-primary-text: #ffffff;
+
+  /* 상태 4단계 색 (level 값과 1:1 매칭)
+   * - 진한 색(선·점), 옅은 배경(-soft), 글자용(-text) 3가지
+   * - 화재(FIRE)는 설계안에서 경보와 같은 빨강을 쓰고 문구·아이콘으로 구분 */
+  --color-level-normal: #16a34a;      /* NORMAL 정상: 초록 */
+  --color-level-normal-soft: #dcfce7;
+  --color-level-normal-text: #15803d;
+  --color-level-warn: #f97316;        /* WARN 주의: 주황 (노랑 사용 금지) */
+  --color-level-warn-soft: #ffedd5;
+  --color-level-warn-text: #c2410c;
+  --color-level-alarm: #dc2626;       /* ALARM 경보: 빨강 */
+  --color-level-alarm-soft: #fee2e2;
+  --color-level-alarm-text: #b91c1c;
+  --color-level-fire: #dc2626;        /* FIRE 화재: 경보와 같은 빨강 */
+  --color-level-fire-soft: #fee2e2;
+  --color-level-fire-text: #b91c1c;
+
+  /* 모서리 6~8px, 그림자 최소 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+
+  /*
+   * 화면 배율 (utils/screenScale.js 가 창 폭에 맞춰 <html> 에 넣음: FHD 1, QHD 1.333)
+   * - 배율(zoom)이 걸리면 100vh · 100vw 도 같이 커져 화면을 넘치므로, 화면 높이·폭은 아래 두 값을 씀
+   */
+  --screen-scale: 1;
+  --screen-h: calc(100vh / var(--screen-scale));
+  --screen-w: calc(100vw / var(--screen-scale));
+
+  /* 상단 바 높이 */
+  --topbar-height: 64px;
+
+  /*
+   * 움직임(모션) 토큰 — 화면설계서 R2 '효과·애니메이션 기준'
+   * - 나타날 때 ease-out, 사라질 때 ease-in. 화면 요소는 500ms 를 넘기지 않음
+   * - 끝없이 반복되는 움직임은 불러오는 표시와 이상 상태(주의·경보)에만
+   * - '움직임 줄이기'(prefers-reduced-motion) 설정이면 motion.css 에서 끔
+   */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.55, 0.05, 0.8, 0.5);
+  --m-press: 100ms ease-out; /* 버튼 누름 (97% 축소) */
+  --m-hover: 150ms ease-out; /* 마우스 올림 바탕·테두리 */
+  --m-pop-in: 160ms ease-out; /* 드롭다운·팝오버·툴팁 나타남 (4px 위에서) */
+  --m-pop-out: 120ms ease-in; /* 사라짐 */
+  --m-panel: 240ms cubic-bezier(0.2, 0.8, 0.2, 1); /* 펼치기·패널 */
+  --m-value: 400ms ease-out; /* 숫자·게이지·도넛 길이 변화 */
+  --m-zoom: 500ms cubic-bezier(0.4, 0, 0.2, 1); /* 단계 사이 확대·축소 (들어오는 화면) */
+  --m-zoom-leave: 220ms ease-in; /* 단계 사이 확대·축소 (나가는 화면) */
+  --m-tab: 200ms ease-out; /* 같은 단계·메뉴 이동 */
+  --m-rise: 460ms cubic-bezier(0.2, 0.8, 0.2, 1); /* 카드 아래에서 올라오며 나타남 */
+  --m-stagger: 42ms; /* 카드마다 늦게 나타나는 간격 */
+  --m-pulse-warn: 1.6s; /* 주의 테두리 빛번짐 반복 */
+  --m-pulse-alarm: 0.8s; /* 경보 테두리 빛번짐 반복 */
+  --m-pulse-fire: 0.6s; /* 화재 테두리 빛번짐 반복 (1초에 1.7번 — 광과민 기준 1초 3번 이하) */
+
+  /*
+   * 뼈대 화면(불러오는 중) — components/skeleton/
+   * - 회색 칸 위로 밝은 띠가 왼쪽 → 오른쪽으로 지나감 (회색만 사용, 주황·빨강 금지)
+   * - 0.2초 안에 끝나는 불러오기는 뼈대를 아예 보이지 않음 (깜빡임 방지)
+   * - 나타날 때는 --m-pop-in(160ms ease-out) 으로 살짝 나타남
+   */
+  --color-skeleton: #e6eaf0; /* 뼈대 칸 */
+  --color-skeleton-shine: #f4f6f9; /* 뼈대 위를 지나가는 밝은 띠 */
+  --m-skeleton-shine: 1.4s; /* 밝은 띠가 한 번 지나가는 시간 (반복) */
+  --m-skeleton-delay: 200ms; /* 이 시간보다 오래 걸릴 때만 뼈대를 보임 */
+}

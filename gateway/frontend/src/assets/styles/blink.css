@@ -1,0 +1,222 @@
+/*
+ * 주의·경보·화재 점멸 (2026-11-20 재원님 선택 시안: drafts_1120/점멸애니메이션)
+ * - 지도 구역 면·공장 배치도 건물·3D 설비: 테두리 굵게 + 빛 크게
+ * - 상단 알림 띠: 넓게 퍼지는 링 2겹 / 카드·이름표: 바깥 빛번짐 / 목록 줄: 바탕 숨쉬기
+ *
+ * 쓰는 법
+ * - 단계 값: 요소에 class="blink-warn | blink-alarm | blink-fire" (또는 SVG 는 data-blink="warn|alarm|fire")
+ *   → utils/blink.js 의 blinkClass(level) / blinkKey(level) 로 붙임
+ * - 모양: blink-glow(카드) · blink-row(목록 줄) · 뒤에 .weak 를 붙이면 약하게
+ * - 지도·3D 그림은 각 컴포넌트에서 아래 @keyframes(blink-stroke, blink-light, blink-halo)를 씀
+ *
+ * 규칙
+ * - 같은 단계는 같은 박자: keyframes 이름을 모두 'blink-' 로 시작 → utils/blink.js 가 시작점을 맞춤
+ * - 글자·숫자는 깜빡이지 않음 (테두리·바탕·빛만)
+ * - 마우스를 올리면 깜빡임을 멈추고 진하게 고정 (눌러도 되는 곳이라는 표시)
+ * - '움직임 줄이기' 설정이면 깜빡임 대신 굵은 테두리·고정 빛
+ */
+
+/* 빛 테두리 굵기를 부드럽게 바꾸려면 등록된 속성이어야 함 (PaintMap 상태 테두리) */
+@property --halo-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 8px;
+}
+
+/* ───────── 단계별 세기 ─────────
+ * --blink-t   : 한 번 깜빡이는 시간 (tokens.css --m-pulse-*)
+ * --blink-amp : 빛·굵기가 커지는 배수 (주의 1 · 경보 1.4 · 화재 1.8)
+ * --blink-rgb : 단계 색 rgb 값 (투명도를 바꿔 쓰려고 숫자로 둠) */
+.blink-warn,
+[data-blink='warn'] {
+  --blink-t: var(--m-pulse-warn);
+  --blink-amp: 1;
+  --blink-rgb: 249 115 22; /* --color-level-warn #f97316 */
+}
+
+.blink-alarm,
+[data-blink='alarm'] {
+  --blink-t: var(--m-pulse-alarm);
+  --blink-amp: 1.4;
+  --blink-rgb: 220 38 38; /* --color-level-alarm #dc2626 */
+}
+
+.blink-fire,
+[data-blink='fire'] {
+  --blink-t: var(--m-pulse-fire);
+  --blink-amp: 1.8;
+  --blink-rgb: 220 38 38; /* --color-level-fire (경보와 같은 빨강, 속도·크기로 구분) */
+}
+
+/* ───────── 카드·이름표: 테두리는 그대로, 바깥으로 빛번짐 ───────── */
+.blink-glow {
+  animation: blink-glow var(--blink-t) ease-in-out infinite;
+}
+
+.blink-glow.weak {
+  animation-name: blink-glow-weak;
+}
+
+@keyframes blink-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(var(--blink-rgb) / 0),
+      0 0 0 0 rgb(var(--blink-rgb) / 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 calc(3px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.28),
+      0 0 calc(16px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.5);
+  }
+}
+
+@keyframes blink-glow-weak {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(var(--blink-rgb) / 0),
+      0 0 0 0 rgb(var(--blink-rgb) / 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgb(var(--blink-rgb) / 0.22),
+      0 0 calc(10px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.32);
+  }
+}
+
+/* ───────── 목록 줄: 왼쪽 띠는 고정, 줄 바탕이 진해졌다 옅어짐 ───────── */
+.blink-row {
+  animation: blink-row var(--blink-t) ease-in-out infinite;
+}
+
+.blink-row.weak {
+  animation-name: blink-row-weak;
+}
+
+@keyframes blink-row {
+  0%,
+  100% {
+    background-color: rgb(var(--blink-rgb) / 0.04);
+  }
+  50% {
+    background-color: rgb(var(--blink-rgb) / calc(0.16 * var(--blink-amp)));
+  }
+}
+
+@keyframes blink-row-weak {
+  0%,
+  100% {
+    background-color: rgb(var(--blink-rgb) / 0.04);
+  }
+  50% {
+    background-color: rgb(var(--blink-rgb) / calc(0.1 * var(--blink-amp)));
+  }
+}
+
+/* 바탕을 ::before 등 따로 둔 줄에서 투명도만 바꿀 때 (NearThresholdCard) */
+@keyframes blink-fade {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ───────── 버튼(상단 알림 띠): 버튼 밖으로 넓게 퍼지는 링 2겹 ─────────
+ * - 링 두 개를 box-shadow 하나에 그림 (버튼이 overflow: hidden 이라 ::before 링은 잘림)
+ * - 링 A: 0 → 끝까지, 링 B: 반 박자 늦게 → 두 링이 번갈아 퍼짐
+ * - 사용: animation: blink-ring calc(var(--blink-t) * 1.25) cubic-bezier(0.2, 0.6, 0.3, 1) infinite */
+@keyframes blink-ring {
+  0% {
+    box-shadow:
+      0 0 0 0 rgb(var(--blink-rgb) / 0.75),
+      0 0 0 calc(4px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.35);
+  }
+  49.9% {
+    box-shadow:
+      0 0 0 calc(4px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.35),
+      0 0 0 calc(8px * var(--blink-amp)) rgb(var(--blink-rgb) / 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 calc(4px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.35),
+      0 0 0 0 rgb(var(--blink-rgb) / 0.75);
+  }
+  100% {
+    box-shadow:
+      0 0 0 calc(8px * var(--blink-amp)) rgb(var(--blink-rgb) / 0),
+      0 0 0 calc(4px * var(--blink-amp)) rgb(var(--blink-rgb) / 0.35);
+  }
+}
+
+/* ───────── 지도·3D 그림 (SVG) ─────────
+ * blink-stroke: 둘레 선 굵기·진하기  (요소에 --blink-w0 가는 굵기, --blink-w1 굵은 굵기)
+ * blink-light : 바깥 빛 진하기·크기   (transform-box: fill-box; transform-origin: center 와 같이)
+ * blink-halo  : 3D 설비 상태 테두리 굵기 + 빛 (--halo-lo, --halo-hi) */
+@keyframes blink-stroke {
+  0%,
+  100% {
+    stroke-width: var(--blink-w0);
+    opacity: 0.6;
+  }
+  50% {
+    stroke-width: calc(var(--blink-w1) * var(--blink-amp));
+    opacity: 1;
+  }
+}
+
+@keyframes blink-light {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(calc(1 + 0.04 * var(--blink-amp)));
+  }
+}
+
+@keyframes blink-halo {
+  0%,
+  100% {
+    --halo-width: var(--halo-lo);
+    opacity: 0.6;
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+  50% {
+    --halo-width: calc(var(--halo-hi) * var(--blink-amp));
+    opacity: 1;
+    filter: drop-shadow(0 0 calc(8px * var(--blink-amp)) currentColor) drop-shadow(0 0 calc(18px * var(--blink-amp)) currentColor);
+  }
+}
+
+/* ───────── 마우스 올림: 깜빡임 멈추고 진하게 고정 ───────── */
+.blink-glow:hover {
+  animation: none;
+  box-shadow: 0 0 0 3px rgb(var(--blink-rgb) / 0.3);
+}
+
+.blink-row:hover {
+  animation: none;
+  background-color: rgb(var(--blink-rgb) / 0.14);
+}
+
+/* ───────── 움직임 줄이기: 깜빡임 대신 굵은 테두리·고정 빛 ───────── */
+@media (prefers-reduced-motion: reduce) {
+  .blink-glow,
+  .blink-row {
+    animation: none !important;
+  }
+
+  .blink-glow {
+    box-shadow: 0 0 0 3px rgb(var(--blink-rgb) / 0.3);
+  }
+
+  .blink-row {
+    background-color: rgb(var(--blink-rgb) / 0.12);
+  }
+}
