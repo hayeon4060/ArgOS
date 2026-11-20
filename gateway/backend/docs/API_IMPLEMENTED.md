@@ -468,3 +468,14 @@ DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `sou
 정상 **30Hz** (900rpm) · 주의 45Hz (1,350rpm) · 경보 60Hz (1,800rpm). 위 문서에서 '평상시 40Hz · 1,200rpm' 이라고 적힌 곳은 이 값으로 읽는다.
 - 경보 종료 때 복귀(RECOVERY), `POST /equipment/{id}/fan {power: ON}`, 시연 리셋의 배기팬 회전수가 30Hz(900rpm)
 - 수집 서버 `V6__fan_normal_30hz.sql`: 1200rpm 으로 돌던 배기팬을 900rpm 으로
+
+## 2026-11-20 값이 정상으로 돌아오면 경보 · 화재 자동 해제
+
+- 수집 서버: 경보에 묶인 센서 이벤트가 모두 끝나면(엣지 복귀 20회 · VMS 정상) 경보를 바로 종료 (`close_reason = AUTO_RECOVERED`).
+  사람이 종료할 때처럼 승인 대기 배기팬 명령을 취소하고, 경보 중 올린 배기팬을 30Hz 로 되돌린다
+- 중앙 서버: 피드 `ALARM_CLEARED`(자동 종료)를 받으면 SSE `alarm.updated`(`status: CLOSED`, `closeReason: AUTO_RECOVERED`),
+  조치 기록 `CLOSE` "값이 정상으로 돌아와 자동 종료", 화재 경보면 **화재도 자동 해제** (비밀번호 없이, 방송 중지 · 작업자 푸시 `FIRE_CLEARED`,
+  SSE `fire.cleared` 의 `clearedBy: "자동 해제"`, 이용 로그 `FIRE_CLEAR` 사용자 없음)
+- 수집 서버를 다시 켤 때 이미 값이 정상인데 열려 있던 경보(겹친 예전 경보 포함)도 자동 종료. 중앙 서버는 수집 서버 재시작을 알아채면
+  경보가 닫혔는데 진행 중인 화재를 찾아 자동 해제
+- 사람이 먼저 종료 · 화재 해제하는 것도 그대로 된다
