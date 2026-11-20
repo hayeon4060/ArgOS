@@ -759,8 +759,3 @@
 - 삭제는 서버 규칙 그대로: 센서가 붙은 설비는 지우지 않고 사용 안 함.
 - 확인 요청 4건(`shape` 응답, 삭제 결과, 시드에 없는 그림 설비, `equipment_type` null): 저장소 **`docs/api/paint-equipment-edit.md`**.
 
-
-## 29. 가스 주의 때 배기팬 속도 직접 조절 20 ~ 60 Hz (2026-11-20, 재원님 요청)
-
-- 가스 주의 알림 창 · 주의 상세 창의 배기팬 줄 아래 슬라이더 → 이미 있는 `POST /equipment/{id}/fan` `{ hz }` (공장 담당자만, 20 ~ 60 Hz). 새 API 없음.
-- 요청 5건(`fanAuto.manualHz`, 명령에 `alarmId`, 경보 승격 · 승인 대기 · 복귀 규칙): 저장소 **`docs/api/fan-speed-control.md`**.

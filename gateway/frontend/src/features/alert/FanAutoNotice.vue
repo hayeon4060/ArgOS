@@ -20,6 +20,7 @@ import { ROLE, RPM_PER_HZ } from '@/types/codes'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import FanSpeedControl from './FanSpeedControl.vue'
+import { manualHzOf, rememberManualHz } from './fanManual'
 
 const props = defineProps({
   /** 알림 응답의 fanAuto (가스 알림이 아니거나 배기팬이 없으면 부모가 그리지 않음) */
@@ -47,16 +48,11 @@ watch(
   },
 )
 /*
- * 이 창에서 속도를 직접 정한 값 (FanSpeedControl 'sent')
- * - 실제 서버는 아직 알림에 manualHz 를 안 실어 줌 → 다시 불러와도(SSE) 사라지지 않게 따로 둠
- * - 다른 알림(발생 시각이 다름)이 오면 지움
+ * 속도를 직접 정한 값 (FanSpeedControl 'sent' → fanManual.js)
+ * - 실제 서버는 아직 알림에 manualHz 를 안 실어 줌 → 화면 전체가 같이 쓰는 곳에 기억
+ *   (주의 알림 창에서 정하고 주의 상세 창으로 넘어가도, SSE 로 다시 불러와도 그대로)
  */
-const sentHz = ref(null)
-watch(
-  () => props.fan.at,
-  () => (sentHz.value = null),
-)
-const f = computed(() => ({ ...props.fan, ...override.value, manualHz: sentHz.value ?? props.fan.manualHz ?? null }))
+const f = computed(() => ({ ...props.fan, ...override.value, manualHz: manualHzOf(props.fan) }))
 /** 담당자가 속도를 직접 정했는지 (정했으면 제목 · rpm 을 그 값으로) */
 const manual = computed(() => f.value.manualHz != null)
 
@@ -159,7 +155,7 @@ async function decide(approve) {
     </span>
     <span v-else-if="!isAuto" class="tag">수동</span>
     <!-- 가스 주의: 속도 직접 조절 20 ~ 60 Hz (공장 담당자만 — 승인 · 거절과 같은 권한) -->
-    <FanSpeedControl v-if="adjustable && canDecide" :fan="f" class="speed" @sent="sentHz = $event" />
+    <FanSpeedControl v-if="adjustable && canDecide" :fan="f" class="speed" @sent="rememberManualHz(fan, $event)" />
   </div>
 </template>
 
