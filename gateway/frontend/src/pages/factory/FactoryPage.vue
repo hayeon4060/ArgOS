@@ -35,6 +35,7 @@ import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import NameInputModal from '@/components/NameInputModal.vue'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import EquipmentEditPanel from '@/features/factory/EquipmentEditPanel.vue'
 import EquipmentPickerModal from '@/features/factory/EquipmentPickerModal.vue'
@@ -452,7 +453,8 @@ watch(
       </span>
     </div>
 
-    <p v-if="loading" class="state">불러오는 중</p>
+    <!-- 처음 들어올 때 · '조회'로 범위를 바꿀 때: 위 탭 줄은 그대로 두고 아래 본문 칸만 뼈대 -->
+    <PageSkeleton v-if="loading" shape="table" layout="factory" body />
 
     <!-- 고를 공장 · 공정이 아직 없음 (막 만든 사업장 · 공장) -->
     <div v-else-if="needs" class="none base-card">
@@ -633,10 +635,6 @@ watch(
   height: 40px;
   margin-top: 10px;
   padding: 0 18px;
-}
-
-.state {
-  color: var(--color-text-sub);
 }
 
 .fade-enter-active,

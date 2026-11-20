@@ -16,7 +16,7 @@ import { ROLE, WEB_ROLES } from '@/types/codes'
 
 import BlankLayout from '@/layouts/BlankLayout.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
-import { decideTransition } from '@/features/motion/pageTransition'
+import { installRouteSkeleton } from '@/features/motion/routeSkeleton'
 import { homeRouteOf, scopeOf } from './home'
 import { MENU_ROUTES } from './menus'
 
@@ -44,6 +44,7 @@ const routes = [
    * - meta.plain: 메뉴 없는 상단 바 (설계안 'hdr plain', 사업장 선택)
    * - meta.depth: 대시보드 단계 깊이 (사업장 선택 0 → 사업장 1 → 공장 2 → 공정 3 → 설비 4)
    *   깊어지면 확대(줌 인), 얕아지면 축소(줌 아웃) — features/motion/pageTransition.js
+   * - meta.skeleton: 불러오는 동안 보일 뼈대 모양 'dashboard' | 'table' (components/skeleton, features/motion/routeSkeleton.js)
    */
   {
     path: '/sites',
@@ -53,38 +54,38 @@ const routes = [
         path: '',
         name: 'site-select',
         component: () => import('@/pages/site/SiteSelectPage.vue'),
-        meta: { roles: [ROLE.HQ_ADMIN], title: '사업장 선택', plain: true, depth: 0 }, // 본사 관리자만
+        meta: { roles: [ROLE.HQ_ADMIN], title: '사업장 선택', plain: true, depth: 0, skeleton: 'dashboard' }, // 본사 관리자만
       },
       {
         path: ':siteId',
         name: 'site-dashboard',
         component: () => import('@/pages/dashboard/SiteDashboardPage.vue'),
-        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '사업장 현황', depth: 1 },
+        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '사업장 현황', depth: 1, skeleton: 'dashboard' },
       },
       {
         path: ':siteId/factories/:factoryId',
         name: 'dashboard',
         component: () => import('@/pages/dashboard/FactoryDashboardPage.vue'),
-        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '공장 대시보드', depth: 2 },
+        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '공장 대시보드', depth: 2, skeleton: 'dashboard' },
       },
       {
         path: ':siteId/factories/:factoryId/processes/:processId',
         name: 'process',
         component: () => import('@/pages/dashboard/ProcessPage.vue'),
-        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '3D 설비 배치도', depth: 3 },
+        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '3D 설비 배치도', depth: 3, skeleton: 'dashboard' },
       },
       {
         path: ':siteId/factories/:factoryId/processes/:processId/equipment/:equipmentId',
         name: 'equipment',
         component: () => import('@/pages/dashboard/EquipmentPage.vue'),
-        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '설비 상세', depth: 4 },
+        meta: { roles: WEB_ROLES, nav: 'dashboard', title: '설비 상세', depth: 4, skeleton: 'dashboard' },
       },
       // 메뉴 화면 (깊이 없음 → 탭 이동처럼 부드럽게 바뀜)
       ...MENU_ROUTES.map((menu) => ({
         path: `:siteId/${menu.path}`,
         name: menu.name,
         component: menu.component,
-        meta: { roles: WEB_ROLES, nav: menu.nav, title: menu.title },
+        meta: { roles: WEB_ROLES, nav: menu.nav, title: menu.title, skeleton: menu.skeleton },
       })),
     ],
   },
@@ -163,9 +164,10 @@ router.beforeEach((to) => {
   return true
 })
 
-// 화면 전환 방향(줌 인 / 줌 아웃 / 탭 이동)은 여기 한 곳에서 정함
-router.beforeResolve((to, from) => {
-  decideTransition(to, from)
-})
+/*
+ * 화면 전환 방향(줌 인 / 줌 아웃 / 탭 이동) + 화면 파일을 받는 동안의 뼈대 (features/motion/routeSkeleton.js)
+ * - 권한 가드 다음에 등록해야 가드를 통과한(실제로 이동할) 경우만 뼈대를 예약함
+ */
+installRouteSkeleton(router)
 
 export default router
