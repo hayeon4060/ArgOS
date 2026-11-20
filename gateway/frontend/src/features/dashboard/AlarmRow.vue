@@ -67,7 +67,7 @@ watch(
 
 <template>
   <div class="alarm-row-wrap" :class="{ open, fresh }">
-    <button type="button" class="alarm-row" :class="active ? `active is-${levelKey}` : ''" :aria-expanded="open" @click="emit('toggle')">
+    <button type="button" class="alarm-row" :class="active ? `active is-${levelKey} blink-row blink-${levelKey}` : ''" :aria-expanded="open" @click="emit('toggle')">
       <span class="icon"><AppIcon :name="icon" :size="21" /></span>
 
       <div class="text">
@@ -137,7 +137,10 @@ watch(
   background: #f8fafc;
 }
 
-/* 진행 중인 알림: 왼쪽 색 띠(깜빡) + 옅은 배경 */
+/*
+ * 진행 중인 알림: 왼쪽 색 띠(고정) + 줄 바탕이 진해졌다 옅어짐 (2026-11-20 재원님 선택, blink.css blink-row)
+ * - 반복 시간 주의 1.6초 · 경보 0.8초 · 화재 0.6초
+ */
 .alarm-row.active::before {
   content: '';
   position: absolute;
@@ -145,7 +148,6 @@ watch(
   top: 0;
   bottom: 0;
   width: 4px;
-  animation: bar-blink 1.2s ease-in-out infinite;
 }
 
 .alarm-row.active.is-warn {
@@ -169,7 +171,6 @@ watch(
 .alarm-row.active.is-fire::before {
   width: 5px;
   background: var(--color-level-alarm);
-  animation-duration: 0.7s;
 }
 
 /* 아이콘 칸: 기본은 회색(끝난 알림) */
@@ -337,18 +338,8 @@ watch(
   }
 }
 
-@keyframes bar-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .alarm-row.active::before,
   .fresh .alarm-row {
     animation: none;
   }

@@ -13,6 +13,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { keyOf } from '@/features/site/stages'
 import { LEVEL_META } from '@/types/codes'
+import { blinkClass } from '@/utils/blink'
 
 const props = defineProps({
   /** 사업장 현황의 공장 하나 */
@@ -67,7 +68,7 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
     </div>
 
     <template v-if="enterable">
-      <div v-for="p in factory.processes" :key="p.id" class="row" :class="`is-${keyOf(p.level)}`">
+      <div v-for="p in factory.processes" :key="p.id" class="row" :class="[`is-${keyOf(p.level)}`, blinkClass(p.level) && ['blink-row', 'weak', blinkClass(p.level)]]">
         <i :style="{ background: LEVEL_META[p.level].color }" />
         <span class="name">{{ p.name }}</span>
         <LevelBadge :level="p.level" />

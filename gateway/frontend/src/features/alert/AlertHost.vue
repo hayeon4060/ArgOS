@@ -8,7 +8,7 @@
       공장 담당자: 주의 알림 창 / 경보·화재 대응 창을 바로 띄움 (경보·화재는 열려 있던 창 위로)
       본사 관리자: 알림 띠 ('위치 보기', 화재는 '화재 현황 보기'로 닫을 때까지)
     · 담당자가 체크리스트를 모두 마치면: 알림 띠 '확인하기' → 체크리스트 진행 창
-    · 대응 중 알림이 있으면 화면 가장자리 테두리가 숨쉬듯 (설계안 #vig: 주의 주황 1.6초, 경보·화재 빨강 0.8초)
+    · 대응 중 알림이 있으면 화면 가장자리 테두리가 숨쉬듯 (설계안 #vig: 주의 주황 1.6초, 경보 빨강 0.8초, 화재 0.6초)
       탭 제목 앞에 [주의] / [경보] / [화재]
 -->
 <script setup>
@@ -180,7 +180,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 화면 가장자리 테두리 (설계안 #vig.warn: 안쪽 5px 주황, 1.6초 숨쉬기) */
+/* 화면 가장자리 테두리 (설계안 #vig.warn: 안쪽 5px 주황, 1.6초 숨쉬기)
+   - keyframes 이름이 blink- 로 시작 → 지도·카드 점멸과 같은 박자 (utils/blink.js) */
 .vignette {
   position: fixed;
   inset: 0;
@@ -190,25 +191,25 @@ onBeforeUnmount(() => {
 
 .vignette.warn {
   box-shadow: inset 0 0 0 5px rgba(249, 115, 22, 0.95);
-  animation: vig-warn var(--m-pulse-warn) ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-warn) ease-in-out infinite;
 }
 
 .vignette.alarm {
   box-shadow:
     inset 0 0 0 7px var(--color-level-alarm),
     inset 0 0 90px rgba(220, 38, 38, 0.28);
-  animation: vig-warn var(--m-pulse-alarm) ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-alarm) ease-in-out infinite;
 }
 
-/* 화재: 더 굵고 진하게, 0.7초 (설계안 #vig.fire) */
+/* 화재: 더 굵고 진하게, 0.6초 (2026-11-20 다른 화재 점멸과 같은 --m-pulse-fire 로 맞춤) */
 .vignette.fire {
   box-shadow:
     inset 0 0 0 9px #b91c1c,
     inset 0 0 160px rgba(220, 38, 38, 0.42);
-  animation: vig-warn 0.7s ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-fire) ease-in-out infinite;
 }
 
-@keyframes vig-warn {
+@keyframes blink-vig {
   0%,
   100% {
     opacity: 1;

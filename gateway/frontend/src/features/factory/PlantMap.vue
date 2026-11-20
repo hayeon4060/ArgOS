@@ -12,6 +12,7 @@ import plantSvg from '@/assets/images/plant-map.svg?raw'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { LEVEL, LEVEL_META } from '@/types/codes'
+import { blinkClass, blinkKey } from '@/utils/blink'
 
 const props = defineProps({
   /** 공장 현황의 공정 목록 [{ id, code, name, level, equipmentCount, equipmentLevels, sensorCount }] */
@@ -74,6 +75,10 @@ function applyLevels() {
   for (const p of props.processes) {
     const el = svg.querySelector(`.hall-zone[data-hall="${HALL_BY_CODE[p.code]}"]`)
     el?.setAttribute('data-level', HALL_LEVEL[p.level] ?? 'normal')
+    // 점멸 단계 (정상이면 지움) — 테두리 굵게 + 빛 크게, 아래 스타일
+    const blink = blinkKey(p.level)
+    if (blink) el?.setAttribute('data-blink', blink)
+    else el?.removeAttribute('data-blink')
   }
 }
 
@@ -102,6 +107,7 @@ watch(() => props.processes, () => nextTick(applyLevels), { deep: true })
       <button
         type="button"
         class="label"
+        :class="l.process.level !== LEVEL.NORMAL && ['blink-glow', 'weak', blinkClass(l.process.level)]"
         :style="{ left: `${l.label.left}%`, top: `${l.label.top}%`, borderColor: l.color }"
         @click="emit('select', l.process)"
       >
@@ -164,6 +170,46 @@ watch(() => props.processes, () => nextTick(applyLevels), { deep: true })
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
+}
+
+/*
+ * 주의·경보·화재 공정 건물: 테두리 굵게 + 빛 크게 (blink.css 의 blink-stroke · blink-light)
+ * - 그림의 둘레 선 10 ↔ 16(× 단계 배수), 바깥 빛 30% ↔ 100%
+ * - 공정 이름표는 같은 박자로 약하게 빛번짐 (blink-glow weak)
+ */
+.svg :deep(.hall-zone[data-blink] .rim polygon) {
+  --blink-w0: 8px;
+  --blink-w1: 16px;
+  animation: blink-stroke var(--blink-t) ease-in-out infinite;
+}
+
+.svg :deep(.hall-zone[data-blink] .glow) {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink-light var(--blink-t) ease-in-out infinite;
+}
+
+/* 마우스 올림: 깜빡임 멈추고 가장 진한 모양으로 고정 */
+.svg :deep(.hall-zone[data-blink]:hover .rim polygon) {
+  animation: none;
+  stroke-width: 16px;
+}
+
+.svg :deep(.hall-zone[data-blink]:hover .glow) {
+  animation: none;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .svg :deep(.hall-zone[data-blink] .rim polygon) {
+    animation: none;
+    stroke-width: 16px;
+  }
+
+  .svg :deep(.hall-zone[data-blink] .glow) {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* 이름표 안 상태 배지는 조금 크게 (설계안 chip.lgc) */
