@@ -31,7 +31,16 @@ export async function saveFile(fileName, makeBlob) {
     return 'saved'
   }
   // 저장 창이 없는 브라우저: 다운로드 폴더로
-  const blob = await makeBlob()
+  downloadBlob(fileName, await makeBlob())
+  return 'downloaded'
+}
+
+/**
+ * 받은 파일(Blob)을 저장 창 없이 브라우저 다운로드 폴더로 바로 저장
+ * - 점검 관리의 빈 서류 양식 · 스캔 원본 PDF 처럼 여러 개를 연달아 받을 때 씀
+ *   (저장 창은 버튼을 누른 순간 한 번만 열 수 있어 두 번째 파일부터 막힘)
+ */
+export function downloadBlob(fileName, blob) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -40,7 +49,6 @@ export async function saveFile(fileName, makeBlob) {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
-  return 'downloaded'
 }
 
 /** 파일 이름에 쓸 수 없는 글자(\ / : * ? " < > |)와 빈칸 빼기 */
