@@ -164,7 +164,15 @@ public class InternalQueryRepository {
     /** 센서별 마지막 1분 추이 (실시간 값이 아직 없을 때 쓴다) */
     public Map<Long, TrendValue> lastTrends() {
         Map<Long, TrendValue> out = new HashMap<>();
-        jdbc.query("SELECT DISTINCT ON (sensor_id) sensor_id, ts, avg_v FROM sensor_trend ORDER BY sensor_id, ts DESC",
+        // 센서마다 기본키 인덱스(sensor_id, ts)로 마지막 한 줄만 읽는다. 전체를 정렬하는 DISTINCT ON 은
+        // 30일치(약 60만 행)에서 0.6초 걸려 화면 상태 API 가 느렸다 (2026-11-20). 끊김만 있던 분(avg_v null)은 건너뜀
+        jdbc.query("""
+                SELECT s.sensor_id, t.ts, t.avg_v FROM sensor s
+                CROSS JOIN LATERAL (
+                    SELECT ts, avg_v FROM sensor_trend t
+                    WHERE t.sensor_id = s.sensor_id AND t.avg_v IS NOT NULL
+                    ORDER BY ts DESC LIMIT 1) t
+                """,
                 rs -> {
                     out.put(rs.getLong("sensor_id"), new TrendValue(odt(rs, "ts"), rs.getDouble("avg_v")));
                 });
