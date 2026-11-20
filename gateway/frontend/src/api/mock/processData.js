@@ -19,16 +19,19 @@ const { NORMAL, WARN, ALARM, FIRE } = LEVEL
  * - 설비 상세 예시 데이터(equipmentData.js)도 이 목록을 그대로 씀 → 두 화면 숫자가 어긋나지 않음
  * - type: DB equipment.equipment_type 코드. 지금 DB 시드 · 체크리스트 양식에 있는 코드(OVEN · TANK …)만 쓰고,
  *   코드가 정해지지 않은 설비(실링 · 부스 · 공조기 · 도료 혼합실 · 소각설비)는 null (backend-notes 15장 질문)
+ * - code: 실제 서버(중앙 시드 공정 12)에 있는 설비는 그 코드 (PT-TANK · ED-TANK · ED-OVEN · PR-OVEN · TC-OVEN, 2026-11-20)
+ *   실제 시드에 없는 설비(실링 · 부스 · 공조기 · 도료 혼합실 · 소각설비)는 화면설계안 그림 때문에 'PNT-' 코드로 남김
+ *   (실제 서버의 배기팬 · 버너실 · 펌프 · 열화상 카메라는 따로 설비지만, 예시는 건조로 · 탱크 한 대로 묶어 둠)
  */
 export const EQUIPMENT = [
-  { id: 24, code: 'PNT-PRETREAT', name: '전처리', type: 'TANK', seq: 1, manager: '이재호' },
-  { id: 25, code: 'PNT-ED-TANK', name: '전착 탱크', type: 'TANK', seq: 2, manager: '이재호' },
-  { id: 26, code: 'PNT-ED-OVEN', name: '전착 건조로', type: 'OVEN', seq: 3, manager: '박성훈' },
+  { id: 24, code: 'PT-TANK', name: '전처리', type: 'TANK', seq: 1, manager: '이재호' },
+  { id: 25, code: 'ED-TANK', name: '전착 탱크', type: 'TANK', seq: 2, manager: '이재호' },
+  { id: 26, code: 'ED-OVEN', name: '전착 건조로', type: 'OVEN', seq: 3, manager: '박성훈' },
   { id: 27, code: 'PNT-SEALING', name: '실링', type: null, seq: 4, manager: '박성훈' },
   { id: 28, code: 'PNT-PRIMER-BOOTH', name: '중도 부스', type: null, seq: 5, manager: '박성훈' },
-  { id: 29, code: 'PNT-PRIMER-OVEN', name: '중도 건조로', type: 'OVEN', seq: 6, manager: '박성훈' },
+  { id: 29, code: 'PR-OVEN', name: '중도 건조로', type: 'OVEN', seq: 6, manager: '박성훈' },
   { id: 30, code: 'PNT-TOP-BOOTH', name: '상도 부스', type: null, seq: 7, manager: '김도현' },
-  { id: 31, code: 'PNT-TOP-OVEN', name: '상도 건조로', type: 'OVEN', seq: 8, manager: '김도현' },
+  { id: 31, code: 'TC-OVEN', name: '상도 건조로', type: 'OVEN', seq: 8, manager: '김도현' },
   { id: 32, code: 'PNT-AHU', name: '공조기 (AHU)', type: null, seq: null, manager: '이재호' },
   { id: 33, code: 'PNT-PAINT-MIX', name: '도료 혼합실', type: null, seq: null, manager: '이재호' },
   { id: 34, code: 'PNT-INCINERATOR', name: '소각설비', type: null, seq: null, manager: '이재호' },

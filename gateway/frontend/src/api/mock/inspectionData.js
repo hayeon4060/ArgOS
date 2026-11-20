@@ -456,10 +456,21 @@ export function daySchedule(date) {
   if (!cell) return []
   const d = Number(date.slice(8, 10))
   const states = [...Array(cell.done).fill('DONE'), ...Array(cell.planned).fill('PLANNED'), ...Array(cell.delayed).fill('DELAYED')]
+  // 실제 GET /inspections/schedule 응답과 같은 칸 (InspectionService.daySchedule)
   return states.map((status, i) => ({
     scheduleId: 600 + d * 3 + i,
+    date,
+    time: `${pad(9 + i * 2)}:00`,
     title: SCHEDULE_NAMES[(d + i) % 4],
+    formType: FORMS[(d + i) % FORMS.length].formType,
+    formName: FORMS[(d + i) % FORMS.length].name,
+    processId: 501 + ((d + i) % 4),
     processName: `5공장 ${PROC[(d + i) % 4]}`,
+    equipmentId: null,
+    equipmentName: null,
+    assignee: WHO[(d + i) % WHO.length],
     status,
+    doneAt: status === 'DONE' ? `${date}T${pad(10 + i * 2)}:00:00+09:00` : null,
+    doneBy: status === 'DONE' ? WHO[(d + i) % WHO.length] : null,
   }))
 }

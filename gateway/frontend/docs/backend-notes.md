@@ -229,7 +229,7 @@
 | --- | --- |
 | `name` | 경로·카드 제목 ('도장 공정') |
 | `equipment[].id`, `name` | 설비 줄, 말풍선, 설비 상세로 이동 |
-| `equipment[].code` | **그림 속 설비와 짝 맞춤** (`PNT-TOP-OVEN` → 그림의 상도 건조로). 모든 설비에 code 필요, 값 합의 필요 (프론트 가정: `PNT-PRETREAT`, `PNT-ED-TANK`, `PNT-ED-OVEN`, `PNT-SEALING`, `PNT-PRIMER-BOOTH`, `PNT-PRIMER-OVEN`, `PNT-TOP-BOOTH`, `PNT-TOP-OVEN`, `PNT-AHU`, `PNT-PAINT-MIX`, `PNT-INCINERATOR`) |
+| `equipment[].code` | **그림 속 설비와 짝 맞춤** (`PNT-TOP-OVEN` → 그림의 상도 건조로). 모든 설비에 code 필요, 값 합의 필요 (프론트 가정: `PNT-PRETREAT`, `PNT-ED-TANK`, `PNT-ED-OVEN`, `PNT-SEALING`, `PNT-PRIMER-BOOTH`, `PNT-PRIMER-OVEN`, `PNT-TOP-BOOTH`, `PNT-TOP-OVEN`, `PNT-AHU`, `PNT-PAINT-MIX`, `PNT-INCINERATOR`) → **2026-11-20 실제 코드로 바꿈** (24장) |
 | **`equipment[].seq`** | 공정 흐름 순서 번호(1~8) — 그림과 아래 설비 줄의 파란 번호. **명세서에 없음 → 추가 필요** (공장 관리 화면에서 정하는 값으로 보임) |
 | `sensors[].id`, `tag`, `type`, `unit`, `equipmentId` | 설비별 센서 묶기 (`equipmentId` 가 null 이면 예비 센서: 개수에는 넣고 그림에는 안 나옴) |
 
@@ -480,7 +480,7 @@
 | `PUT /inspections/{id}` | 임시 저장(REVIEW) · 검수 완료(DONE) | 없음. 확인 필요가 남으면 409 `NEED_CHECK_REMAINS` 를 가정. 값을 고치거나 `checked: true` 면 확인 필요가 풀림 |
 | `POST /inspections/{id}/ocr` | 다시 인식 | 없음 |
 | `GET /inspections?from=&to=&formType=&status=&page=&size=` | 오른쪽 등록 목록(최근 7건), 날짜별 전체 보기 창 | 줄마다 `needCheckCount`(확인 필요 n개), `progress`(인식 중 %), `reviewedAt` 추가 필요 |
-| (없음) 그날 점검 목록 | 달력 날짜를 눌렀을 때 작은 창 | **명세서에 없음** — `GET /inspections/schedule?date=` 같은 API 추가 필요 (예시 데이터만) |
+| (없음) 그날 점검 목록 | 달력 날짜를 눌렀을 때 작은 창 | **명세서에 없음** — 백엔드가 `GET /inspections/schedule?date=&factoryId=` 추가 → 2026-11-20 프론트 연결 (24장) |
 
 ### 서류 양식 F01 ~ F05 칸 (ArgOS 시연용 가상 양식, `api/mock/inspectionData.js` 의 `/doc-forms`)
 
@@ -731,3 +731,11 @@
 - 주의 상세 창 아래 추이 그래프 2개: 화재 주의 = 온도·전류, 가스 주의 = CO·전류.
 - 요청 1개: `GET /alarms/{id}/detail` 에 센서별 추이 `trends[]` 추가 (지금은 알림 센서 하나의 `trend` 만). 없으면 화면은 `trend` 하나만 그림. 자세한 내용: 저장소 **`docs/api/warn-detail-trends.md`**.
 - 사업장 지도에서 공장을 누르면 뜨는 공정 목록 말풍선을 공장 오른쪽에 띄움 (화면만 바뀜, API 없음).
+
+## 24. 백엔드 피드백 4건 반영 (2026-11-20)
+
+- 그날 점검 목록: 예시 데이터만 쓰던 것을 `GET /inspections/schedule?date=&factoryId=` 로 바꿈. 작은 창에 시각 · 공정 · 담당자 같이 표시.
+- 열화상 사진: `thermal.imageUrl`(`/api/v1/thermal/images/{fileId}`)은 로그인이 필요해 axios 로 blob 을 받아 띄움 (`useThermalSrc`).
+- 배기팬 수동 승인: `fanAuto.status = AWAITING` 이고 `commandId` 가 있으면 알림 창에 '승인' · '거절' 버튼 (공장 담당자만) → `POST /fan-commands/{commandId}/approve · deny`.
+- 실제 설비 코드: 배치도 그림 짝 맞춤을 `PT-TANK` · `ED-OVEN` · `TC-OVEN` … 기준으로 바꿈. 배기팬 · 버너실 · 펌프 · 열화상 카메라는 같은 그림에 묶음.
+- 자세한 내용: 저장소 **`docs/api/backend-feedback-1120.md`**.

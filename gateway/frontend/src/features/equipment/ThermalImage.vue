@@ -5,10 +5,12 @@
   - 최고 온도 지점: 흰 네모 표시(1.4초마다 퍼짐) + 값 말풍선
   - 설비 상세 '열화상 카메라' 카드와 주의 상세 창(열화상 이미지)이 같이 씀
   - 그림 비율은 4:3, 폭은 감싸는 쪽이 정함
+  - 서버 사진('/api/v1/thermal/images/{fileId}')은 로그인이 필요해 useThermalSrc 로 받아서 띄움
 -->
 <script setup>
 import { computed } from 'vue'
 import colorBar from '@/assets/images/thermal/ir_bar.png'
+import { useThermalSrc } from './useThermalSrc'
 
 const props = defineProps({
   imageUrl: { type: String, required: true },
@@ -28,12 +30,15 @@ const props = defineProps({
   time: { type: String, default: '' },
 })
 
+// <img> 에 넣을 주소 (서버 사진이면 blob:, 예시 그림이면 그대로)
+const src = useThermalSrc(() => props.imageUrl)
+
 const point = computed(() => (props.maxPoint ? { left: `${props.maxPoint.x * 100}%`, top: `${props.maxPoint.y * 100}%` } : null))
 </script>
 
 <template>
   <div class="ir">
-    <img class="frame" :class="{ live }" :src="imageUrl" alt="열화상 카메라 장면" />
+    <img v-if="src" class="frame" :class="{ live }" :src="src" alt="열화상 카메라 장면" />
     <div class="tl">
       <span class="tag"><template v-if="live"><i />LIVE</template><template v-else>SNAPSHOT</template></span>
       <span v-if="zoneName" class="tag name">{{ zoneName }}</span>

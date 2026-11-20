@@ -70,7 +70,7 @@
 
 | # | ERD | 지금 화면 | 필요한 것 |
 |---|---|---|---|
-| 1 | **배기팬 수동 승인**: `equipment.fan_auto = false` 는 '담당자 승인 후 제어', `equipment_command.result` `AWAITING` / `DENIED`, `approved_by` · `approved_at` | 수동이면 알림 창에 '현장에서 확인해 주세요' 안내만 (승인 버튼 없음) | 승인 · 거절 API 주소와 알림 응답 `fanAuto` 에 실을 값(`commandId`, `status: AWAITING / DENIED`). 정해지면 알림 창에 버튼 추가 |
+| 1 | **배기팬 수동 승인**: `equipment.fan_auto = false` 는 '담당자 승인 후 제어', `equipment_command.result` `AWAITING` / `DENIED`, `approved_by` · `approved_at` | 수동이면 알림 창에 '현장에서 확인해 주세요' 안내만 (승인 버튼 없음) | 승인 · 거절 API 주소와 알림 응답 `fanAuto` 에 실을 값(`commandId`, `status: AWAITING / DENIED`). 정해지면 알림 창에 버튼 추가 → **2026-11-20 반영** (`POST /fan-commands/{commandId}/approve · deny`, `backend-feedback-1120.md` 3장) |
 | 2 | **전류 하한 기준**: `sensor_threshold.low_warn` · `low_alarm` | 기준값 관리 창에 상한(주의 · 경보) 입력 칸만 있음. 게이지 · 추이 그래프도 상한 선만. 저장할 때는 받은 하한을 그대로 돌려보냄 (1장 1번) | 화면에서 하한도 고치게 할지 결정 |
 | 3 | `sensor_threshold.immediate_value`(CO 200 ppm 즉시 경보) · `alarm_avg_sec`(60초 평균) · `release_samples` · `release_margin` | 화면에 없음 (서버 판정 전용으로 봄) | 기준값 창에 보여 줄 필요가 있으면 응답에 추가 |
 | 4 | `alarm.close_reason` (`AUTO_RECOVERED` / `ACTION_DONE` / `MANUAL`) | 통계 · 이력 상세에 종료 사유 표시 없음 | 응답에 `closeReason` 을 주면 '조치 완료' 옆에 표시 가능 |
@@ -84,7 +84,7 @@
 | `FAILED` · `REJECTED` · `EXPIRED` · `CANCELLED` | `FAILED` |
 | `DUPLICATE` | 앞선 명령의 결과를 따름 |
 | 명령 없음 (수동) | `SKIPPED` |
-| `AWAITING` · `DENIED` | 4장 1번이 정해지면 추가 |
+| `AWAITING` · `DENIED` | 그대로 (2026-11-20 반영: 승인 대기 · 거절) |
 
 `rpm` · `beforeRpm` 은 rpm 으로 주세요 (Hz × 30: 1,200 / 1,350 / 1,800).
 
@@ -100,7 +100,7 @@
 | 4 | `equipment.equipment_type` 주석 · DDL 시드 `배기팬 / 건조로 / 탱크 …` (한글) | 중앙 시드 `FAN` / `OVEN` / `BURNER` / `TANK` / `PUMP` / `CAMERA` | **있음**. 공장 관리 '설비 종류' 목록과 체크리스트 양식이 영문 코드 기준 |
 | 5 | `equipment_command.command` `FAN_HZ` / `FAN_STOP`, 값은 Hz | 중앙 `FAN_ON` / `FAN_OFF` / `FAN_RPM` / `SHUTDOWN` / `RESTART`, 값은 rpm. `result` 도 `PENDING / OK / FAIL` | 없음 (웹은 `POST /equipment/{id}/fan` 을 더는 안 부름). 셧다운 명령을 어디에 남기는지만 확인 |
 | 6 | `chat_read.last_read_msg_id` · `updated_at` | 연계 DB `last_msg_id` · `read_at` | 없음 (API 는 `lastReadMessageId`) |
-| 7 | DDL 시드 설비 코드 `TOP-OVEN` · 센서 태그 `IT-307` · `TE-305` · `AT-303` · `IR-301` | 중앙 시드 `TC-OVEN`, 태그는 같음 | 프론트 예시 데이터는 설계안 태그(`CT-17` · `TE-15` · `CO-13`)와 코드(`PNT-TOP-OVEN`)를 씀. 실제 서버에 붙으면 서버 값이 그대로 보임. 공정 배치도는 설비 코드로 그림 위치를 찾으므로(`paintLayout.js` `svgKeyOf`) **설비 코드가 확정되면 알려 주세요** |
+| 7 | DDL 시드 설비 코드 `TOP-OVEN` · 센서 태그 `IT-307` · `TE-305` · `AT-303` · `IR-301` | 중앙 시드 `TC-OVEN`, 태그는 같음 | 프론트 예시 데이터는 설계안 태그(`CT-17` · `TE-15` · `CO-13`)와 코드(`PNT-TOP-OVEN`)를 씀. 실제 서버에 붙으면 서버 값이 그대로 보임. 공정 배치도는 설비 코드로 그림 위치를 찾으므로(`paintLayout.js` `svgKeyOf`) **설비 코드가 확정되면 알려 주세요** → **2026-11-20 반영**: 실제 코드(`PT-TANK` · `ED-OVEN` · `TC-OVEN` …)로 그림을 찾음 (`backend-feedback-1120.md` 4장) |
 
 ## 6. 프론트 옛 문서에서 달라진 내용
 

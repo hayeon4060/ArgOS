@@ -3,9 +3,10 @@
  * - 배기팬이 있는 설비: 전착 건조로 · 중도 부스 · 중도 건조로 · 상도 부스 · 상도 건조로 (processData.js fansNow 와 같음)
  * - 자동/수동: 공장 관리에서 설비마다 고름 (저장값 layoutData.js edits[id].fanAuto, 처음에는 모두 자동)
  * - 알림 응답에 붙는 fanAuto 모양 (GET /alarms items, GET /alarms/{id}/response):
- *   { equipmentId, fanName, mode: 'AUTO'|'MANUAL', percent, rpm, beforeRpm, status: 'APPLIED'|'SKIPPED', at }
- *   · AUTO  → status APPLIED: percent·rpm 으로 올림
- *   · MANUAL → status SKIPPED: 바꾸지 않음 (화면은 안내만)
+ *   { equipmentId, fanName, mode: 'AUTO'|'MANUAL', percent, rpm, beforeRpm, status, commandId, at }
+ *   · AUTO   → status APPLIED: percent·rpm 으로 바로 올림
+ *   · MANUAL → status AWAITING: 담당자 승인 대기 (백엔드 API_IMPLEMENTED.md '배기팬 수동 승인')
+ *              승인하면 APPLIED(실제는 SENT → APPLIED), 거절하면 DENIED
  */
 import { editsOf } from './layoutData'
 import { FAN_AUTO_PERCENT, FAN_MAX_RPM, FAN_NORMAL_RPM } from '@/types/codes'
@@ -32,7 +33,39 @@ export const autoRpmOf = (level) => Math.round((FAN_MAX_RPM * FAN_AUTO_PERCENT[l
 export function fanAutoOf({ equipmentId, level, at }) {
   const auto = fanAutoMode(equipmentId)
   if (auto === null || !FAN_AUTO_PERCENT[level]) return null
-  const base = { equipmentId, fanName: FAN_EQUIPMENT[equipmentId], beforeRpm: FAN_RATED_RPM, at }
-  if (!auto) return { ...base, mode: 'MANUAL', percent: null, rpm: null, status: 'SKIPPED' }
-  return { ...base, mode: 'AUTO', percent: FAN_AUTO_PERCENT[level], rpm: autoRpmOf(level), status: 'APPLIED' }
+  const base = { equipmentId, fanName: FAN_EQUIPMENT[equipmentId], beforeRpm: FAN_RATED_RPM, percent: FAN_AUTO_PERCENT[level], rpm: autoRpmOf(level), at }
+  if (auto) return { ...base, mode: 'AUTO', status: 'APPLIED', commandId: null }
+  // 수동: 같은 알림(설비 + 발생 시각)이면 같은 명령 번호, 승인·거절한 뒤면 그 결과
+  const commandId = commandIdOf(equipmentId, at, base.rpm)
+  return { ...base, mode: 'MANUAL', status: decisions.get(commandId)?.status ?? 'AWAITING', commandId }
+}
+
+/* ───────── 수동 배기팬 승인 · 거절 (POST /fan-commands/{commandId}/approve · deny) ───────── */
+const commandIds = new Map() // '설비id|발생시각' → 명령 번호
+const commands = new Map() // 명령 번호 → { equipmentId, rpm(목표 회전수) }
+const decisions = new Map() // 명령 번호 → { status } (승인 · 거절한 것만)
+let nextCommandId = 8100
+
+function commandIdOf(equipmentId, at, rpm) {
+  const key = `${equipmentId}|${at}`
+  if (!commandIds.has(key)) {
+    commandIds.set(key, nextCommandId)
+    commands.set(nextCommandId, { equipmentId, rpm })
+    nextCommandId += 1
+  }
+  return commandIds.get(key)
+}
+
+/**
+ * 승인 · 거절 처리 → { data } 또는 { error } (api/equipment.js 가 성공 · 실패 응답으로 바꿈)
+ * - 예시에서는 승인하면 바로 APPLIED 로 남김 (실제는 응답 SENT → 엣지 결과 후 APPLIED)
+ * @param {number} commandId
+ * @param {boolean} approve
+ */
+export function decideFanCommand(commandId, approve) {
+  const cmd = commands.get(commandId)
+  if (!cmd) return { error: { code: 'COMMAND_NOT_FOUND', message: '없는 명령입니다.', status: 404 } }
+  if (decisions.has(commandId)) return { error: { code: 'COMMAND_NOT_AWAITING', message: '이미 처리된 승인 요청입니다.', status: 409 } }
+  decisions.set(commandId, { status: approve ? 'APPLIED' : 'DENIED' })
+  return { data: { commandId, equipmentId: cmd.equipmentId, status: approve ? 'SENT' : 'DENIED', hz: cmd.rpm / 30, rpm: cmd.rpm } }
 }

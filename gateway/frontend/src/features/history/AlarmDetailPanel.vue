@@ -12,6 +12,7 @@ import { sensorSeriesOption } from './historyCharts'
 import { HAZARD_META, SENSOR_ICON, SENSOR_LABEL, placeOf } from './historyFilter'
 import { sensorCsvBlob, sensorCsvName } from './sensorCsv'
 import { getStatsAlarmDetail } from '@/api/stats'
+import { useThermalSrc } from '@/features/equipment/useThermalSrc'
 import { saveFile } from '@/utils/saveFile'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
@@ -52,6 +53,8 @@ const hhmm = (iso) => (iso ? iso.slice(11, 16) : '')
 const LEVEL_NAME = { WARN: '주의', ALARM: '경보' }
 
 const place = computed(() => placeOf(detail.value?.location))
+// 열화상 사진 (서버 사진은 로그인이 필요해 blob: 주소로 받아 씀, 없거나 실패하면 '열화상 없음')
+const thermalSrc = useThermalSrc(() => detail.value?.thermal?.imageUrl)
 const hazard = computed(() => HAZARD_META[detail.value?.hazard] ?? null)
 const active = computed(() => detail.value && detail.value.status !== 'CLOSED')
 const cause = computed(() => {
@@ -147,8 +150,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <section class="two">
         <div>
           <h4>열화상 <small>{{ hhmm(detail.thermal?.capturedAt) }} 촬영 · {{ detail.thermal?.cameraTag }}</small></h4>
-          <div v-if="detail.thermal?.imageUrl" class="ir">
-            <img :src="detail.thermal.imageUrl" :alt="`${place.equipment} 열화상`" />
+          <div v-if="thermalSrc" class="ir">
+            <img :src="thermalSrc" :alt="`${place.equipment} 열화상`" />
             <i v-if="detail.thermal.maxPoint" class="pt" :style="{ left: `${detail.thermal.maxPoint.x * 100}%`, top: `${detail.thermal.maxPoint.y * 100}%` }" />
           </div>
           <div v-else class="ir none">열화상 없음</div>
