@@ -4,12 +4,13 @@
  * - 자동/수동: 공장 관리에서 설비마다 고름 (저장값 layoutData.js edits[id].fanAuto, 처음에는 모두 자동)
  * - 알림 응답에 붙는 fanAuto 모양 (GET /alarms items, GET /alarms/{id}/response):
  *   { equipmentId, fanName, mode: 'AUTO'|'MANUAL', percent, rpm, beforeRpm, status, commandId, at }
+ *   (직접 정한 속도 manualHz 는 서버에 요청 중이라 예시에도 없음 — 화면은 features/alert/fanManual.js 에 기억)
  *   · AUTO   → status APPLIED: percent·rpm 으로 바로 올림
  *   · MANUAL → status AWAITING: 담당자 승인 대기 (백엔드 API_IMPLEMENTED.md '배기팬 수동 승인')
  *              승인하면 APPLIED(실제는 SENT → APPLIED), 거절하면 DENIED
  */
 import { editsOf } from './layoutData'
-import { FAN_AUTO_PERCENT, FAN_MAX_RPM, FAN_NORMAL_RPM } from '@/types/codes'
+import { FAN_AUTO_PERCENT, FAN_HZ, FAN_MAX_RPM, FAN_NORMAL_RPM } from '@/types/codes'
 
 /** 배기팬이 있는 설비 id → 배기팬 이름 */
 export const FAN_EQUIPMENT = { 26: '전착 건조로 배기팬', 28: '중도 부스 배기팬', 29: '중도 건조로 배기팬', 30: '상도 부스 배기팬', 31: '상도 건조로 배기팬' }
@@ -68,4 +69,20 @@ export function decideFanCommand(commandId, approve) {
   if (decisions.has(commandId)) return { error: { code: 'COMMAND_NOT_AWAITING', message: '이미 처리된 승인 요청입니다.', status: 409 } }
   decisions.set(commandId, { status: approve ? 'APPLIED' : 'DENIED' })
   return { data: { commandId, equipmentId: cmd.equipmentId, status: approve ? 'SENT' : 'DENIED', hz: cmd.rpm / 30, rpm: cmd.rpm } }
+}
+
+/* ───────── 배기팬 속도 직접 조절 (POST /equipment/{id}/fan { hz }, 2026-11-20) ───────── */
+/**
+ * 속도 직접 조절 → { data } 또는 { error } (서버 EquipmentActionService.fan 과 같은 검사)
+ * - 예시에서는 바로 반영된 것으로 봄 (실제는 접수 202 → 엣지 결과 SSE command.result)
+ * @param {number} equipmentId 배기팬이 달린 설비 id (예시는 건조로 id 로 받음 — 실제는 fanEquipmentId)
+ * @param {number} hz
+ */
+export function setManualHz(equipmentId, hz) {
+  if (!Number.isInteger(hz) || hz < FAN_HZ.MIN || hz > FAN_HZ.MAX) {
+    return { error: { code: 'HZ_OUT_OF_RANGE', message: `주파수는 ${FAN_HZ.MIN} ~ ${FAN_HZ.MAX} Hz 사이여야 합니다.`, status: 400 } }
+  }
+  if (!FAN_EQUIPMENT[equipmentId]) return { error: { code: 'EQUIPMENT_NOT_FOUND', message: '없는 설비입니다.', status: 404 } }
+  const commandId = nextCommandId++
+  return { data: { commandId, equipmentId, status: 'PENDING' } }
 }
