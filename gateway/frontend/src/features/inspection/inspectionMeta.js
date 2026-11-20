@@ -86,8 +86,12 @@ export const PERIODS = [
   { value: 30, label: '30일' },
 ]
 
-/** 점검 관리 화면에서 쓰는 서류 양식 (팀 양식 PDF 의 F02 · F03 쪽) */
-export const PAPER_FORMS = ['F02', 'F03']
+/**
+ * 점검 관리 화면에서 쓰는 서류 양식 = F02 환기·배기설비 점검일지 하나 (팀 양식 PDF 의 F02 쪽)
+ * - 2026-11-20 재원님: 변전소(F03 수변전설비) 점검은 점검 관리에서 뺌 → 양식 고르는 칸도 없음
+ * - FORM_TYPES(위)는 수기 서류 등록(OCR)이 쓰는 공통 목록이라 F01 ~ F05 그대로 둠
+ */
+export const PAPER_FORM = 'F02'
 
 /** 스케줄 반복 */
 export const REPEATS = [

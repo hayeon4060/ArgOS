@@ -1,6 +1,6 @@
 <!--
   점검 스케줄 추가 창
-  - 칸: 날짜 · 시각, 서류 양식(F02 · F03), 설비(고른 양식에 맞는 설비만), 점검자, 반복(한 번 / 매일 / 매주 / 매월)
+  - 칸: 날짜 · 시각, 서류 양식(F02 하나라 글자로만), 설비(F02 설비만), 점검자, 반복(한 번 / 매일 / 매주 / 매월)
   - 반복이면 '횟수'(몇 번 만들지)도 받음 — 시안에는 없던 칸 (백엔드가 끝을 알아야 해서 추가)
   - 추가하면 POST /inspections/schedule → saved(만든 건 목록, 첫 날짜)
 -->
@@ -11,7 +11,7 @@ import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import SegButtons from '@/components/SegButtons.vue'
-import { FORM_LABEL, PAPER_FORMS, REPEATS } from './inspectionMeta'
+import { FORM_LABEL, PAPER_FORM, REPEATS } from './inspectionMeta'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -25,18 +25,18 @@ const emit = defineEmits(['close', 'saved'])
 /** 반복별 기본 횟수 (시안: 매일 5번 · 매주 4번 · 매월 4번) */
 const DEFAULT_COUNT = { ONCE: 1, DAILY: 5, WEEKLY: 4, MONTHLY: 4 }
 
-const f = reactive({ date: '', time: '14:00', formType: 'F02', equipmentId: null, assigneeId: null, repeat: 'ONCE', count: 1 })
+const f = reactive({ date: '', time: '14:00', formType: PAPER_FORM, equipmentId: null, assigneeId: null, repeat: 'ONCE', count: 1 })
 const opts = ref({ equipments: [], inspectors: [] })
 const saving = ref(false)
 
-/** 고른 양식에 맞는 설비만 (F02 배기팬 설비 · F03 변전소) */
+/** 이 양식(F02)을 점검하는 설비만 */
 const equipments = computed(() => opts.value.equipments.filter((e) => !e.formType || e.formType === f.formType))
 
 watch(
   () => props.open,
   async (open) => {
     if (!open) return
-    Object.assign(f, { date: props.date, time: '14:00', formType: 'F02', repeat: 'ONCE', count: 1 })
+    Object.assign(f, { date: props.date, time: '14:00', repeat: 'ONCE', count: 1 })
     try {
       opts.value = await getScheduleOptions(props.factoryId ?? undefined)
     } catch (error) {
@@ -47,11 +47,6 @@ watch(
   },
 )
 
-// 양식을 바꾸면 설비를 그 양식의 첫 설비로
-watch(
-  () => f.formType,
-  () => (f.equipmentId = equipments.value[0]?.id ?? null),
-)
 watch(
   () => f.repeat,
   (r) => (f.count = DEFAULT_COUNT[r]),
@@ -87,10 +82,8 @@ async function save() {
             <input v-model="f.time" type="time" aria-label="시각" />
           </div>
 
-          <label for="sa-form">서류 양식</label>
-          <select id="sa-form" v-model="f.formType">
-            <option v-for="t in PAPER_FORMS" :key="t" :value="t">{{ t }} {{ FORM_LABEL[t] }}</option>
-          </select>
+          <label>서류 양식</label>
+          <span class="fixed"><b class="mono">{{ f.formType }}</b> {{ FORM_LABEL[f.formType] }}</span>
 
           <label for="sa-eq">설비</label>
           <select id="sa-eq" v-model="f.equipmentId">
@@ -147,6 +140,11 @@ select {
   background: #fff;
   font-size: 13.5px;
   color: var(--color-text);
+}
+
+.fixed b {
+  font-size: 12.5px;
+  color: var(--color-primary);
 }
 
 .two {

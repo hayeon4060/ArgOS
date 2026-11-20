@@ -4,7 +4,7 @@
  * - 울산 5공장 도장 공정. 날짜는 오늘(serverNow) 기준으로 만듦 → 언제 열어도 이번 달 · 최근 7일에 데이터가 있음
  * - 규칙 (시안과 같음)
  *   · 평일마다 F02 환기·배기설비 점검일지 2건 — 도장 설비 8개를 돌아가며
- *   · 월요일마다 F03 수변전설비 점검일지 1건 — 5공장 변전소
+ *   · (변전소 F03 수변전설비 점검은 2026-11-20 재원님 요청으로 점검 관리에서 뺌)
  *   · 오늘은 주말이어도 점검을 넣음 (이력 맨 위 '오늘 점검'이 비지 않게)
  *   · 지난 건 중 몇 건은 안 함(누락), 몇 건은 불량
  * - 상태는 백엔드 InspectionService.scheduleStatus 와 같은 규칙으로 읽을 때마다 계산
@@ -25,7 +25,6 @@ const EQUIPMENTS = [
     code: `EF-${pad(i + 1)}`, // 배기팬 번호 (F02 양식의 '설비번호 EF - __')
     formType: 'F02',
   })),
-  { id: 109, name: '5공장 변전소', code: 'TR-01', formType: 'F03' },
 ]
 const INSPECTORS = [
   { id: 21, name: '김도현' },
@@ -63,7 +62,6 @@ function seed() {
       // 오늘 두 번째 건은 지금보다 2시간 뒤(늦어도 23:30)로 → 언제 열어도 '예정'으로 보이게
       ['F02', EQUIPMENTS[(k + 3) % 8], date === today ? laterToday : ['14:05', '15:20', '16:30'][k % 3], INSPECTORS[(k + 1) % 3]],
     ]
-    if (w === 1) rows.push(['F03', EQUIPMENTS[8], '09:40', INSPECTORS[3]])
     rows.forEach(([formType, eq, time, who], n) => {
       // 지난 날은 했음 / 오늘은 첫 건만 했음 / 앞날은 안 함
       const done = date < today || (date === today && n === 0)
@@ -115,8 +113,9 @@ function view(it) {
     status: statusOf(it),
     source: it.done ? it.source : null,
     result: it.done ? it.result : null,
-    inspectionId: paper ? 5000 + it.scheduleId : null, // 수기 건: 스캔 원본(ocr_result) 번호
-    scanName: paper ? scanName(it) : null,
+    // 수기 건: 스캔 원본(ocr_result) 번호 · 파일 이름 (수기 서류 등록 창에서 이은 건은 그 서류, 처음 예시 건은 5000번대)
+    inspectionId: paper ? (it.inspectionId ?? 5000 + it.scheduleId) : null,
+    scanName: paper ? (it.scanName ?? scanName(it)) : null,
     doneAt: it.doneAt,
     doneBy: it.done ? it.who.name : null,
   }
@@ -157,10 +156,9 @@ const findItem = (id) => ITEMS.find((it) => it.scheduleId === Number(id))
 /** 예시: 불량 항목 (항목 번호 → [이상 내용, 조치 내용]) · 측정값 */
 const BAD = {
   F02: { 4: ['벨트 균열', '벨트 교체'], 5: ['덕트 연결부 누설', '연결부 실링 보수'], 7: ['필터 차압 기준 초과', '필터 교체'] },
-  F03: { 5: ['접속부 과열 흔적', '볼트 재체결 후 재측정'], 7: ['접지선 부식', '접지선 교체'] },
 }
-const MEASURE = { F02: { 2: 18.2, 3: 46, 7: 118, 8: 412, 10: 3 }, F03: { 5: 52, 8: 24 } }
-const ITEM_COUNT = { F02: 12, F03: 10 }
+const MEASURE = { F02: { 2: 18.2, 3: 46, 7: 118, 8: 412, 10: 3 } }
+const ITEM_COUNT = { F02: 12 }
 
 /** 완료 건의 예시 양식 값 (키는 GET /doc-forms 의 fields.key) */
 function sampleValues(it) {
@@ -168,9 +166,7 @@ function sampleValues(it) {
   const keys = Object.keys(BAD[f]).map(Number)
   const bad = it.result === 'NG' ? keys[it.scheduleId % keys.length] : 0
   const checker = it.who.name === '정해준' ? '김도현' : '정해준'
-  const v = { inspectedAt: `${it.date}T${it.time}`, inspType: '일상', factory: '울산', equipmentNo: it.eq.code.slice(3), inspector: it.who.name, checker }
-  if (f === 'F02') v.zone = '도장'
-  else Object.assign(v, { roomName: it.eq.name, voltage: '22.9kV' })
+  const v = { inspectedAt: `${it.date}T${it.time}`, inspType: '일상', factory: '울산', zone: '도장', equipmentNo: it.eq.code.slice(3), inspector: it.who.name, checker }
   for (let n = 1; n <= ITEM_COUNT[f]; n++) {
     const no = pad(n)
     v[`item${no}`] = n === bad ? '불량' : '양호'
@@ -181,13 +177,8 @@ function sampleValues(it) {
     const due = new Date(Number(it.date.slice(0, 4)), Number(it.date.slice(5, 7)) - 1, Number(it.date.slice(8, 10)) + 7)
     Object.assign(v, { issue1No: String(bad), issue1Problem: BAD[f][bad][0], issue1Action: BAD[f][bad][1], issue1Due: ymd(due) })
   }
-  if (f === 'F02') {
-    v.verdict = bad ? '조건부 운전' : '정상 운전'
-    v.opinion = bad ? `${BAD[f][bad][0]}, 조치 후 재점검` : '이상 없음'
-  } else {
-    v.verdict = bad ? '주의' : '정상'
-    Object.assign(v, { voltR: '22,860', voltS: '22,910', voltT: '22,880', ampR: '312', ampS: '308', ampT: '315', peakKw: '9,840', loadRate: '62', powerFactor: '96', trTemp: '58', kwh: '1,284,500' })
-  }
+  v.verdict = bad ? '조건부 운전' : '정상 운전'
+  v.opinion = bad ? `${BAD[f][bad][0]}, 조치 후 재점검` : '이상 없음'
   return v
 }
 
@@ -220,4 +211,30 @@ export function createRecord({ formType, equipmentId, date, time, values, result
   ITEMS.push(it)
   VALUES[it.scheduleId] = values
   return { data: view(it) }
+}
+
+/* ───────── 수기 서류 등록(OCR) 검수 완료 → 점검 건에 잇기 (PUT /inspections/{id} 의 scheduleId) ───────── */
+/**
+ * 실제는 백엔드가 PUT /inspections/{id} (status DONE, scheduleId) 를 받을 때 함 — 예시 모드에서는 api/inspections.js 가 이어서 부름
+ * - scheduleId 가 있으면: 그 예정 · 누락 건을 '완료 · 수기'로 (스캔 원본 = 이 서류)
+ * - 없으면('연결 안 함'): 인식한 값으로 새 점검 건(완료 · 수기)을 만듦
+ * - 결과: 인식한 값에 '불량'이 하나라도 있으면 NG
+ * @param {{ scheduleId, inspectionId, fileName, formType, fields: [{ key, value }], by }} o
+ */
+export function linkScan({ scheduleId, inspectionId, fileName, formType, fields = [], by }) {
+  const now = serverNow()
+  const values = Object.fromEntries(fields.map((f) => [f.key, f.value]))
+  const result = fields.some((f) => f.value === '불량') ? 'NG' : 'OK'
+  let it = scheduleId ? findItem(scheduleId) : null
+  if (!it) {
+    // 새 점검 건: 인식한 설비번호(EF-03 · 03)가 목록에 있으면 그 설비, 없으면 '설비 미지정'
+    const code = String(values.equipmentNo ?? '').replace(/^([A-Z]+)?-?\s*/, '')
+    const eq = EQUIPMENTS.find((e) => e.code.endsWith(`-${code.padStart(2, '0')}`) && e.formType === formType) ?? { id: null, name: '설비 미지정', code: '', formType }
+    const who = INSPECTORS.find((w) => w.name === (values.inspector || by)) ?? { id: null, name: values.inspector || by || '' }
+    it = makeItem({ date: ymd(now), time: hm(now), formType, eq, who })
+    ITEMS.push(it)
+  }
+  Object.assign(it, { done: true, source: 'PAPER', result, doneAt: `${ymd(now)}T${hm(now)}:00+09:00`, inspectionId, scanName: fileName })
+  VALUES[it.scheduleId] = values
+  return view(it)
 }

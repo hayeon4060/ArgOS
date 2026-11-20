@@ -1,7 +1,8 @@
 <!--
   스캔 원본 미리보기 창 (점검 이력의 수기 줄 돋보기 버튼)
   - 실제: 올린 스캔 원본 GET /inspections/{inspectionId}/file — 그림이면 img, PDF 면 iframe
-  - 예시 모드: 스캔 파일이 없어 그 건의 양식 값을 스캔본처럼(종이 색 · 기울임 · 손글씨) 그려 보여 줌
+  - 예시 모드: F02 는 스캔 파일이 없어 그 건의 양식 값을 스캔본처럼(종이 색 · 기울임 · 손글씨) 그려 보여 줌
+    (수기 서류 등록 창에서 이은 건은 예시 원본 그림이 있어 그 그림을 보여 줌)
   - 위 '내려받기' = 이력 줄의 내려받기와 같음 (scanFile.downloadScan)
 -->
 <script setup>
@@ -12,6 +13,7 @@ import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import PaperForm from './forms/PaperForm.vue'
+import { PAPER_FORM } from './inspectionMeta'
 import { downloadScan } from './scanFile'
 
 const props = defineProps({
@@ -39,8 +41,12 @@ watch(
     if (!open || !props.item) return
     loading.value = true
     try {
-      if (USE_MOCK) values.value = (await getScheduleForm(props.item.scheduleId)).values
-      else file.value = await getInspectionFile(props.item.inspectionId)
+      file.value = await getInspectionFile(props.item.inspectionId)
+      // 예시 모드: 처음부터 있던 F02 예시 건은 스캔 그림이 없음 → 양식 값을 스캔본처럼 그림
+      if (USE_MOCK && !file.value.url && props.item.formType === PAPER_FORM) {
+        file.value = null
+        values.value = (await getScheduleForm(props.item.scheduleId)).values
+      }
     } catch (error) {
       toast(error.message, { type: 'err' })
     } finally {
@@ -65,7 +71,7 @@ onBeforeUnmount(clear)
           </div>
           <div class="body">
             <div v-if="loading" class="empty">스캔 원본을 불러오는 중…</div>
-            <PaperForm v-else-if="values" :form-type="item.formType" :values="values" :equipment-name="item.equipmentName" scan />
+            <PaperForm v-else-if="values" :values="values" :equipment-name="item.equipmentName" scan />
             <iframe v-else-if="file?.type === 'application/pdf'" :src="file.url" title="스캔 원본" class="pdf" />
             <img v-else-if="file?.url" :src="file.url" alt="스캔 원본" class="img" />
             <div v-else class="empty">스캔 원본을 찾지 못했습니다.</div>

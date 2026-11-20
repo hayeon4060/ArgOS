@@ -62,7 +62,10 @@ export async function uploadInspection(file, { formType, processId, scheduleId, 
   })
 }
 
-/** @returns {{ id, status, progress, formType, pageCount, fields: [{ key, label, value, box, needCheck, reason }], needCheckCount }} */
+/**
+ * @returns {{ id, status, progress, formType, pageCount, fields: [{ key, label, value, box, needCheck, reason }], needCheckCount, scheduleId }}
+ * - scheduleId: 백엔드가 인식 값(양식 · 설비 · 날짜)으로 맞춘 점검 건 (TODO(백엔드): 추가 요청. 없으면 화면이 직접 맞춤 — scheduleMatch.js)
+ */
 export function getInspectionOcr(id) {
   if (USE_MOCK) return reply(mock.ocr(id))
   return http.get(`/inspections/${id}/ocr`)
@@ -81,10 +84,18 @@ export async function getInspectionFile(id, page = 1) {
   return { url, type: blob.type, revoke: () => URL.revokeObjectURL(url) }
 }
 
-/** 임시 저장(status REVIEW) · 검수 완료 저장(status DONE) */
-export function saveInspection(id, body, by) {
-  if (USE_MOCK) return reply(mock.save(id, body, by))
-  return http.put(`/inspections/${id}`, body)
+/**
+ * 임시 저장(status REVIEW) · 검수 완료 저장(status DONE)
+ * - body: { status, fields, scheduleId } — scheduleId: 이 서류를 이을 점검 건 (null 이면 '연결 안 함' → 새 점검 건)
+ * - TODO(백엔드): status DONE 일 때 scheduleId 를 받아 ① 있으면 그 예정 · 누락 건을 완료 · 수기로(ocr_result.schedule_id),
+ *   ② null 이면 인식 값으로 새 점검 건(완료 · 수기)을 만들어 주세요 (docs/api/inspection-redesign-api.md 3-7)
+ */
+export async function saveInspection(id, body, by) {
+  if (!USE_MOCK) return http.put(`/inspections/${id}`, body)
+  const r = await reply(mock.save(id, body, by))
+  // 예시 모드: 백엔드가 할 '점검 건에 잇기'를 흉내
+  if (body.status === 'DONE') sched.linkScan({ ...mock.docInfo(id), scheduleId: body.scheduleId ?? null, by })
+  return r
 }
 
 /** 다시 인식 */

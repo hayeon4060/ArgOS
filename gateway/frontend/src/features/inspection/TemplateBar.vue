@@ -1,9 +1,8 @@
 <!--
   맨 위 '점검 서류 양식' 바 — 빈 양식 내려받기 (현장에서 인쇄해 손으로 쓰는 용도)
-  - F02 환기·배기설비 점검일지 · F03 수변전설비 점검일지 · 전체 받기
-  - 실제: GET /doc-forms/{formType}/template (PDF) 를 받아 바로 저장 (getFormTemplate)
+  - F02 환기·배기설비 점검일지 하나 (변전소 F03 은 2026-11-20 에 빼서 '전체 받기'도 없앰)
+  - 실제: GET /doc-forms/F02/template (PDF) 를 받아 바로 저장 (getFormTemplate, 브라우저 다운로드 폴더로)
   - 예시 모드: 파일이 없어 안내만
-  - '전체 받기'는 양식마다 차례로 받음 (저장 창 없이 브라우저 다운로드 폴더로)
 -->
 <script setup>
 import { ref } from 'vue'
@@ -12,28 +11,23 @@ import { USE_MOCK } from '@/api/mock'
 import { downloadBlob } from '@/utils/saveFile'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
-import { FORM_LABEL, PAPER_FORMS } from './inspectionMeta'
+import { FORM_LABEL, PAPER_FORM } from './inspectionMeta'
 
-const busy = ref('')
+const busy = ref(false)
+const f = PAPER_FORM
 
-/** 양식 하나 받기 */
-async function getOne(formType) {
-  const blob = await getFormTemplate(formType)
-  if (blob) downloadBlob(`ARG-${formType}_${FORM_LABEL[formType]}.pdf`, blob)
-}
-
-async function download(formType) {
+async function download() {
   if (busy.value) return
-  busy.value = formType
+  busy.value = true
   try {
-    const list = formType === 'all' ? PAPER_FORMS : [formType]
-    for (const f of list) await getOne(f)
-    const what = formType === 'all' ? `점검 서류 양식 ${list.length}종` : `${formType} ${FORM_LABEL[formType]} 빈 양식`
+    const blob = await getFormTemplate(f)
+    if (blob) downloadBlob(`ARG-${f}_${FORM_LABEL[f]}.pdf`, blob)
+    const what = `${f} ${FORM_LABEL[f]} 빈 양식`
     toast(USE_MOCK ? `${what}을 내려받았습니다. (예시 모드라 실제 파일은 없습니다)` : `${what}을 내려받았습니다.`)
   } catch (error) {
     toast(error.message, { type: 'err' })
   } finally {
-    busy.value = ''
+    busy.value = false
   }
 }
 </script>
@@ -41,13 +35,10 @@ async function download(formType) {
 <template>
   <div class="tplbar base-card">
     <h3><AppIcon name="file" :size="17" />점검 서류 양식</h3>
-    <button v-for="f in PAPER_FORMS" :key="f" type="button" class="tpl" :disabled="!!busy" @click="download(f)">
+    <button type="button" class="tpl" :disabled="busy" @click="download">
       <span class="fc mono">{{ f }}</span>{{ FORM_LABEL[f] }}<AppIcon name="download" :size="15" />
     </button>
-    <span class="gap" />
-    <button type="button" class="link" :disabled="!!busy" @click="download('all')">
-      전체 양식 한 번에 받기<AppIcon name="download" :size="14" />
-    </button>
+    <span class="hint">빈 양식을 인쇄해 현장에서 손으로 쓰고, 스캔해 아래 '서류 등록'에 올립니다.</span>
   </div>
 </template>
 
@@ -110,19 +101,10 @@ h3 svg {
   color: var(--color-primary);
 }
 
-.gap {
-  flex: 1;
-}
-
-.link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: none;
-  color: var(--color-primary);
-  font-size: 13px;
-  cursor: pointer;
+.hint {
+  margin-left: 6px;
+  font-size: 12.5px;
+  color: var(--color-text-weak);
 }
 
 button:disabled {

@@ -1,5 +1,6 @@
 /**
- * 서류 양식 F02 · F03 의 칸 정의 (팀 양식 PDF ArgOS_서류양식.pdf 의 F02 · F03 쪽 그대로)
+ * 서류 양식 F02 환기·배기설비 점검일지의 칸 정의 (팀 양식 PDF ArgOS_서류양식.pdf 의 F02 쪽 그대로)
+ * - 점검 관리 화면은 F02 한 가지만 씀 (2026-11-20 재원님: 변전소(F03 수변전설비) 점검은 점검 관리에서 뺌)
  *
  * - 양식 값(values)의 키는 GET /doc-forms 의 fields.key 와 같음
  *   → 수기 서류(OCR 인식 결과)와 전자 작성이 같은 양식 · 같은 키로 저장됨
@@ -36,22 +37,9 @@ const F02_ITEMS = [
   ['예비 팬 전환', '주 팬 정지 시 자동 전환 정상'],
 ]
 
-const F03_ITEMS = [
-  ['변압기 외관', '이상음·누유·변색 없음'],
-  ['차단기 (VCB·ACB)', '개폐 표시 정상, 이상음 없음'],
-  ['표시등·계기', '정상 지시, 경보 표시 없음'],
-  ['보호계전기', '동작 표시 없음'],
-  ['케이블 접속부', '과열·변색·손상 없음 (열화상 최고 온도)', '℃'],
-  ['절연 상태', '이상 냄새·방전음 없음'],
-  ['접지', '접지선 탈락·부식 없음'],
-  ['전기실 환경', '온도 적정, 누수·먼지·소동물 흔적 없음', '℃'],
-  ['소화설비·감지기', '비치·작동 정상'],
-  ['출입 통제', '시건 상태, 위험 표지 부착'],
-]
-
 const opts = (list) => list.map((v) => (Array.isArray(v) ? { value: v[0], label: v[1] } : { value: v, label: v }))
 
-/** 양식별 머리 · 고르는 칸 · 줄 수 */
+/** 양식 머리 · 고르는 칸 · 줄 수 (키는 양식 번호) */
 export const FORM_DEFS = {
   F02: {
     code: 'ARG-F02',
@@ -64,25 +52,13 @@ export const FORM_DEFS = {
     zones: opts(['시험 챔버', '도장', '차체 용접', '변전소', '기타']),
     verdicts: opts(['정상 운전', ['조건부 운전', '조건부 운전 (조치 후 재점검)'], '운전 중지']),
   },
-  F03: {
-    code: 'ARG-F03',
-    title: '수변전설비 점검일지',
-    sub: '변압기 · 차단기 · 수배전반',
-    eqPrefix: 'TR',
-    items: F03_ITEMS,
-    issueRows: 2,
-    inspTypes: opts(['일상', '월간', '분기']),
-    voltages: opts([['22.9kV', '22.9 kV'], ['154kV', '154 kV'], '기타']),
-    verdicts: opts(['정상', ['주의', '주의 (조치 후 재점검)'], '운전 정지 필요']),
-  },
 }
 
 /**
  * 새로 쓰는 양식의 처음 값 (점검 건의 날짜 · 시각 · 설비 · 점검자를 미리 채움)
- * @param {string} formType 'F02' | 'F03'
- * @param {{ date, time, equipmentNo, equipmentName, inspector }} base
+ * @param {{ date, time, equipmentNo, inspector }} base
  */
-export function blankValues(formType, { date, time, equipmentNo, equipmentName, inspector } = {}) {
+export function blankValues({ date, time, equipmentNo, inspector } = {}) {
   const v = {
     inspectedAt: date && time ? `${date}T${time}` : '',
     inspType: '일상',
@@ -90,10 +66,10 @@ export function blankValues(formType, { date, time, equipmentNo, equipmentName, 
     equipmentNo: equipmentNo ? equipmentNo.replace(/^[A-Z]+-/, '') : '', // 'EF-03' → '03' (양식에 'EF - ' 가 인쇄돼 있음)
     inspector: inspector ?? '',
     checker: '',
+    zone: '도장',
     verdict: '',
+    opinion: '',
   }
-  if (formType === 'F02') Object.assign(v, { zone: '도장', opinion: '' })
-  else Object.assign(v, { roomName: equipmentName ?? '', voltage: '22.9kV' })
   return v
 }
 

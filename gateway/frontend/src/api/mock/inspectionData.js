@@ -371,6 +371,12 @@ export function ocr(id) {
 }
 
 /** GET /inspections/{id}/file → 원본 그림 주소 (예시는 F01 그림 하나) */
+/** 예시 모드 전용: 서류 한 장의 이름 · 양식 · 인식 값 (검수 완료 뒤 점검 건에 잇는 데 씀) */
+export function docInfo(id) {
+  const d = find(id)
+  return d ? { inspectionId: d.id, fileName: d.fileName, formType: d.formType, fields: d.fields.map((f) => ({ key: f.key, value: f.value })) } : null
+}
+
 export function fileUrl(id) {
   return find(id)?.formType === 'F01' ? f01Scan : null
 }
@@ -398,11 +404,9 @@ export function save(id, { status, fields }, by) {
   if (status === 'DONE') {
     doc.reviewedBy = by
     doc.reviewedAt = iso(new Date())
-    // 이번 달 현황: 완료 하나 늘고 예정 하나 줄어듦 (연결된 점검 일정이 완료로)
-    SUMMARY.done += 1
-    SUMMARY.planned = Math.max(0, SUMMARY.planned - 1)
+    // 이은 점검 건을 완료 · 수기로 바꾸는 일은 api/inspections.js 가 inspectionSchedule.linkScan 으로 이어서 함
   }
-  return { data: { id: doc.id, status: doc.status, reviewedBy: doc.reviewedBy, reviewedAt: doc.reviewedAt, scheduleId: 640 } }
+  return { data: { id: doc.id, status: doc.status, reviewedBy: doc.reviewedBy, reviewedAt: doc.reviewedAt } }
 }
 
 /** POST /inspections/{id}/ocr (다시 인식: 고친 값을 지우고 처음부터) */

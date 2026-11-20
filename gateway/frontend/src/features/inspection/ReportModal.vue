@@ -1,7 +1,8 @@
 <!--
   월별 점검 보고서 창 (점검 이력 카드의 '월별 보고서')
   - 고른 달 1일 ~ 말일, 이번 달이면 1일 ~ 오늘까지만 (reportCalc.buildReport)
-  - 요약 5칸(대상 · 완료 · 예정 · 누락 · 불량), 서류 양식별 · 설비별 표, 불량 목록, 누락 목록
+  - 요약 5칸(대상 · 완료 · 예정 · 누락 · 불량), 설비별 표, 불량 목록, 누락 목록
+    (서류 양식별 표는 양식이 F02 하나뿐이라 뺌 — 2026-11-20 변전소 F03 제외)
   - 인쇄: window.print() — 아래 @media print 가 보고서 종이만 남김 (PDF 는 인쇄 창에서 'PDF 로 저장')
   - 데이터: GET /inspections/schedule?month= (달력과 같은 목록) → 별도 보고서 API 없음
 -->
@@ -104,7 +105,7 @@ function print() {
                 <div class="ptop">
                   <div>
                     <small>ArgOS 환경안전관제 · {{ scopeName || '점검 관리' }}</small>
-                    <h2>{{ monthName(ym) }} 설비 점검 보고서</h2>
+                    <h2>{{ monthName(ym) }} 환기·배기설비 점검 보고서</h2>
                   </div>
                   <span class="code mono">{{ rep.from }} ~ {{ rep.to }}</span>
                 </div>
@@ -119,45 +120,7 @@ function print() {
 
                 <div class="rcols">
                   <div>
-                    <h4><i>1</i>서류 양식별</h4>
-                    <table class="pt">
-                      <thead>
-                        <tr><th>서류 양식</th><th class="w42">대상</th><th class="w42">완료</th><th class="w42">{{ MISS }}</th><th class="w42">불량</th><th class="w84">이행</th></tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="g in rep.byForm" :key="g.key">
-                          <td>{{ g.label }}</td>
-                          <td class="num">{{ g.total }}</td>
-                          <td class="num">{{ g.done }}</td>
-                          <td class="num" :class="{ ngt: g.missed }">{{ g.missed }}</td>
-                          <td class="num" :class="{ ngt: g.ng }">{{ g.ng }}</td>
-                          <td><span class="rbar"><i class="ok" :style="{ width: pct(g.done, g.total) }" /><i class="no" :style="{ width: pct(g.missed, g.total) }" /></span></td>
-                        </tr>
-                        <tr v-if="!rep.byForm.length"><td colspan="6" class="c weak">없음</td></tr>
-                      </tbody>
-                    </table>
-
-                    <h4><i>3</i>불량 {{ rep.ngList.length }}건</h4>
-                    <table class="pt">
-                      <thead><tr><th class="w56">날짜</th><th>설비</th><th class="w64">점검자</th></tr></thead>
-                      <tbody>
-                        <tr v-for="it in rep.ngList" :key="it.scheduleId"><td class="c">{{ md(it.date) }}</td><td>{{ it.equipmentName }}</td><td class="c">{{ it.assignee }}</td></tr>
-                        <tr v-if="!rep.ngList.length"><td colspan="3" class="c weak">없음</td></tr>
-                      </tbody>
-                    </table>
-
-                    <h4><i>4</i>{{ MISS }} {{ rep.missedList.length }}건</h4>
-                    <table class="pt">
-                      <thead><tr><th class="w56">예정일</th><th>설비</th><th class="w64">점검자</th></tr></thead>
-                      <tbody>
-                        <tr v-for="it in rep.missedList" :key="it.scheduleId"><td class="c">{{ md(it.date) }}</td><td>{{ it.equipmentName }}</td><td class="c">{{ it.assignee }}</td></tr>
-                        <tr v-if="!rep.missedList.length"><td colspan="3" class="c weak">없음</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div>
-                    <h4><i>2</i>설비별</h4>
+                    <h4><i>1</i>설비별</h4>
                     <table class="pt">
                       <thead>
                         <tr><th>설비</th><th class="w42">대상</th><th class="w42">완료</th><th class="w42">{{ MISS }}</th><th class="w42">불량</th><th class="w84">이행</th></tr>
@@ -172,6 +135,26 @@ function print() {
                           <td><span class="rbar"><i class="ok" :style="{ width: pct(g.done, g.total) }" /><i class="no" :style="{ width: pct(g.missed, g.total) }" /></span></td>
                         </tr>
                         <tr v-if="!rep.byEquipment.length"><td colspan="6" class="c weak">없음</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div>
+                    <h4><i>2</i>불량 {{ rep.ngList.length }}건</h4>
+                    <table class="pt">
+                      <thead><tr><th class="w56">날짜</th><th>설비</th><th class="w64">점검자</th></tr></thead>
+                      <tbody>
+                        <tr v-for="it in rep.ngList" :key="it.scheduleId"><td class="c">{{ md(it.date) }}</td><td>{{ it.equipmentName }}</td><td class="c">{{ it.assignee }}</td></tr>
+                        <tr v-if="!rep.ngList.length"><td colspan="3" class="c weak">없음</td></tr>
+                      </tbody>
+                    </table>
+
+                    <h4><i>3</i>{{ MISS }} {{ rep.missedList.length }}건</h4>
+                    <table class="pt">
+                      <thead><tr><th class="w56">예정일</th><th>설비</th><th class="w64">점검자</th></tr></thead>
+                      <tbody>
+                        <tr v-for="it in rep.missedList" :key="it.scheduleId"><td class="c">{{ md(it.date) }}</td><td>{{ it.equipmentName }}</td><td class="c">{{ it.assignee }}</td></tr>
+                        <tr v-if="!rep.missedList.length"><td colspan="3" class="c weak">없음</td></tr>
                       </tbody>
                     </table>
                   </div>

@@ -1,8 +1,9 @@
 <!--
-  서류 양식 창 (항상 서류 양식 모양으로 보고 씀 — 팀 양식 F02 · F03 쪽 그대로)
+  서류 양식 창 (항상 서류 양식 모양으로 보고 씀 — 팀 양식 F02 환기·배기설비 점검일지 그대로)
   - 완료 건: 저장된 값이 채워진 양식 보기 (수기는 '스캔 원본 보기' 버튼도)
   - 예정 · 누락 건: 그 건의 양식 작성 — 날짜 · 시각 · 설비 · 점검자를 미리 채움
-  - item 없이 열면('점검일지 작성'): 새 양식 — 위에서 양식(F02 · F03) · 설비를 고름
+  - item 없이 열면('점검일지 작성'): 새 양식 — 위에서 설비를 고름 (양식은 F02 하나라 고르는 칸 없음)
+  - 화면 양식이 없는 서류(수기 서류 등록으로 이은 F01 등)는 양식 대신 안내 + '스캔 원본 보기'
   - 작성: 노란 칸을 눌러 적고, 네모를 눌러 V. 저장하면 그 건이 완료(전자)로 바뀌고 이력에 반영 (saved)
   - 결과(양호 · 불량)는 양식에서 계산: 점검 항목에 불량이 하나라도 있으면 불량 (formDefs.resultOf)
   - 본사 관리자는 열람만 (작성 칸 없이 보기)
@@ -14,11 +15,10 @@ import { serverNow } from '@/api/clock'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
-import SegButtons from '@/components/SegButtons.vue'
 import InspBadge from './InspBadge.vue'
 import PaperForm from './forms/PaperForm.vue'
 import { blankValues, missingOf, resultOf } from './forms/formDefs'
-import { FORM_LABEL, PAPER_FORMS, RESULT, SOURCE, ymd } from './inspectionMeta'
+import { FORM_LABEL, PAPER_FORM, RESULT, SOURCE, ymd } from './inspectionMeta'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -33,7 +33,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved', 'scan'])
 
 const values = ref({})
-const formType = ref('F02')
+const formType = ref(PAPER_FORM)
 const source = ref(null)
 const loading = ref(false)
 const saving = ref(false)
@@ -48,7 +48,8 @@ const isNew = computed(() => !props.item)
 const pickable = computed(() => equipments.value.filter((e) => e.formType === formType.value))
 const equipment = computed(() => (isNew.value ? equipments.value.find((e) => e.id === equipmentId.value) : null))
 const eqName = computed(() => props.item?.equipmentName ?? equipment.value?.name ?? '')
-const formOptions = PAPER_FORMS.map((f) => ({ value: f, label: f }))
+/** 화면에 그릴 수 있는 양식인지 (F02 만) */
+const hasPaper = computed(() => formType.value === PAPER_FORM)
 
 watch(
   () => props.open,
@@ -62,7 +63,7 @@ async function start() {
   formType.value = props.item.formType
   if (!viewing.value) {
     const it = props.item
-    values.value = blankValues(it.formType, { date: it.date, time: it.time, equipmentNo: it.equipmentNo, equipmentName: it.equipmentName, inspector: it.assignee })
+    values.value = blankValues({ date: it.date, time: it.time, equipmentNo: it.equipmentNo, inspector: it.assignee })
     return
   }
   loading.value = true
@@ -79,7 +80,7 @@ async function start() {
 
 /** 새 양식: 설비 목록을 받고 지금 시각 · 내 이름으로 채움 */
 async function startNew() {
-  formType.value = 'F02'
+  formType.value = PAPER_FORM
   try {
     equipments.value = (await getScheduleOptions(props.factoryId ?? undefined)).equipments
   } catch (error) {
@@ -97,7 +98,7 @@ function fillNew() {
   const now = serverNow()
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const e = equipment.value
-  values.value = blankValues(formType.value, { date: ymd(now), time: hm, equipmentNo: e?.code, equipmentName: e?.name, inspector: props.myName })
+  values.value = blankValues({ date: ymd(now), time: hm, equipmentNo: e?.code, inspector: props.myName })
 }
 
 async function save() {
@@ -137,7 +138,6 @@ async function save() {
             <InspBadge v-else-if="editable" tone="plan">새로 작성</InspBadge>
             <!-- 새 양식: 양식 · 설비 고르기 -->
             <template v-if="isNew">
-              <SegButtons v-model="formType" :options="formOptions" small @update:model-value="pickFirst" />
               <select v-model="equipmentId" class="eq" aria-label="설비" @change="fillNew">
                 <option v-for="e in pickable" :key="e.id" :value="e.id">{{ e.name }} ({{ e.code }})</option>
               </select>
@@ -148,7 +148,10 @@ async function save() {
 
           <div class="paperwrap">
             <div v-if="loading" class="empty">양식을 불러오는 중…</div>
-            <PaperForm v-else :form-type="formType" :values="values" :edit="editable" :equipment-name="eqName" />
+            <PaperForm v-else-if="hasPaper" :values="values" :edit="editable" :equipment-name="eqName" />
+            <div v-else class="empty">
+              {{ formType }} {{ FORM_LABEL[formType] }} 는 화면 양식이 없습니다.<br />아래 '스캔 원본 보기'로 원본을 확인하세요.
+            </div>
           </div>
 
           <div class="mf">

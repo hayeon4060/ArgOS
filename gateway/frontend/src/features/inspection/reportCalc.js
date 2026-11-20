@@ -3,10 +3,11 @@
  *
  * - 기간: 그 달 1일 ~ 말일. 이번 달이면 1일 ~ 오늘까지만
  * - 요약: 점검 대상 · 완료 · 예정 · 누락 · 불량
- * - 서류 양식별 · 설비별 표: 대상 · 완료 · 누락 · 불량 · 이행 막대(완료 초록 · 누락 빨강)
+ * - 설비별 표: 대상 · 완료 · 누락 · 불량 · 이행 막대(완료 초록 · 누락 빨강)
+ *   (양식이 F02 하나라 서류 양식별 표는 없음)
  * - 불량 목록 · 누락 목록
  */
-import { FORM_LABEL, countStates } from './inspectionMeta'
+import { countStates } from './inspectionMeta'
 
 /** 'YYYY-MM' 의 말일 'YYYY-MM-DD' */
 const lastDay = (ym) => {
@@ -49,11 +50,6 @@ export function buildReport(items, month, today) {
     partial: to !== end, // 이번 달이라 오늘까지만
     future, // 아직 시작하지 않은 달
     sum: sumUp(list),
-    byForm: groupBy(
-      [...list].sort((a, b) => a.formType.localeCompare(b.formType)),
-      (it) => it.formType,
-      (it) => `${it.formType} ${FORM_LABEL[it.formType].replace(' 점검일지', '')}`, // 표 칸이 좁아 'F02 환기·배기설비' 까지만
-    ),
     byEquipment: groupBy(
       [...list].sort((a, b) => a.equipmentId - b.equipmentId),
       (it) => it.equipmentId,

@@ -5,21 +5,26 @@
   - 열 때 file 이 있으면(서류 등록 카드에 끌어다 놓은 파일) 바로 올림
   - 창을 닫으면 2초 확인 타이머 · 원본 그림 주소를 정리 → 다시 열면 처음부터
   - 저장 · 올리기가 있었으면 닫을 때 changed → 화면이 점검 이력을 다시 불러옴
+  - 추가(2026-11-20): 인식이 끝나면 '점검 건 연결' 줄(ScheduleLinkBar) — 인식 값으로 맞는 예정 · 누락 건을 추천,
+    사용자가 바꿀 수 있음. 검수 완료 저장 때 같이 보내 그 건이 '완료 · 수기'로 바뀜 (없으면 새 이력)
   - 본사 관리자는 열람만 (화면설계서 E1)
 -->
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { USE_MOCK } from '@/api/mock'
-import { getDocForms, getInspections } from '@/api/inspections'
+import { getDocForms, getInspections, getSchedule } from '@/api/inspections'
+import { serverNow } from '@/api/clock'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import InspectionListModal from './InspectionListModal.vue'
 import OcrFields from './OcrFields.vue'
 import ScanViewer from './ScanViewer.vue'
+import ScheduleLinkBar from './ScheduleLinkBar.vue'
 import StepBar from './StepBar.vue'
 import UploadQueue from './UploadQueue.vue'
-import { FORM_LABEL, SAMPLE_FORM } from './inspectionMeta'
+import { FORM_LABEL, SAMPLE_FORM, addDays, ymd } from './inspectionMeta'
+import { suggestSchedule } from './scheduleMatch'
 import { useOcrDoc } from './useOcrDoc'
 
 const props = defineProps({
@@ -64,6 +69,39 @@ const fieldMode = computed(() => {
   if (viewMode.value === 'empty') return 'empty'
   return { UPLOADING: 'wait', RECOGNIZING: 'wait', FAILED: 'fail', DONE: 'saved' }[doc.status] ?? 'review'
 })
+
+/* ───────── 점검 건 연결 (스캔본 ↔ 점검 건) ───────── */
+const candidates = ref([]) // 오늘 포함 최근 7일의 예정 · 누락 건
+const linkId = ref(null) // 고른 건 (null = 연결 안 함)
+const linked = ref('') // 저장 뒤 이은 결과 문구
+const suggested = computed(() => suggestSchedule(candidates.value, { formType: doc.formType, fields: doc.fields, scheduleId: doc.scheduleId }))
+/** 인식이 끝나 원본 대조 중일 때만 보임 (저장한 뒤에는 이은 결과 문구) */
+const showLink = computed(() => fieldMode.value === 'review' || !!linked.value)
+
+async function loadCandidates() {
+  const today = ymd(serverNow())
+  try {
+    const list = await getSchedule({ from: addDays(today, -6), to: today })
+    candidates.value = list.filter((it) => it.status !== 'DONE').sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))
+  } catch (error) {
+    toast(error.message, { type: 'err' })
+  }
+}
+
+// 다른 서류를 열거나 인식이 끝나면(REVIEW) 추천 건으로 다시 고름 (저장해 DONE 이 될 때는 그대로 둠)
+watch(
+  () => [doc.id, doc.status],
+  ([id, status], [oldId]) => {
+    if (id === oldId && status !== 'REVIEW') return
+    linkId.value = suggested.value
+    linked.value = ''
+  },
+)
+
+const nameOf = (id) => {
+  const c = candidates.value.find((x) => x.scheduleId === id)
+  return c ? `${c.date.slice(5)} ${c.time} ${c.equipmentName}` : ''
+}
 
 /** 등록 목록: 올리는 중인 파일은 서버 목록에 아직 없어 맨 위에 임시 줄 */
 const queueRows = computed(() =>
@@ -125,10 +163,15 @@ watch(
 /** 저장 (임시 저장 REVIEW · 검수 완료 DONE) */
 async function save(status) {
   try {
-    await ocr.save(status, props.myName)
+    const link = linkId.value
+    await ocr.save(status, props.myName, link)
     changed = true
     if (status === 'REVIEW') toast('임시 저장했습니다. 등록 목록에서 이어서 검수할 수 있습니다.')
-    else toast(`${FORM_LABEL[doc.formType]}를 저장했습니다.`)
+    else {
+      linked.value = link ? `'${nameOf(link)}' 점검 건을 완료 · 수기로 바꿨습니다.` : '연결할 점검 건 없이 새 점검 이력(완료 · 수기)으로 저장했습니다.'
+      toast(`${FORM_LABEL[doc.formType]}를 저장했습니다. ${linked.value}`)
+      loadCandidates()
+    }
     loadRows()
   } catch (error) {
     toast(error.message, { type: 'err' })
@@ -174,7 +217,7 @@ async function start() {
   } catch (error) {
     toast(error.message, { type: 'err' })
   }
-  await loadRows()
+  await Promise.all([loadRows(), loadCandidates()])
   if (props.file) upload(props.file)
   else {
     // 파일 없이 열면: 검수 중인 서류를 열어 둠 (예전 화면과 같음)
@@ -220,6 +263,8 @@ function close() {
             </span>
             <button type="button" class="m-close" aria-label="닫기" @click="close"><AppIcon name="x" /></button>
           </header>
+
+          <ScheduleLinkBar v-if="showLink" v-model="linkId" :candidates="candidates" :suggested="suggested" :disabled="readOnly" :linked="linked" />
 
           <div class="body">
             <ScanViewer
