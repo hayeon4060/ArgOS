@@ -50,7 +50,12 @@ export function sendChecklist({ alarmId, templateId, assigneeId, items, sentBy }
   return http.post('/checklists', { alarmId, templateId, assigneeId, items })
 }
 
-/** 진행 중 체크리스트 목록 (상단 바) */
+/**
+ * 진행 중 체크리스트 목록 (상단 바 · 공정 화면 칩)
+ * - 서버 줄 모양: { id, alarmId, status, level, equipmentName, sensorTag, assignee: { id, name }, doneCount, totalCount, sentAt }
+ *   항목(items)과 설비 번호(equipmentId)는 없음 → 화면은 doneCount · totalCount 를 쓰고, 설비는 알림 목록에서 찾음 (stores/alert.js)
+ * - TODO(백엔드): 줄에 equipmentId · processId 추가 요청 → docs/api/frontend-api-audit-1120.md 3장
+ */
 export function getActiveChecklists({ factoryId } = {}) {
   if (USE_MOCK) {
     const c = activeChecklist()

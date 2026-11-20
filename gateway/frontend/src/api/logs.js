@@ -2,8 +2,8 @@
  * 이용 로그 API (API 명세서 G2, 화면설계서 G2)
  * - GET /logs        : 표 + 유형별 건수 + 시간대별 이용을 한 번에
  * - GET /logs/export : 같은 조건의 CSV (내려받은 것도 로그에 남음)
- * - 백엔드는 activity_log 를 쓰기만 하고(common/ActivityLogger) 읽는 API 는 아직 없음 → 명세서 기준 (backend-notes 16장)
- * - 유형(type)은 화면의 한 칸이 여러 코드일 수 있어 쉼표로 이어 보냄 ('LOGIN,LOGOUT') — 명세서는 하나라 가정
+ * - 백엔드 log/LogController (activity_log + 로그인 기록 login_history). from · to 는 필수
+ * - 유형(type)은 화면의 한 칸이 여러 코드일 수 있어 쉼표로 이어 보냄 ('LOGIN,LOGOUT') — 서버도 쉼표로 받음
  */
 import http from './http'
 import { USE_MOCK, mockOk } from './mock'

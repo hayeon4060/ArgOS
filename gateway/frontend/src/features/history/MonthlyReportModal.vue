@@ -3,7 +3,8 @@
   - 왼쪽: 달 목록 (지난달까지, 이번 달은 '작성 중' — 누르면 '…일에 발행됩니다')
   - 오른쪽: 보고서 첫 쪽 미리보기 (요약 4칸, 공장별 안전 등급, 주요 경보)
   - 공장별 등급(A·B·C)은 대시보드에 없고 이 보고서에만 나옴 (설계안 안내 문구)
-  - PDF 내려받기: 명세서 GET /reports/monthly — 백엔드에 아직 없어 예시 모드에서는 안내만 (backend-notes 12장)
+  - PDF 내려받기: GET /reports/monthly?factoryId=&month= (백엔드 ReportController, factoryId 필수). 예시 모드에서는 안내만
+  - 미리보기 내용 · 고를 수 있는 달 목록은 서버 API 가 없어 실제 서버에서도 예시 값 (docs/api/frontend-api-audit-1120.md 5장)
 -->
 <script setup>
 import { ref, watch } from 'vue'
@@ -54,6 +55,11 @@ async function select(m) {
 }
 
 async function download() {
+  // 서버는 공장 하나의 보고서만 만듦 (factoryId 없으면 400) → 조건 줄에서 공장을 먼저 고르게 안내
+  if (!props.factoryId) {
+    toast('조건 줄에서 공장을 먼저 골라 주세요. 월별 보고서는 공장별로 내려받습니다.', { type: 'info' })
+    return
+  }
   busy.value = true
   try {
     const blob = await downloadMonthlyReport({ month: month.value, factoryId: props.factoryId })

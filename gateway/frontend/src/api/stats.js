@@ -7,11 +7,12 @@
  * - GET /stats/alarms/{id}: 알림 상세 패널 (센서 3종 시계열·열화상·조치 이력·체크리스트, 새 API)
  * - GET /stats/export     : 알림 이력 상세 CSV (열 추가 요청)
  * - 새로 바뀐 API 는 docs/stats-history-api.md 에 정리
- * - GET /reports/monthly  : 월별 보고서 PDF (명세서에만 있음, 백엔드 아직 없음)
+ * - GET /reports/monthly  : 월별 보고서 PDF (백엔드 ReportController, factoryId · month 필수)
  *
  * 조건(criteria) 모양: { from, to ('YYYY-MM-DD'), siteId, factoryId, processId, sensorType, level, shift } (+ 표는 hazard)
  * - 빈 값('' · null)은 보내지 않음
- * - siteId 는 백엔드가 아직 받지 않음 (backend-notes 12장) — 예시 데이터는 사업장으로 거름
+ * - siteId 는 표(/stats/alarms) · 내보내기(/stats/export)만 받음. 요약 · 추이 · 공정별은 아직 안 받아 무시됨
+ *   TODO(백엔드): 세 API 도 siteId 를 받게 → docs/api/frontend-api-audit-1120.md 4장
  */
 import http from './http'
 import { historyDetail } from './mock/historyDetail'
@@ -104,7 +105,7 @@ export function getMonthlyReport(month) {
   return mockOk(monthlyReport(month))
 }
 
-/** 월별 보고서 PDF → Blob (명세서 GET /reports/monthly, 백엔드 아직 없음) */
+/** 월별 보고서 PDF → Blob (GET /reports/monthly — factoryId 가 없으면 서버가 400) */
 export function downloadMonthlyReport({ month, factoryId }) {
   if (USE_MOCK) return mockFail({ code: 'NOT_READY', message: '예시 데이터에는 PDF 파일이 없습니다. 백엔드 연결 후 내려받을 수 있습니다.', status: 400 })
   return http.get('/reports/monthly', { params: clean({ month, factoryId }), responseType: 'blob' })

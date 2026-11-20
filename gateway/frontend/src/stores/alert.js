@@ -58,8 +58,12 @@ export const useAlertStore = defineStore('alert', () => {
   /** 알림의 공정 이름 ('도장 공정') — 체크리스트 진행 칸·창 (체크리스트 응답에는 공정 번호만 있음) */
   const processNameOf = (alarmId) => placeOf(activeAlarms.value.find((a) => a.id === alarmId)).processName
 
-  /** 설비의 진행 중 체크리스트 (공정 화면 칩, 설비 상세 배지) */
-  const checklistOfEquipment = (equipmentId) => checklists.value.find((c) => c.equipmentId === equipmentId) ?? null
+  /**
+   * 설비의 진행 중 체크리스트 (공정 화면 칩, 설비 상세 배지)
+   * - 서버 목록 줄에는 equipmentId 가 없어서, 없으면 그 체크리스트의 알림(alarmId)에서 설비를 찾음
+   */
+  const equipmentOfChecklist = (c) => c.equipmentId ?? activeAlarms.value.find((a) => a.id === c.alarmId)?.equipmentId
+  const checklistOfEquipment = (equipmentId) => checklists.value.find((c) => equipmentOfChecklist(c) === equipmentId) ?? null
 
   function open(type, ids = {}) {
     modal.value = { type, ...ids }

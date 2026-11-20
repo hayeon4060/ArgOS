@@ -1,7 +1,8 @@
 /**
  * 상단 바 숫자 API (설계 자료 API 명세서 I1 '상단 바')
  * - GET /notifications/summary : 알림 벨·채팅 아이콘·체크리스트 진행 표시에 쓰는 숫자
- * - TODO: 실시간(SSE) 연결 후에는 처음 한 번만 부르고 숫자는 SSE 로 갱신
+ * - 화면은 unackedAlarmCount 만 씀 (채팅 숫자는 stores/chat.js 대화방 합계, 화재는 알림 목록 · GET /fires)
+ * - 서버는 unreadChatCount 0 · activeFire null 고정 (TODO(백엔드): docs/api/frontend-api-audit-1120.md 2장)
  */
 import http from './http'
 import { USE_MOCK, mockOk } from './mock'

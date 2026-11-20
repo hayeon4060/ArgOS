@@ -111,6 +111,12 @@ router.beforeEach((to) => {
     auth.logout({ callServer: false })
   }
 
+  // 0-2) 비밀번호를 먼저 바꿔야 하는 계정이 바꾸지 않은 채(변경 창에서 새로고침 등) 다른 화면으로 가려 하면
+  //      로그인 정보를 지워 다시 로그인하게 함 (그대로 두면 서버가 모든 API 를 403 으로 막아 빈 화면만 보임)
+  if (auth.isLoggedIn && auth.pwResetRequired) {
+    auth.logout({ callServer: false })
+  }
+
   // 0-1) 로그인 유지 시간(13시간)이 지났으면 로그아웃 후 로그인 화면에 안내
   //      (화면을 켜 둔 채 지난 경우는 상단 바 SessionTimer 가 처리, 여기서는 새로고침·주소 이동 때)
   //      callServer: false → 로그인 정보를 바로(기다리지 않고) 지움.

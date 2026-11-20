@@ -142,6 +142,15 @@ async function onConfirm() {
     clearToasts()
     toast('조치를 확인했습니다. 주의가 해제되었습니다.')
   } catch (error) {
+    if (error.code === 'VALUE_STILL_OVER') {
+      // 서버: 체크리스트는 확인됐고, 값이 아직 기준 위라 알림만 열려 있음 (409, ChecklistService.confirm)
+      // → 실패가 아니므로 창을 닫고 안내. 값이 기준 아래로 내려오면 서버가 알림을 자동으로 종료함
+      alert.close()
+      clearToasts()
+      toast('조치를 확인했습니다. 값이 아직 기준 위라 알림은 열려 있고, 기준 아래로 내려오면 자동으로 해제됩니다.', { type: 'warn', ms: 8000 })
+      alert.refresh()
+      return
+    }
     toast(error.message, { type: 'err' })
   } finally {
     busy.value = false

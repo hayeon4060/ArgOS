@@ -85,7 +85,8 @@ const levelClass = (lv) => (lv === 'ALARM' || lv === 'FIRE' ? 'dng' : 'warn')
             <span v-if="m.alarm" class="alc" :class="levelClass(m.alarm.level)">
               <AppIcon :name="levelClass(m.alarm.level) === 'dng' ? 'alert' : 'tri'" :size="16" />
               <span>
-                <b>{{ m.alarm.title }} · {{ m.alarm.equipmentName }}</b>
+                <!-- 지워진 알림이면 서버가 설비 이름 없이 '알림 #번호'만 줌 -->
+                <b>{{ [m.alarm.title, m.alarm.equipmentName].filter(Boolean).join(' · ') }}</b>
                 <small v-if="m.alarm.sensorTag" class="mono">{{ m.alarm.sensorTag }} {{ m.alarm.value }} {{ m.alarm.unit }}</small>
               </span>
             </span>
