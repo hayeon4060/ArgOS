@@ -7,7 +7,7 @@
 <script setup>
 import FactoryRow from './FactoryRow.vue'
 import StageCounts from './StageCounts.vue'
-import { keyOf } from './stages'
+import { STAGES, keyOf } from './stages'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 
@@ -60,8 +60,12 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
         <div class="th">
           <span>공장</span>
           <span>공정별 단계</span>
-          <span>센서 단계 (정상 · 주의 · 경보)</span>
-          <span>오늘 알림</span>
+          <span>센서 단계</span>
+          <!-- 정상·주의·경보 숫자 칸마다 머리글 (색 점 + 이름) -->
+          <span v-for="s in STAGES" :key="s.level" class="r">
+            <i :style="{ background: s.color }" />{{ s.label }}
+          </span>
+          <span class="r">오늘 알림</span>
         </div>
         <p v-if="tree?.loading" class="state">불러오는 중</p>
         <p v-else-if="tree?.error" class="state error">{{ tree.error }}</p>
@@ -188,28 +192,45 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
   grid-template-rows: 1fr;
 }
 
+/*
+ * 공장 표 칸 너비 (머리줄 .th 와 FactoryRow 가 같이 씀)
+ * 공장 | 공정별 단계 | 센서 막대 | 정상 | 주의 | 경보 | 오늘 알림
+ * - 남는 폭은 공장 : 공정 : 막대 = 1 : 1.25 : 0.7 로 나눠서, 공정 칩 뒤나 막대만 길어지지 않게 함
+ * - 숫자 3칸·오늘 알림은 고정 폭 (오른쪽 정렬로 머리글과 줄 맞춤)
+ */
 .table {
+  --factory-cols: minmax(140px, 1fr) minmax(240px, 1.25fr) minmax(120px, 0.7fr) 48px 48px 48px 64px;
   min-height: 0;
   overflow: hidden;
 }
 
-/* 칸 너비는 FactoryRow 와 같아야 함 */
 .th {
   height: 34px;
   display: grid;
-  grid-template-columns: 190px 1fr 330px 80px;
+  grid-template-columns: var(--factory-cols);
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 0 16px 0 44px;
   background: var(--color-surface-sub);
   border-top: 1px solid var(--color-border);
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-weak);
+  white-space: nowrap;
 }
 
-.th span:last-child {
-  text-align: right;
+/* 숫자 칸 머리글: 오른쪽 정렬 + 색 점 */
+.th .r {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.th .r i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
 }
 
 .state {

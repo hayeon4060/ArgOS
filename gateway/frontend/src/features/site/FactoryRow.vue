@@ -1,5 +1,6 @@
 <!--
-  사업장 목록의 공장 한 줄: 공장 이름 | 공정별 단계 칩 | 센서 단계 막대·개수 | 오늘 알림
+  사업장 목록의 공장 한 줄: 공장 이름 | 공정별 단계 칩 | 센서 단계 막대 | 정상 | 주의 | 경보 | 오늘 알림
+  - 칸 너비는 SiteListItem 의 .table 에 있는 --factory-cols 를 같이 씀 (머리줄과 항상 같은 칸)
   - link: 들어갈 수 있는 공장이면 누를 수 있게 표시하고, 누르면 enter 이벤트
 -->
 <script setup>
@@ -39,25 +40,24 @@ function onEnter() {
       </em>
     </span>
 
-    <span class="stages">
-      <StageBar :counts="factory.counts" />
-      <b class="mono">{{ factory.counts[LEVEL.NORMAL] }}</b>
-      <b class="mono" :class="{ 'is-warn': factory.counts[LEVEL.WARN] }">{{ factory.counts[LEVEL.WARN] }}</b>
-      <b class="mono" :class="{ 'is-alarm': factory.counts[LEVEL.ALARM] }">{{ factory.counts[LEVEL.ALARM] }}</b>
-    </span>
+    <!-- 센서 단계: 막대 한 칸 + 숫자 3칸 (숫자마다 머리글이 따로 있음). 0은 흐리게 -->
+    <StageBar :counts="factory.counts" />
+    <b class="mono num" :class="{ zero: !factory.counts[LEVEL.NORMAL] }">{{ factory.counts[LEVEL.NORMAL] }}</b>
+    <b class="mono num" :class="factory.counts[LEVEL.WARN] ? 'is-warn' : 'zero'">{{ factory.counts[LEVEL.WARN] }}</b>
+    <b class="mono num" :class="factory.counts[LEVEL.ALARM] ? 'is-alarm' : 'zero'">{{ factory.counts[LEVEL.ALARM] }}</b>
 
-    <span class="mono alarms">{{ factory.todayAlarmCount }}건</span>
+    <span class="mono alarms" :class="{ zero: !factory.todayAlarmCount }">{{ factory.todayAlarmCount }}<small>건</small></span>
   </div>
 </template>
 
 <style scoped>
-/* 칸 너비는 SiteListItem 의 머리줄(th)과 같아야 함 */
+/* 칸 너비: SiteListItem 의 --factory-cols (머리줄과 같은 값) */
 .factory-row {
   height: 46px;
   display: grid;
-  grid-template-columns: 190px 1fr 330px 80px;
+  grid-template-columns: var(--factory-cols);
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 0 16px 0 44px;
   border-top: 1px solid #f1f5f9;
   font-size: 14px;
@@ -146,31 +146,42 @@ em.is-fire i {
   background: var(--color-level-alarm);
 }
 
-.stages {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stages b {
-  width: 26px;
+/* 숫자 칸: 머리글과 같이 오른쪽 정렬 */
+.num {
   text-align: right;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-sub);
 }
 
-.stages b.is-warn {
+/* 0 은 흐리게 → 주의·경보가 있는 칸만 눈에 들어옴 */
+.num.zero,
+.alarms.zero,
+.alarms.zero small {
+  color: #cbd5e1;
+}
+
+.num.is-warn {
   color: var(--color-level-warn-text);
 }
 
-.stages b.is-alarm {
+.num.is-alarm {
   color: var(--color-level-alarm-text);
 }
 
 .alarms {
   text-align: right;
   font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-sub);
+}
+
+/* '건' 은 숫자보다 작고 흐리게 */
+.alarms small {
+  margin-left: 1px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-weak);
 }
 </style>
