@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte.argos.factory.common.api.ApiException;
 import com.gte.argos.factory.common.time.DemoClock;
+import com.gte.argos.factory.kafka.EdgeCommandPublisher;
+import com.gte.argos.factory.kafka.EdgeMessages;
+import com.gte.argos.factory.kafka.EdgeMessages.EdgeResult;
 import com.gte.argos.factory.live.LiveFeed;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -17,6 +20,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -37,12 +41,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *        DUPLICATE: 같은 설비에 같은 명령·값이 아직 PENDING 이면 실행하지 않고 기록만
  *
  * 연계 서버 → POST /internal/equipment/{id}/commands → 허용 목록·상태 검사 → equipment_command 기록 (PENDING)
- *   → 설비 응답 (지금은 시뮬레이션: 팬 1초, 셧다운 3초 뒤 완료) → result DONE, equipment.run_state·fan_rpm 반영
- *   → 피드 COMMAND_RESULT (SENT → DONE · FAILED · EXPIRED · CANCELLED)
+ *   → 설비 응답 → result DONE, equipment.run_state·fan_rpm 반영
+ *   → 피드 COMMAND_RESULT (SENT → DONE · FAILED · EXPIRED · CANCELLED · REJECTED)
+ *
+ * 설비 응답
+ *   Kafka 켜짐(argos.kafka.enabled=true): FAN_HZ · FAN_STOP 은 엣지로 보내고(argos.edge.cmd) 엣지 결과
+ *     (argos.edge.cmd.result, 약 5초 뒤)로 끝낸다 → applyEdgeResult. 15초 안에 결과가 없으면 FAILED.
+ *     실제 인버터는 36 ED-FAN 하나 (다른 팬은 엣지가 REJECTED)
+ *   그 밖: 시뮬레이션 (팬 1초, 셧다운·재가동 3초 뒤 완료). 셧다운·재가동은 엣지 명세에 없어서 항상 시뮬레이션
  * </pre>
  *
- * 실제 설비가 없으므로 응답은 시뮬레이션이다. 센서값을 바꾸지는 않는다 (값 회복은 봇에 직접 명령).
- * TODO(Redis): DAS 설계가 나오면 여기서 봇(미니 PC)에 명령을 전달하고, 봇 응답으로 완료 처리한다.
+ * 센서값을 바꾸지는 않는다 (값 회복은 봇에 직접 명령).
  */
 @Service
 public class EquipmentCommandService {
@@ -63,6 +72,10 @@ public class EquipmentCommandService {
     public static final int RPM_PER_HZ = 30;
     /** 이 시간 안에 설비가 응답하지 않으면 만료 */
     static final Duration EXPIRES_IN = Duration.ofSeconds(30);
+    /** 엣지가 이 시간 안에 결과를 보내지 않으면 FAILED (엣지는 인버터에 쓰고 5초 뒤 결과를 보낸다) */
+    static final Duration EDGE_TIMEOUT = Duration.ofSeconds(15);
+    /** 엣지 결과 값 (argos.edge.cmd.result result) */
+    static final List<String> EDGE_RESULTS = List.of("DONE", "FAILED", "REJECTED", "EXPIRED", "DUPLICATE");
 
     private static final Logger log = LoggerFactory.getLogger(EquipmentCommandService.class);
 
@@ -70,6 +83,8 @@ public class EquipmentCommandService {
     private final DemoClock clock;
     private final LiveFeed feed;
     private final ObjectMapper json;
+    /** 엣지 Kafka (꺼져 있으면 null → 시뮬레이션) */
+    private EdgeCommandPublisher edge;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "equipment-command");
         t.setDaemon(true);
@@ -81,6 +96,11 @@ public class EquipmentCommandService {
         this.clock = clock;
         this.feed = feed;
         this.json = json;
+    }
+
+    @Autowired(required = false)
+    void setEdge(EdgeCommandPublisher edge) {
+        this.edge = edge;
     }
 
     /** 사람이 화면에서 보낸 명령 */
@@ -99,8 +119,8 @@ public class EquipmentCommandService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "source 는 USER · AUTO · RECOVERY 중 하나입니다.");
         }
         List<EquipmentRow> rows = jdbc.query(
-                "SELECT equipment_id, equipment_type, run_state, fan_rpm FROM equipment WHERE equipment_id = ? AND is_active",
-                (rs, i) -> new EquipmentRow(rs.getLong("equipment_id"), rs.getString("equipment_type"),
+                "SELECT equipment_id, code, equipment_type, run_state, fan_rpm FROM equipment WHERE equipment_id = ? AND is_active",
+                (rs, i) -> new EquipmentRow(rs.getLong("equipment_id"), rs.getString("code"), rs.getString("equipment_type"),
                         rs.getString("run_state"), rs.getObject("fan_rpm", Integer.class)), equipmentId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("EQUIPMENT_NOT_FOUND", "없는 설비입니다.");
@@ -148,9 +168,14 @@ public class EquipmentCommandService {
         }
         publish(commandId, equipmentId, command, v, "SENT", runState, eq.fanRpm(), now);
 
-        long delayMs = SHUTDOWN.equals(command) || RESTART.equals(command) ? 3_000 : 1_000;
-        afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, command, v),
-                delayMs, TimeUnit.MILLISECONDS));
+        if (fanCommand && edge != null) {
+            String code = eq.code();
+            afterCommit(() -> scheduler.execute(() -> dispatch(commandId, equipmentId, code, command, v, source)));
+        } else {
+            long delayMs = SHUTDOWN.equals(command) || RESTART.equals(command) ? 3_000 : 1_000;
+            afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, command, v),
+                    delayMs, TimeUnit.MILLISECONDS));
+        }
         return new CommandResult(commandId, equipmentId, command, "SENT", runState, eq.fanRpm(), v, source);
     }
 
@@ -214,9 +239,9 @@ public class EquipmentCommandService {
         Map<String, Object> c = awaiting(commandId);
         long equipmentId = ((Number) c.get("equipment_id")).longValue();
         Double value = c.get("value") == null ? null : ((Number) c.get("value")).doubleValue();
-        String runState = jdbc.queryForObject("SELECT run_state FROM equipment WHERE equipment_id = ?", String.class,
+        Map<String, Object> eq = jdbc.queryForMap("SELECT code, run_state FROM equipment WHERE equipment_id = ?",
                 equipmentId);
-        if (!"RUN".equals(runState)) {
+        if (!"RUN".equals(eq.get("run_state"))) {
             throw ApiException.conflict("EQUIPMENT_STOPPED", "셧다운된 설비입니다.");
         }
         OffsetDateTime now = clock.nowOffset();
@@ -225,8 +250,14 @@ public class EquipmentCommandService {
                 WHERE command_id = ? AND result = 'AWAITING'
                 """, userId, now, now.plus(EXPIRES_IN), commandId);
         publishCurrent(commandId, equipmentId, FAN_HZ, value, "SENT", now);
-        afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, FAN_HZ, value),
-                1_000, TimeUnit.MILLISECONDS));
+        if (edge != null) {
+            String code = (String) eq.get("code");
+            String source = (String) c.get("source");
+            afterCommit(() -> scheduler.execute(() -> dispatch(commandId, equipmentId, code, FAN_HZ, value, source)));
+        } else {
+            afterCommit(() -> scheduler.schedule(() -> complete(commandId, equipmentId, FAN_HZ, value),
+                    1_000, TimeUnit.MILLISECONDS));
+        }
         return find(commandId);
     }
 
@@ -266,7 +297,7 @@ public class EquipmentCommandService {
 
     private Map<String, Object> awaiting(long commandId) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT equipment_id, value, result FROM equipment_command WHERE command_id = ?", commandId);
+                "SELECT equipment_id, value, result, source FROM equipment_command WHERE command_id = ?", commandId);
         if (rows.isEmpty()) {
             throw ApiException.notFound("COMMAND_NOT_FOUND", "없는 명령입니다.");
         }
@@ -290,6 +321,81 @@ public class EquipmentCommandService {
             throw ApiException.notFound("COMMAND_NOT_FOUND", "없는 명령입니다.");
         }
         return rows.get(0);
+    }
+
+    /**
+     * 엣지 명령 결과 반영. 이 서버가 보내고 아직 처리 중(PENDING)이며 설비·명령이 같은 것만 반영한다
+     * (여러 서버가 같은 결과 토픽을 받으므로, 다른 DB 의 같은 번호 명령을 덮어쓰지 않게). 반영했으면 true.
+     * 엣지 DUPLICATE(엣지가 최근에 받은 같은 command_id)는 실행되지 않은 것이므로 FAILED 로 남긴다
+     * (우리 DUPLICATE 는 "같은 명령 처리 중"이라 화면에서 '반영됨'으로 보이기 때문).
+     */
+    @Transactional
+    public boolean applyEdgeResult(EdgeResult r) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT equipment_id, command, value, result FROM equipment_command WHERE command_id = ?", r.commandId());
+        if (rows.isEmpty()) {
+            log.info("엣지 명령 결과 무시: 이 서버에 없는 명령 {}", r.commandId());
+            return false;
+        }
+        Map<String, Object> row = rows.get(0);
+        long equipmentId = ((Number) row.get("equipment_id")).longValue();
+        String command = (String) row.get("command");
+        if (!"PENDING".equals(row.get("result")) || equipmentId != r.equipmentId() || !command.equals(r.command())) {
+            log.info("엣지 명령 결과 무시: 명령 {} (우리 {} {} {}, 엣지 {} {} {})", r.commandId(), equipmentId, command,
+                    row.get("result"), r.equipmentId(), r.command(), r.result());
+            return false;
+        }
+        if (!EDGE_RESULTS.contains(r.result())) {
+            log.warn("엣지 명령 결과 무시: 모르는 result {} (명령 {})", r.result(), r.commandId());
+            return false;
+        }
+        String result = "DUPLICATE".equals(r.result()) ? "FAILED" : r.result();
+        Double value = row.get("value") == null ? null : ((Number) row.get("value")).doubleValue();
+        OffsetDateTime now = clock.nowOffset();
+        if (finish(r.commandId(), result, now, r.detail()) == 0) {
+            return false; // 그 사이 시간 초과·셧다운 취소
+        }
+        if ("DONE".equals(result)) {
+            int rpm = r.fanRpm() != null ? r.fanRpm()
+                    : FAN_STOP.equals(command) ? 0 : (value == null ? HZ_NORMAL : value.intValue()) * RPM_PER_HZ;
+            jdbc.update("UPDATE equipment SET fan_rpm = ? WHERE equipment_id = ?", rpm, equipmentId);
+        }
+        log.info("엣지 명령 결과: 명령 {} 설비 {} {} {} → {}", r.commandId(), equipmentId, command, value, r.result());
+        publishCurrent(r.commandId(), equipmentId, command, value, result, now);
+        return true;
+    }
+
+    /** 엣지로 보내고, 결과가 안 오면 FAILED 로 끝낼 시간 초과를 걸어 둔다 */
+    private void dispatch(long commandId, long equipmentId, String code, String command, Double value, String source) {
+        // 만료 시각은 실제 시각 기준 (엣지는 센서 데이터 ts 로 "지금"을 잡는데, 재생 스크립트가 실제 시각으로 보낸다)
+        OffsetDateTime expiresAt = OffsetDateTime.now(clock.zone()).plus(EXPIRES_IN);
+        try {
+            edge.send(equipmentId, EdgeMessages.command(commandId, equipmentId, code, command, value, source, expiresAt))
+                    .whenComplete((ok, e) -> {
+                        if (e != null) {
+                            edgeFailed(commandId, equipmentId, command, value, "엣지로 보내지 못함: " + e.getMessage());
+                        }
+                    });
+            log.info("엣지로 명령 보냄: 명령 {} 설비 {}({}) {} {}", commandId, equipmentId, code, command, value);
+        } catch (RuntimeException e) {
+            edgeFailed(commandId, equipmentId, command, value, "엣지로 보내지 못함: " + e.getMessage());
+            return;
+        }
+        scheduler.schedule(() -> edgeFailed(commandId, equipmentId, command, value,
+                "엣지 응답 없음 (" + EDGE_TIMEOUT.toSeconds() + "초)"), EDGE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /** 아직 처리 중이면 FAILED 로 끝낸다 (이미 끝났으면 아무것도 안 함) */
+    private void edgeFailed(long commandId, long equipmentId, String command, Double value, String message) {
+        try {
+            OffsetDateTime now = clock.nowOffset();
+            if (finish(commandId, "FAILED", now, Map.of("message", message)) > 0) {
+                log.warn("설비 명령 {} 실패: {}", commandId, message);
+                publishCurrent(commandId, equipmentId, command, value, "FAILED", now);
+            }
+        } catch (RuntimeException e) {
+            log.error("설비 명령 {} 실패 처리 중 오류", commandId, e);
+        }
     }
 
     /** 설비 응답 (시뮬레이션) */
@@ -381,8 +487,8 @@ public class EquipmentCommandService {
         }
     }
 
-    private void finish(long commandId, String result, OffsetDateTime at, Map<String, Object> detail) {
-        jdbc.update("""
+    private int finish(long commandId, String result, OffsetDateTime at, Map<String, Object> detail) {
+        return jdbc.update("""
                 UPDATE equipment_command SET result = ?, completed_at = ?,
                        result_detail = COALESCE(result_detail, '{}'::jsonb) || ?::jsonb
                 WHERE command_id = ? AND result = 'PENDING'
@@ -447,11 +553,11 @@ public class EquipmentCommandService {
         scheduler.shutdownNow();
     }
 
-    private record EquipmentRow(long id, String type, String runState, Integer fanRpm) {
+    private record EquipmentRow(long id, String code, String type, String runState, Integer fanRpm) {
     }
 
     /**
-     * @param status  SENT | DONE | FAILED | EXPIRED | CANCELLED | DUPLICATE
+     * @param status  SENT | DONE | FAILED | EXPIRED | CANCELLED | DUPLICATE | REJECTED(엣지: 인버터 없음 등)
      * @param value   FAN_HZ 의 목표 주파수 (그 밖은 null)
      * @param source  USER | AUTO | RECOVERY
      */
