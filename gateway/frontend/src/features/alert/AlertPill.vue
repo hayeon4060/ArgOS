@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="pill"
-        :class="meta.key"
+        :class="[meta.key, `blink-${meta.key}`]"
         role="status"
         :aria-haspopup="many ? 'menu' : undefined"
         :aria-expanded="many ? listOpen : undefined"
@@ -185,21 +185,32 @@ onBeforeUnmount(() => {
   animation: pill-blink 1s steps(2, jump-none) infinite;
 }
 
-/* 주의: 주황 + 1.6초 빛번짐 */
-.pill.warn {
-  background: var(--color-level-warn);
+/*
+ * 나타날 때 커지며 등장 + 버튼 밖으로 넓게 퍼지는 링 2겹 (2026-11-20 재원님 선택, blink.css blink-ring)
+ * - 링 반복: 주의 2초 · 경보 1초 · 화재 0.75초 (단계 반복 시간 × 1.25), 퍼지는 폭 8 · 11 · 14px
+ */
+.pill.warn,
+.pill.alarm,
+.pill.fire {
+  box-shadow: 0 2px 10px rgb(var(--blink-rgb) / 0.35);
   animation:
     pill-pop 400ms cubic-bezier(0.2, 1.2, 0.3, 1) both,
-    pill-warn var(--m-pulse-warn) ease-in-out 400ms infinite;
+    blink-ring calc(var(--blink-t) * 1.25) cubic-bezier(0.2, 0.6, 0.3, 1) 400ms infinite;
 }
 
-/* 경보·화재: 빨강 + 0.9초 */
+.pill.warn {
+  background: var(--color-level-warn);
+}
+
 .pill.alarm,
 .pill.fire {
   background: var(--color-level-alarm);
-  animation:
-    pill-pop 400ms cubic-bezier(0.2, 1.2, 0.3, 1) both,
-    pill-alarm 0.9s ease-in-out 400ms infinite;
+}
+
+/* 마우스 올림: 링 멈추고 진한 테두리로 고정 (눌러도 되는 곳) */
+.pill:hover {
+  animation: none;
+  box-shadow: 0 0 0 4px rgb(var(--blink-rgb) / 0.3);
 }
 
 /* 사라질 때 */
@@ -219,26 +230,6 @@ onBeforeUnmount(() => {
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes pill-warn {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);
-  }
-}
-
-@keyframes pill-alarm {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 0 7px rgba(220, 38, 38, 0);
   }
 }
 
@@ -267,6 +258,13 @@ onBeforeUnmount(() => {
   .pill,
   .pill .ico {
     animation: none !important;
+  }
+
+  /* 링 대신 굵은 바깥 테두리로 고정 */
+  .pill {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 4px rgb(var(--blink-rgb) / 0.6);
   }
 
   .slide-enter-active,

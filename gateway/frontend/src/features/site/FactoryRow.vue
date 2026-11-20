@@ -7,6 +7,7 @@
 import StageBar from './StageBar.vue'
 import { keyOf, shortName } from './stages'
 import { LEVEL, LEVEL_META } from '@/types/codes'
+import { blinkClass } from '@/utils/blink'
 
 const props = defineProps({
   /** { id, name, level, processes, counts, todayAlarmCount } */
@@ -24,7 +25,7 @@ function onEnter() {
 <template>
   <div
     class="factory-row"
-    :class="[`is-${keyOf(factory.level)}`, { link }]"
+    :class="[`is-${keyOf(factory.level)}`, { link }, blinkClass(factory.level) && ['blink-row', 'weak', blinkClass(factory.level)]]"
     :role="link ? 'button' : undefined"
     :tabindex="link ? 0 : undefined"
     @click="onEnter"

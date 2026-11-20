@@ -14,6 +14,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { keyOf } from '@/features/site/stages'
 import { LEVEL, SENSOR_TYPES } from '@/types/codes'
+import { blinkClass } from '@/utils/blink'
 
 const props = defineProps({
   /** 사업장 현황의 공장 하나 (levelsByType: { CURRENT: { NORMAL, WARN, ALARM }, TEMP, CO }) */
@@ -37,7 +38,13 @@ const cells = computed(() =>
 </script>
 
 <template>
-  <button type="button" class="factory-item" :class="`is-${keyOf(factory.level)}`" @click="emit('select', factory)">
+  <!-- 주의·경보·화재 공장은 카드 바깥으로 빛번짐 점멸 (blink.css blink-glow) -->
+  <button
+    type="button"
+    class="factory-item"
+    :class="[`is-${keyOf(factory.level)}`, blinkClass(factory.level) && ['blink-glow', blinkClass(factory.level)]]"
+    @click="emit('select', factory)"
+  >
     <span class="head">
       {{ factory.name }}
       <LevelBadge :level="factory.level" />
