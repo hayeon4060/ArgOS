@@ -11,7 +11,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { serverNow } from '@/api/clock'
 import { exportLogs, getLogs } from '@/api/logs'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
 import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import LogFilterBar from '@/features/log/LogFilterBar.vue'
@@ -142,9 +142,9 @@ const tab = computed({
 /* ───────── 처음 ───────── */
 onMounted(async () => {
   try {
-    const tree = await getSiteTree(route.params.siteId || 1)
-    const mine = auth.user?.scope?.factoryIds ?? []
-    factories.value = (isHq.value ? tree.factories : tree.factories.filter((f) => mine.includes(f.id))).map((f) => ({
+    // 공장 담당자는 담당 공장만 옴 (getScopeTree — 실서버 /tree 는 본사 관리자 전용)
+    const tree = await getScopeTree(route.params.siteId || 1)
+    factories.value = tree.factories.map((f) => ({
       id: f.id,
       name: f.name,
       processes: f.processes.map((p) => ({ id: p.id, name: p.name })),

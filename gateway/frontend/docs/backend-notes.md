@@ -759,3 +759,9 @@
 - 삭제는 서버 규칙 그대로: 센서가 붙은 설비는 지우지 않고 사용 안 함.
 - 확인 요청 4건(`shape` 응답, 삭제 결과, 시드에 없는 그림 설비, `equipment_type` null): 저장소 **`docs/api/paint-equipment-edit.md`**.
 
+
+## 28. 공장 담당자 공장 관리 화면이 비던 문제 (2026-11-20, 재원님 제보)
+
+- 원인: `GET /sites/{siteId}/tree` 가 본사 관리자 전용(`DashboardService.siteTree` → `require(HQ_ADMIN)`)이라 실서버에서 공장 담당자는 403 → 공장 관리 · 통계·이력 · 이용 로그 · 사용자 관리의 공장 · 공정 고르는 칸이 빔.
+- 프론트 처리: 공장 담당자는 `GET /factories?siteId=` → 공장마다 `GET /processes?factoryId=` 로 목록을 만듦 (`api/sites.js getScopeTree`). 서버가 담당 범위 밖 공장은 빼고 주므로 화면에서 다시 거르지 않음 (사업장 전체를 맡은 공장 담당자는 `scope.factoryIds` 가 `[]`).
+- 요청(선택): `/tree` 를 공장 담당자에게도 열어 주면(담당 공장만, `canFactory`) 요청 한 번으로 바꾸고 위 분기는 지웁니다.

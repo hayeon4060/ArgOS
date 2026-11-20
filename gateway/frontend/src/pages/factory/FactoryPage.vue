@@ -28,7 +28,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { createFactory } from '@/api/factory'
 import { createProcess, getProcessLayout, getProcessStatus, saveProcessLayout } from '@/api/process'
-import { getSiteName, getSiteTree, getSites } from '@/api/sites'
+import { getScopeTree, getSiteName, getSites } from '@/api/sites'
 import { useAuthStore } from '@/stores/auth'
 import { ROLE } from '@/types/codes'
 import { toast } from '@/utils/toast'
@@ -64,15 +64,12 @@ const tree = ref(null) // GET /sites/{id}/tree
 const pick = reactive({ siteId: '', factoryId: '', processId: '' }) // 고르는 중
 const scope = reactive({ processId: null, factoryId: null, name: '', path: '' }) // 조회한 범위 (path: '5공장 · 도장 공정')
 
-const factories = computed(() => {
-  const all = tree.value?.factories ?? []
-  const mine = auth.user?.scope?.factoryIds ?? []
-  return isHq.value ? all : all.filter((f) => mine.includes(f.id))
-})
+// 공장 담당자의 담당 공장 거르기는 getScopeTree 가 함 (서버가 범위 안 공장만 줌)
+const factories = computed(() => tree.value?.factories ?? [])
 const processes = computed(() => factories.value.find((f) => String(f.id) === String(pick.factoryId))?.processes ?? [])
 
 async function loadTree(siteId) {
-  tree.value = await getSiteTree(siteId)
+  tree.value = await getScopeTree(siteId) // 공장 담당자도 부를 수 있는 목록 (sites.js)
   setFactoryCount(siteId, tree.value.factories.length) // 상단 메뉴(설정 전 사업장이면 '관리'만)와 맞춤
   const f = factories.value.find((x) => x.name === DEFAULT_FACTORY) ?? factories.value[0]
   pick.factoryId = f ? String(f.id) : ''
@@ -187,14 +184,14 @@ async function submitAdd(name) {
   try {
     if (adding.value === 'factory') {
       const made = await createFactory({ siteId: pick.siteId, name })
-      tree.value = await getSiteTree(pick.siteId)
+      tree.value = await getScopeTree(pick.siteId)
       setFactoryCount(pick.siteId, tree.value.factories.length) // 상단 메뉴 탭이 다시 보임
       pick.factoryId = String(made.id)
       pick.processId = ''
       toast(`${name}을(를) 추가했습니다. 공정을 추가해 주세요.`)
     } else {
       const made = await createProcess({ factoryId: pick.factoryId, name })
-      tree.value = await getSiteTree(pick.siteId)
+      tree.value = await getScopeTree(pick.siteId)
       pick.processId = String(made.id)
       toast(`${name}을(를) 추가했습니다. 설비를 배치할 수 있습니다.`)
     }
