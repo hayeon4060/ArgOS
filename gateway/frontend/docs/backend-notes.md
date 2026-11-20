@@ -765,3 +765,9 @@
 - 원인: `GET /sites/{siteId}/tree` 가 본사 관리자 전용(`DashboardService.siteTree` → `require(HQ_ADMIN)`)이라 실서버에서 공장 담당자는 403 → 공장 관리 · 통계·이력 · 이용 로그 · 사용자 관리의 공장 · 공정 고르는 칸이 빔.
 - 프론트 처리: 공장 담당자는 `GET /factories?siteId=` → 공장마다 `GET /processes?factoryId=` 로 목록을 만듦 (`api/sites.js getScopeTree`). 서버가 담당 범위 밖 공장은 빼고 주므로 화면에서 다시 거르지 않음 (사업장 전체를 맡은 공장 담당자는 `scope.factoryIds` 가 `[]`).
 - 요청(선택): `/tree` 를 공장 담당자에게도 열어 주면(담당 공장만, `canFactory`) 요청 한 번으로 바꾸고 위 분기는 지웁니다.
+
+## 29. 경보 창 '센서 데이터'에 공정 센서가 전부 나오던 문제 (2026-11-20, 재원님 제보)
+
+- 원인: `GET /alarms/{id}/response` 의 `sensors` 가 공정 전체(`AlarmService.response()` 가 `central.status(processId).sensors()` 를 거르지 않음). `detail()` · `FireService` 는 관제 단위 센서로 거름.
+- 프론트 처리: 경보 창을 열 때 `GET /alarms/{id}/detail` 을 한 번 불러 그 `sensors` 태그만 남김 (`features/alert/alarmSensors.js`). 전류 → 온도 → CO 순서, 단계는 PR #91 규칙(`utils/sensorLevel.js`). 화재 창 감지 근거 센서 이름도 같은 목록에서.
+- 요청: `response()` 의 `sensors` 를 관제 단위 구성 센서만으로 (`equipment` 는 공정 전체 그대로). 자세히는 `docs/api/alarm-sensor-scope.md`.

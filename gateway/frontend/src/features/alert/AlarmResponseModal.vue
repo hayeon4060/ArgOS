@@ -7,6 +7,7 @@
   - 데이터: GET /alarms/{id}/response (+ 화재면 GET /fires/{fireId}). 바뀌면(SSE, 지금은 예시 상황) 다시 불러옴
   - 본사 관리자: 열람만 (셧다운·해제 단추 없음)
   - 공정 번호·이름, 설비 이름은 고정하지 않음: 응답에 위치 번호가 없어 같은 알림의 목록 줄(GET /alarms)에서 꺼냄 (alarmPlace.js)
+  - 센서 데이터 · 화재 감지 근거 센서 이름: 응답 sensors 가 공정 전체라서 경보가 난 관제 단위 센서만 골라 씀 (alarmSensors.js, 2026-11-20)
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
@@ -14,12 +15,14 @@ import { useRoute, useRouter } from 'vue-router'
 import AlarmHead from './AlarmHead.vue'
 import { hazardLabelOf } from './alarmView'
 import { placeOf } from './alarmPlace'
+import { pickAlarmSensors, unitTagsOf } from './alarmSensors'
 import BroadcastBand from './BroadcastBand.vue'
 import EmergencySensors from './EmergencySensors.vue'
 import FanAutoNotice from './FanAutoNotice.vue'
 import FireRelease from './FireRelease.vue'
 import ProblemLog from './ProblemLog.vue'
 import ShutdownPanel from './ShutdownPanel.vue'
+import { getAlarmDetail } from '@/api/alarms'
 import { callWorkers, getAlarmResponse, getFire } from '@/api/emergency'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
@@ -63,6 +66,17 @@ async function load() {
 onMounted(load)
 useLiveReload(load)
 
+/* ───────── 보여 줄 센서 (경보가 난 관제 단위의 전류 · 온도 · CO) ───────── */
+// 관제 단위 구성 센서는 경보 중에 바뀌지 않으니 창을 열 때 한 번만 받음
+// (detail 은 서버가 7일 평균 · 추이까지 계산해서 무거움 → load() 처럼 SSE 마다 다시 받지 않음)
+const unitTags = ref(null)
+onMounted(() => {
+  getAlarmDetail(props.alarmId)
+    .then((d) => (unitTags.value = unitTagsOf(d)))
+    .catch(() => {}) // 못 받으면 거르지 않고 응답 센서를 그대로 (예시 데이터는 이미 설비 센서 3종만 줌)
+})
+const sensors = computed(() => pickAlarmSensors(response.value?.sensors, unitTags.value))
+
 /* ───────── 이 알림의 위치 (사업장·공장·공정 번호, 공정·설비 이름) ───────── */
 // 알림 목록 줄은 경보가 끝나면 목록에서 빠지므로, 보이는 동안 한 번 잡아 둠
 const row = ref(null)
@@ -88,8 +102,8 @@ const stoppedName = computed(() => {
 })
 // 열화상 아래 이름 'IR-01 · 도장 공정'
 const zoneOf = (thermal) => [thermal?.cameraTag, place.value.processName].filter(Boolean).join(' · ')
-// 화재 감지 근거 칸의 센서 이름 (응답 센서에서 종류로 찾음)
-const tagOf = (type) => response.value?.sensors?.find((s) => s.type === type)?.tag ?? ''
+// 화재 감지 근거 칸의 센서 이름 (관제 단위 센서에서 종류로 찾음 — 공정 전체에서 찾으면 TE-301 처럼 다른 설비 이름이 나옴)
+const tagOf = (type) => sensors.value.find((s) => s.type === type)?.tag ?? ''
 
 const isFire = computed(() => !!fire.value)
 const stopped = computed(() => !isFire.value && !!response.value?.shutdown?.done && !response.value.shutdown.auto)
@@ -228,7 +242,7 @@ function shake() {
           </section>
           <section>
             <div class="m-sect"><AppIcon name="chart" :size="15" />센서 데이터</div>
-            <EmergencySensors :sensors="response.sensors" class="gap" />
+            <EmergencySensors :sensors="sensors" class="gap" />
           </section>
           <section class="log">
             <div class="m-sect"><AppIcon name="file" :size="15" />문제 로그</div>
