@@ -392,6 +392,8 @@ public class ThresholdAdminService {
         v.put("warnHoldSec", ((Number) r.get("warnSamples")).intValue() * sampleSec);
         v.put("alarmHoldSec", ((Number) r.get("alarmSamples")).intValue() * sampleSec);
         v.put("validFrom", r.get("validFrom"));
+        // 그 계절 줄이 없어서 ALL 값을 보여 주는 중이면 true (저장하면 그 계절 줄이 새로 생긴다)
+        v.put("inherited", Boolean.TRUE.equals(r.get("inherited")));
         return v;
     }
 

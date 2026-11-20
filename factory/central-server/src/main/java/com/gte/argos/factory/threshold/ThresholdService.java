@@ -91,6 +91,11 @@ public class ThresholdService {
                 seasons.put(rs.getString("season"), row(rs));
             }
         }, equipmentId);
+        for (Map<String, Object> s : sensors) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> seasons = (Map<String, Object>) s.get("seasons");
+            fillSeasons(seasons);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("equipmentId", equipmentId);
         out.put("activeSeason", Seasons.current(clock));
@@ -428,6 +433,25 @@ public class ThresholdService {
     private boolean equipmentExists(long equipmentId) {
         Long n = jdbc.queryForObject("SELECT COUNT(*) FROM equipment WHERE equipment_id = ?", Long.class, equipmentId);
         return n != null && n > 0;
+    }
+
+    /**
+     * 계절 줄(SPRING_FALL · SUMMER · WINTER)이 없으면 ALL 줄 값을 복사해 채운다 (inherited = true).
+     * 판정 규칙(지금 계절 줄이 먼저, 없으면 ALL)과 같은 값을 화면에 보여 주기 위해서. ALL 도 없으면 채우지 않는다.
+     */
+    static void fillSeasons(Map<String, Object> seasons) {
+        Object all = seasons.get(Seasons.ALL);
+        if (!(all instanceof Map<?, ?> allRow)) {
+            return;
+        }
+        for (String season : Seasons.SEASONS) {
+            if (!seasons.containsKey(season)) {
+                Map<String, Object> copy = new LinkedHashMap<>();
+                allRow.forEach((k, v) -> copy.put(String.valueOf(k), v));
+                copy.put("inherited", true);
+                seasons.put(season, copy);
+            }
+        }
     }
 
     private Map<String, Object> row(ResultSet rs) throws SQLException {
