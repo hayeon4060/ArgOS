@@ -35,8 +35,16 @@ const option = computed(() => (props.trend && !empty.value ? trendOption(props.t
 </template>
 
 <style scoped>
+/* 카드 높이는 페이지가 정함(화면 높이를 두 그래프가 나눠 가짐) → 그래프가 제목 아래 남는 높이를 채움 */
+.base-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .chart {
-  height: 328px;
+  flex: 1;
+  min-height: 180px; /* 이보다 낮으면 막대·눈금이 겹침 */
 }
 
 .lg {

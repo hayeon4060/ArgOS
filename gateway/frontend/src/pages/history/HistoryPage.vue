@@ -235,13 +235,22 @@ useLiveReload(() => query({ silent: true }))
  * 배치 (설계안 1920 기준): 왼쪽 1180 | 오른쪽 684 — 같은 비율로 화면 폭에 맞춰 줄어듦
  * 1400px 이하는 한 줄에 하나씩
  */
+/*
+ * 한 화면에 맞춤 (2026-11-20 재원님 요청: 전체 화면이 스크롤되지 않게)
+ * - 페이지 높이 = 화면 − 상단 바 − 본문 위아래 여백 40px. 너무 낮은 창에서는 640px 아래로 줄이지 않고 스크롤
+ * - 조건 줄 · 요약 카드는 제 높이, 남는 높이는 아래 줄(.main)이 가져감
+ *   → 알림 이력 표는 줄 높이를 줄여 14행을 맞추고(AlarmHistoryTable), 오른쪽 그래프 2개는 높이를 반씩 나눔
+ */
 .history-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: max(640px, calc(var(--screen-h) - var(--topbar-height) - 40px));
 }
 
 .cards {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -258,6 +267,9 @@ useLiveReload(() => query({ silent: true }))
   grid-template-columns: minmax(0, 1180fr) minmax(0, 684fr);
   gap: 16px;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .side {
@@ -265,6 +277,12 @@ useLiveReload(() => query({ silent: true }))
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+}
+
+/* 오른쪽 그래프 카드 2개가 높이를 반씩 */
+.side > :deep(.base-card) {
+  flex: 1;
 }
 
 .detail {
@@ -285,9 +303,24 @@ useLiveReload(() => query({ silent: true }))
   transform: translateX(24px);
 }
 
+/* 한 열로 쌓이는 좁은 화면: 한 화면에 맞추지 않고 내용 높이대로 (표는 14행 높이 고정) */
 @media (max-width: 1400px) {
+  .history-page {
+    height: auto;
+  }
+
   .main {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .main > :deep(.history-card) {
+    height: 730px;
+  }
+
+  .side > :deep(.base-card) {
+    flex: none;
+    height: 376px;
   }
 }
 </style>

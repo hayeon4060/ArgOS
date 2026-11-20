@@ -37,7 +37,16 @@ export const HAZARDS = [
   { value: 'FIRE', label: '화재' },
   { value: 'GAS', label: '가스' },
 ]
-export const HAZARD_META = { FIRE: { label: '화재', icon: 'flame' }, GAS: { label: '가스', icon: 'wind' } }
+/*
+ * 유형 칩의 글자·아이콘·아이콘 색 (2026-11-20 재원님 요청으로 바꿈)
+ * - 화재: 불꽃, 빨강 (전에는 보라)
+ * - 가스: 가스 구름, 연두 (전에는 바람 모양 · 청록). 정상(초록 #16a34a)보다 노란 쪽이라 구분됨
+ * 색을 바꾸려면 여기 color 만 고치면 됨 (알림 이력 표 · 상세 패널이 같이 씀)
+ */
+export const HAZARD_META = {
+  FIRE: { label: '화재', icon: 'flame', color: '#dc2626' },
+  GAS: { label: '가스', icon: 'gas', color: '#65a30d' },
+}
 export const hazardOf = (row) => row.hazard ?? (row.sensorType === 'CO' ? 'GAS' : 'FIRE')
 
 /** 등급 (백엔드 level 값) */
