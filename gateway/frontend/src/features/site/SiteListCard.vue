@@ -1,7 +1,7 @@
 <!--
   사업장 목록 카드 (사업장 → 공장 → 공정 → 센서)
   - 제목줄 오른쪽: 전체 / 주의 이상 필터
-  - 사업장을 펼치면 그때 공장 목록을 불러옴 (useSiteTrees)
+  - 처음부터 모든 사업장을 펼쳐 두고 공장 목록을 불러옴 (접었다 다시 펼칠 때는 저장된 값 사용, useSiteTrees)
   - 이벤트: enter(사업장 ID), enter-factory(공장)
 -->
 <script setup>
@@ -14,7 +14,7 @@ import { LEVEL } from '@/types/codes'
 
 const props = defineProps({
   sites: { type: Array, required: true },
-  /** 강조하고 처음부터 펼쳐 둘 사업장 ID */
+  /** 강조할 사업장 ID (파란 테두리 · '이동' 버튼 강조) */
   currentSiteId: { type: Number, default: null },
   /** 누를 수 있는 공장 ID */
   linkFactoryId: { type: Number, default: null },
@@ -24,8 +24,8 @@ const emit = defineEmits(['enter', 'enter-factory'])
 
 const { trees, loadTree } = useSiteTrees()
 
-// 펼친 사업장 (처음에는 강조 사업장만 펼침)
-const openIds = ref(new Set(props.currentSiteId ? [props.currentSiteId] : []))
+// 펼친 사업장: 화면을 처음 열 때 모든 사업장을 펼쳐 둠 (2026-11-20 재원님 요청, 전에는 강조 사업장만)
+const openIds = ref(new Set(props.sites.map((s) => s.id)))
 onMounted(() => openIds.value.forEach(loadTree))
 
 function toggle(siteId) {
