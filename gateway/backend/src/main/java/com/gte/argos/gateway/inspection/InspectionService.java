@@ -304,12 +304,7 @@ public class InspectionService {
             throw new ApiException(HttpStatus.valueOf(422), "OCR_FAILED", "글자를 읽지 못했습니다. 다시 스캔하거나 직접 입력하세요.");
         }
         List<Map<String, Object>> fields = fields(r);
-        int need = 0;
-        for (Map<String, Object> f : fields) {
-            if (Boolean.TRUE.equals(f.get("needCheck"))) {
-                need++;
-            }
-        }
+        int need = needCheckCount(fields);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", id);
         out.put("status", status);
@@ -415,7 +410,7 @@ public class InspectionService {
         }
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 SELECT o.ocr_id, o.form_type, d.name AS form_name, f.orig_name, o.process_id, u.name AS uploaded_by,
-                       o.uploaded_at, o.status
+                       o.uploaded_at, o.status, o.fields, o.reviewed_at
                 FROM ocr_result o JOIN file_asset f ON f.file_id = o.file_id
                 LEFT JOIN doc_form d ON d.form_type = o.form_type
                 LEFT JOIN app_user u ON u.user_id = o.uploaded_by""" + where + " ORDER BY o.uploaded_at DESC, o.ocr_id DESC", p);
@@ -436,6 +431,11 @@ public class InspectionService {
             v.put("uploadedBy", r.get("uploaded_by"));
             v.put("uploadedAt", zoned(r.get("uploaded_at")));
             v.put("status", r.get("status"));
+            // 목록에서도 확인 필요 칸 수 · 진행 · 저장 시각 (GET /inspections/{id}/ocr 와 같은 값, frontend-api-audit-1120 6장)
+            String st = String.valueOf(r.get("status"));
+            v.put("needCheckCount", needCheckCount(fields(r)));
+            v.put("progress", "RECOGNIZING".equals(st) || "UPLOADED".equals(st) ? 50 : 100);
+            v.put("reviewedAt", zoned(r.get("reviewed_at")));
             visible.add(v);
         }
         int fromIdx = Math.min(visible.size(), page * size);
@@ -505,6 +505,16 @@ public class InspectionService {
         out.put("name", r.get("name"));
         out.put("fields", json(r.get("field_schema")));
         return out;
+    }
+
+    static int needCheckCount(List<Map<String, Object>> fields) {
+        int need = 0;
+        for (Map<String, Object> f : fields) {
+            if (Boolean.TRUE.equals(f.get("needCheck"))) {
+                need++;
+            }
+        }
+        return need;
     }
 
     private List<Map<String, Object>> fields(Map<String, Object> r) {

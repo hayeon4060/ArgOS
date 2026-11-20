@@ -34,8 +34,9 @@ public class StatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
-            @RequestParam(required = false) String shift) {
-        return ApiResponse.ok(service.summary(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift)));
+            @RequestParam(required = false) String shift, @RequestParam(required = false) Long siteId) {
+        return ApiResponse.ok(service.summary(
+                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift, null, null, siteId)));
     }
 
     @GetMapping("/stats/trend")
@@ -44,8 +45,10 @@ public class StatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
-            @RequestParam(required = false) String shift, @RequestParam(required = false) String unit) {
-        return ApiResponse.ok(service.trend(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift), unit));
+            @RequestParam(required = false) String shift, @RequestParam(required = false) String unit,
+            @RequestParam(required = false) Long siteId) {
+        return ApiResponse.ok(service.trend(
+                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift, null, null, siteId), unit));
     }
 
     @GetMapping("/stats/by-process")
@@ -54,8 +57,9 @@ public class StatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
-            @RequestParam(required = false) String shift) {
-        return ApiResponse.ok(service.byProcess(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift)));
+            @RequestParam(required = false) String shift, @RequestParam(required = false) Long siteId) {
+        return ApiResponse.ok(service.byProcess(
+                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift, null, null, siteId)));
     }
 
     @GetMapping("/stats/heatmap")
@@ -64,8 +68,9 @@ public class StatsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long factoryId, @RequestParam(required = false) Long processId,
             @RequestParam(required = false) String sensorType, @RequestParam(required = false) String level,
-            @RequestParam(required = false) String shift) {
-        return ApiResponse.ok(service.heatmap(new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift)));
+            @RequestParam(required = false) String shift, @RequestParam(required = false) Long siteId) {
+        return ApiResponse.ok(service.heatmap(
+                new AlarmCriteria(from, to, factoryId, processId, sensorType, level, shift, null, null, siteId)));
     }
 
     /**

@@ -412,3 +412,22 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 - 조회와 그 밖의 저장은 아직 HTTP
 
 Redis 키 규격은 `factory/central-server/README.md` 의 "Redis 연동" 절.
+
+## 2026-11-20 프론트 요청 반영 (`docs/api/` 11-20 문서)
+
+| 요청 | 반영 |
+| --- | --- |
+| `hourly-alarm-one-day.md` | `GET /alarms/hourly` 범위를 **date 00:00 ~ date+1 00:00** 으로. 응답 맨 위에 `alarmCount` · `actionCount` · `hours[]` (00~23시, 알림 있는 시간만). `day` · `night` 는 호환용으로 남김 (같은 날의 07~19시 / 19~24시+00~07시) |
+| `frontend-api-audit-1120.md` 2장 | 알림 `fireId`: `GET /alarms` 줄, `GET /alarms/{id}/response`, SSE `alarm.updated` 에 넣음 (화재 아니면 null). `alarm.created` 직후 화재로 판정되면 `fireId` 를 실은 `alarm.updated` 를 한 번 더 보냄 |
+| 3장 | `GET /checklists` 줄에 `processId` · `equipmentId` (`GET /checklists/{id}` 와 같은 값) |
+| 4장 | `GET /stats/summary` · `/stats/trend` · `/stats/by-process` · `/stats/heatmap` 도 `siteId` 받음 |
+| 5장 | 31일짜리 달 월간 보고서 400 수정: 기간이 **달 하나 전체(1일~말일)** 면 30일 제한을 넘어도 됨 (`/stats/*` 도 같음) |
+| 6장 | `GET /inspections` 줄에 `needCheckCount` · `progress` · `reviewedAt` |
+| 9장 | 배치 저장 `equipment.update[]` 의 `type` · `shape` 저장 |
+| `scope-add.md` 1 | `POST /sites` · `/factories` · `/processes` 에서 `code` 를 비우면 서버가 만듦: 사업장 `SITE-n`, 공장 `Fn`(사업장 안), 공정 `PRn`(공장 안). 설비 `EQ-{공정}-{n}` 도 지운 번호와 겹치지 않게 |
+| `paint-equipment-edit.md` 4-2 | 배치 저장 응답에 `kept: [id…]` (지우려 했지만 센서·이력이 있어 '사용 안 함'으로만 바꾼 설비) |
+
+확인 질문 답:
+- `equipment-add.md` 3-1 · `paint-equipment-edit.md` 4-4: 중앙 DB `equipment.equipment_type` 은 비어도 됨 (null 저장됨). 코드를 정하면 그대로 넣으면 된다.
+- `paint-equipment-edit.md` 4-1: `GET /processes/{id}/layout` 의 `shape` 는 저장한 값 그대로 온다 (마스터 캐시 `Equipment.shape` 포함, 실제 저장 → 조회로 확인).
+- 4-3 (그림만 있는 도장 설비 시드): 서버 시드는 그대로 둔다. 공장 관리에서 추가하면 된다.
