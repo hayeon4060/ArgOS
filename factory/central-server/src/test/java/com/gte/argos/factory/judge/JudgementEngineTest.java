@@ -313,6 +313,60 @@ class JudgementEngineTest {
     }
 
     @Test
+    void 다시_켜면_열린_엣지_이벤트와_경보를_이어_받아_새_경보를_만들지_않는다() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        long ek = engine.nextEventKey();
+        long ak = engine.nextAlarmKey();
+        // DB 에 '-2' 꼬리가 붙어 저장된 엣지 구간
+        engine.restore(List.of(new JudgementEngine.RestoredEvent(ek, "IT-307", Stage.ALARM, "HI", 23.0,
+                        "P5-IT-307-20261116T090224-2", true)),
+                List.of(new JudgementEngine.RestoredAlarm(ak, 5, Stage.ALARM, Hazard.FIRE, List.of(ek))));
+
+        edge("IT-307", "P5-IT-307-20261116T090224", EdgeStage.Phase.UPDATE, Stage.ALARM, "HI", 23.5, null, true);
+        edgeValue("IT-307", 23.8);
+        edge("IT-307", "P5-IT-307-20261116T090224", EdgeStage.Phase.END, Stage.NORMAL, "HI", 18.0, 24.0, true);
+
+        assertThat(rec.log).noneMatch(l -> l.startsWith("event+") || l.startsWith("alarm+"));
+        assertThat(rec.log).contains("event- end=2 peak=24.0", "alarm- closed=false");
+        assertThat(engine.currentStage("IT-307")).isEqualTo(Stage.NORMAL);
+    }
+
+    @Test
+    void 다시_켜면_열린_열화상_이벤트에_VMS_값이_이어_붙는다() {
+        SensorDef ir = new SensorDef(331, "IR-301", "IR", 5,
+                new ThresholdRule(16, 50.0, 60.0, null, null, 24, 6),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(ir), rec, JudgementEngine.Options.live());
+        long ek = engine.nextEventKey();
+        engine.restore(List.of(new JudgementEngine.RestoredEvent(ek, "IR-301", Stage.ALARM, "IR", 64.0, "k", true)),
+                List.of(new JudgementEngine.RestoredAlarm(engine.nextAlarmKey(), 5, Stage.ALARM, Hazard.FIRE, List.of(ek))));
+        external(65.0, Stage.ALARM);
+        external(66.0, Stage.ALARM);
+        assertThat(rec.log).isEmpty();
+        assertThat(engine.currentStage("IR-301")).isEqualTo(Stage.ALARM);
+        external(48.0, Stage.NORMAL);
+        assertThat(rec.log).containsExactly("event- end=2 peak=66.0", "alarm- closed=false");
+    }
+
+    @Test
+    void 다시_켜면_서버_판정_이벤트도_이어서_복귀를_센다() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        long ek = engine.nextEventKey();
+        engine.restore(List.of(new JudgementEngine.RestoredEvent(ek, "TE-305", Stage.WARN, "HI", 152.0, "k", false)),
+                List.of(new JudgementEngine.RestoredAlarm(engine.nextAlarmKey(), 5, Stage.WARN, Hazard.FIRE, List.of(ek))));
+        feed("TE-305", 153, 3);
+        feed("TE-305", 140, 6);
+        assertThat(rec.log).containsExactly("event- end=3 peak=153.0", "alarm- closed=false");
+    }
+
+    @Test
+    void 엣지_구간_키_꼬리() {
+        assertThat(JudgementEngine.sameEdge("P5-TE-305-20261116T090145-2", "P5-TE-305-20261116T090145")).isTrue();
+        assertThat(JudgementEngine.sameEdge("P5-TE-305-20261116T090145", "P5-TE-305-20261116T090145")).isTrue();
+        assertThat(JudgementEngine.sameEdge("P5-TE-305-20261116T090145", "P5-TE-305-20261116T090150")).isFalse();
+    }
+
+    @Test
     void 통신_끊김은_추이의_lost_n_으로() {
         engine = new JudgementEngine(List.of(te), rec, JudgementEngine.Options.live());
         edgeValue("TE-305", 140);

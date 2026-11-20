@@ -259,6 +259,20 @@ public class JdbcJudgementStore implements JudgementListener {
         }
     }
 
+    /** 서버를 다시 켤 때: 엔진 번호 ↔ DB 이벤트 id */
+    public void restoreEvent(long eventKey, long eventId) {
+        eventIds.put(eventKey, eventId);
+    }
+
+    /** 서버를 다시 켤 때: 엔진 번호 ↔ DB 경보 id, 그 단위 센서 값을 다시 알림 샘플로 남기기 시작 */
+    public void restoreAlarm(long alarmKey, long alarmId, long unitId) {
+        alarmIds.put(alarmKey, alarmId);
+        unitByAlarmId.put(alarmId, unitId);
+        for (Long sensorId : unitSensors().getOrDefault(unitId, java.util.Set.of())) {
+            openAlarmsBySensor.computeIfAbsent(sensorId, k -> new java.util.HashSet<>()).add(alarmId);
+        }
+    }
+
     /** 모아 둔 batch 를 모두 넣는다 */
     public void flush() {
         flushTrends();

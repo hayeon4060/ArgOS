@@ -142,6 +142,21 @@ public class FeedingListener implements JudgementListener {
         store.flush();
     }
 
+    /** 서버를 다시 켤 때 열린 이벤트를 이어 받음 */
+    public void restoreEvent(long eventKey, long eventId, long sensorId) {
+        store.restoreEvent(eventKey, eventId);
+        sensorByEventKey.put(eventKey, sensorId);
+    }
+
+    /** 서버를 다시 켤 때 열린 경보를 이어 받음 (가스면 지금 단계를 기억해 배기팬 명령을 다시 보내지 않게) */
+    public void restoreAlarm(long alarmKey, long alarmId, long unitId, Stage stage, Hazard hazard) {
+        store.restoreAlarm(alarmKey, alarmId, unitId);
+        unitByAlarmKey.put(alarmKey, unitId);
+        if (hazard == Hazard.GAS) {
+            gasStageByAlarmKey.put(alarmKey, stage.code());
+        }
+    }
+
     /** 사람이 경보를 닫음: 그 단위 알림의 센서 값 저장을 멈춘다 */
     public void alarmClosed(long unitId) {
         store.forgetUnit(unitId);
