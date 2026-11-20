@@ -4,6 +4,9 @@
     3D 엔진(Three.js 등)을 쓰지 않고 설계안처럼 비스듬히 그린 그림 위에 표시만 함
   - 설비 상태: 설비 둘레에 상태 색 테두리 (면은 칠하지 않음). 주의·경보 설비만 테두리 빛번짐
   - 센서 이름표: 주의·경보 센서는 이름표 테두리를 상태 색으로
+  - 2026-11-20 재원님 요청: 주의·경보·화재 설비는 테두리가 굵어지고 빛이 커지며 깜빡임 (센서 이름표도 같은 박자로 테두리 굵기)
+    · halo·tag 에 data-blink 를 붙이고 모양은 아래 스타일 + assets/styles/blink.css (blink-halo, blink-stroke)
+    · 공장 관리(editable)는 설비 재배치 화면이라 깜빡이지 않음
   - 마우스를 올리면 설비 묶음 전체 표시 + 이름 칩(PaintHoverChip), 누르면 select(설비) — 배기팬을 눌러도 그 설비 선택
     · 2026-11-19 재원님 요청: 대시보드에서 배기팬을 눌러 회전수·켜기/끄기를 바꾸던 창(FanPopover)과 배기팬 2단계 표시를 모두 삭제
     · 2026-11-19 재원님 시안 A: 설비 면 옅은 초록 + 4px 들어 올림 (건조로는 건물·배기팬·버너실을 한 덩어리로)
@@ -23,6 +26,7 @@ import { HALO_GROUPS, PAINT_EQUIPMENT, keyOfSvgId } from './paintLayout'
 import { mergeByKey } from './processEquipment'
 import paintSvg from '@/assets/images/paint-map.svg?raw'
 import { LEVEL } from '@/types/codes'
+import { blinkKey } from '@/utils/blink'
 import { toLayoutPx } from '@/utils/screenScale'
 
 const props = defineProps({
@@ -116,6 +120,12 @@ function markEquipment(svg) {
   }
 }
 
+/** 점멸 단계 붙이기/지우기 (data-blink = warn | alarm | fire) */
+function setBlink(el, key) {
+  if (key) el.setAttribute('data-blink', key)
+  else el.removeAttribute('data-blink')
+}
+
 /** 설비 상태·센서 상태를 그림에 반영 */
 function applyLevels() {
   const svg = box.value?.querySelector('svg')
@@ -132,14 +142,19 @@ function applyLevels() {
     halo.style.stroke = COLOR[level]
     halo.style.color = COLOR[level] // 빛번짐(drop-shadow)이 이 색을 씀
     halo.classList.toggle('glow', !calm) // 빛번짐은 주의·경보 테두리에만
-    halo.classList.toggle('fast', level === LEVEL.ALARM || level === LEVEL.FIRE) // 경보·화재는 더 빠르게 깜빡임
+    // 점멸: 테두리 굵기 --halo-lo ↔ --halo-hi(× 단계 배수) + 빛 크게 (공장 관리 화면은 깜빡이지 않음)
+    halo.style.setProperty('--halo-lo', props.thin ? '3px' : '5px')
+    halo.style.setProperty('--halo-hi', props.thin ? '6px' : '12px')
+    setBlink(halo, props.editable ? null : blinkKey(level))
   })
   for (const eq of merged.value) {
     // 그림 안 설비 이름표 (공장 관리에서 이름을 바꾸면 그 이름으로) — 번호(숫자)가 아닌 글자
     const label = [...(svg.querySelector(`#eq-${eq.key}`)?.querySelectorAll('text') ?? [])].find((t) => !/^\d+$/.test(t.textContent))
     if (label && eq.name && label.textContent !== eq.name) label.textContent = eq.name
     for (const s of eq.sensors) {
-      svg.querySelector(`#tag-${s.tag}`)?.setAttribute('data-level', TAG_LEVEL[s.level] ?? 'normal')
+      const tag = svg.querySelector(`#tag-${s.tag}`)
+      tag?.setAttribute('data-level', TAG_LEVEL[s.level] ?? 'normal')
+      if (tag) setBlink(tag, props.editable ? null : blinkKey(s.level)) // 센서 이름표도 같은 박자로 테두리 굵기
     }
   }
 }
@@ -463,24 +478,39 @@ function onClick(event) {
   }
 }
 
-/* 주의·경보 테두리만 빛번짐 + 천천히 깜빡임 */
+/* 주의·경보 테두리 빛번짐 (공장 관리 화면은 이 모양으로 고정) */
 .svg :deep(.halo.glow) {
   filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor);
-  animation: halo-pulse var(--m-pulse-warn) ease-in-out infinite;
 }
 
-/* 경보·화재: 0.8초 (화면설계서 R2 --m-pulse-alarm) */
-.svg :deep(.halo.glow.fast) {
-  animation-duration: var(--m-pulse-alarm);
+/*
+ * 점멸: 테두리 굵게 + 빛 크게 (2026-11-20 재원님 선택)
+ * - 굵기 5px ↔ 12px × 단계 배수(주의 1 · 경보 1.4 · 화재 1.8), 빛 2px ↔ 18px
+ * - 반복 시간 주의 1.6초 · 경보 0.8초 · 화재 0.6초 (blink.css)
+ */
+.svg :deep(.halo.glow[data-blink]) {
+  animation: blink-halo var(--blink-t) ease-in-out infinite;
 }
 
-@keyframes halo-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
+/* 센서 이름표 테두리: 같은 박자로 굵기만 */
+.svg :deep(.tag[data-blink] .pill) {
+  --blink-w0: 2px;
+  --blink-w1: 3.6px;
+  animation: blink-stroke var(--blink-t) ease-in-out infinite;
+}
+
+/* 마우스 올림: 깜빡임 멈추고 가장 진한 모양으로 고정 */
+.svg :deep(.halo.glow.hov[data-blink]) {
+  animation: none;
+  --halo-width: var(--halo-hi) !important; /* 그림에 직접 붙은 굵기보다 우선 */
+  filter: drop-shadow(0 0 8px currentColor) drop-shadow(0 0 16px currentColor);
+}
+
+/* 움직임 줄이기: 이름표는 깜빡이지 않고 굵게 (설비 테두리는 motion.css 에서 굵게) */
+@media (prefers-reduced-motion: reduce) {
+  .svg :deep(.tag[data-blink] .pill) {
+    animation: none;
+    stroke-width: 3.4px;
   }
 }
 </style>

@@ -11,6 +11,7 @@ import StageCounts from './StageCounts.vue'
 import { STAGES, keyOf } from './stages'
 import AppIcon from '@/components/AppIcon.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
+import { blinkClass } from '@/utils/blink'
 
 defineProps({
   /** GET /sites 의 사업장 하나 */
@@ -28,7 +29,8 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
 </script>
 
 <template>
-  <div class="site" :class="[`is-${keyOf(site.level)}`, { open, current }]">
+  <!-- 주의·경보·화재 사업장은 칸 바깥으로 약하게 빛번짐 (blink.css blink-glow weak) -->
+  <div class="site" :class="[`is-${keyOf(site.level)}`, { open, current }, blinkClass(site.level) && ['blink-glow', 'weak', blinkClass(site.level)]]">
     <!-- 머리줄 (누르면 펼치기/접기) -->
     <div
       class="head"

@@ -32,6 +32,7 @@ export function useOcrDoc() {
     reviewedAt: null,
     failMessage: '',
     saving: false,
+    scheduleId: null, // 백엔드가 맞춰 준 점검 건 (없으면 null — 화면이 scheduleMatch.js 로 맞춤)
   })
 
   let seq = 0
@@ -74,6 +75,7 @@ export function useOcrDoc() {
       doc.fields = r.fields.map((f) => ({ ...f, checked: false, edited: false }))
       doc.reviewedBy = r.reviewedBy ?? null
       doc.reviewedAt = r.reviewedAt ?? null
+      doc.scheduleId = r.scheduleId ?? null
       doc.stage = r.status === 'DONE' ? 4 : 2
       if (!doc.imageUrl) await loadImage(my)
     } catch (error) {
@@ -100,6 +102,7 @@ export function useOcrDoc() {
       fields: [],
       imageUrl: null,
       failMessage: '',
+      scheduleId: null,
     })
     await loadImage(my)
     await poll(my)
@@ -110,7 +113,7 @@ export function useOcrDoc() {
     stop()
     const my = seq
     revoke()
-    Object.assign(doc, { id: null, fileName: file.name, formType: '', status: 'UPLOADING', stage: 0, upload: 0, progress: 0, fields: [], imageUrl: null, failMessage: '' })
+    Object.assign(doc, { id: null, fileName: file.name, formType: '', status: 'UPLOADING', stage: 0, upload: 0, progress: 0, fields: [], imageUrl: null, failMessage: '', scheduleId: null })
     try {
       const r = await uploadInspection(file, { by, formType, onProgress: (p) => my === seq && (doc.upload = p) })
       if (my !== seq) return null
@@ -153,11 +156,15 @@ export function useOcrDoc() {
     f.edited = true
   }
 
-  /** 임시 저장(REVIEW) · 검수 완료(DONE) */
-  async function save(status, by) {
+  /**
+   * 임시 저장(REVIEW) · 검수 완료(DONE)
+   * @param {number|null} [scheduleId] 검수 완료할 때 이을 점검 건 (null = 연결 안 함 → 새 점검 건)
+   */
+  async function save(status, by, scheduleId = null) {
     doc.saving = true
     try {
       const body = { status, fields: doc.fields.map((f) => ({ key: f.key, value: f.value, checked: f.checked })) }
+      if (status === 'DONE') body.scheduleId = scheduleId
       const r = await saveInspection(doc.id, body, by)
       doc.status = r.status
       if (status === 'DONE') {

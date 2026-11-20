@@ -53,11 +53,74 @@ export const GROUPS = {
   risk: { label: '위험성 평가 및 감소 대책', icon: 'shield' },
 }
 
-/** 점검 일정 상태 (점 색) */
+/**
+ * 점검 상태 (스케줄 한 건) — 이름은 여기 한 곳에서만 바꿈
+ * - 코드는 백엔드 InspectionService.scheduleStatus 그대로: DONE · PLANNED · DELAYED
+ * - DELAYED 는 화면에서 '누락'으로 씀 (2026-11-20 개편안 수정안 1. '지연'과 통일할지 재원님 확인 중 → 바꾸려면 label 만 고침)
+ * - cls: 달력 칩 · 이력 배지 색 (done 초록 / plan 파랑 / miss 빨강)
+ */
 export const SCHEDULE_STATE = {
-  DONE: { label: '완료', color: 'var(--color-level-normal)', chip: 'ok' },
-  PLANNED: { label: '예정', color: '#3b82f6', chip: 'info' },
-  DELAYED: { label: '지연', color: 'var(--color-level-alarm)', chip: 'alarm' },
+  DONE: { label: '완료', cls: 'done' },
+  PLANNED: { label: '예정', cls: 'plan' },
+  DELAYED: { label: '누락', cls: 'miss' },
+}
+/** 달력 · 합계에 그리는 순서 */
+export const STATE_ORDER = ['DONE', 'PLANNED', 'DELAYED']
+
+/** 점검 구분 (완료 건만): 수기 = 종이에 써서 스캔해 올림 / 전자 = 화면의 서류 양식에 바로 작성 */
+export const SOURCE = {
+  PAPER: { label: '수기', cls: 'paper' },
+  DIGITAL: { label: '전자', cls: 'digital' },
+}
+
+/** 점검 결과 (완료 건만): 서류 양식의 점검 항목에 '불량'이 하나라도 있으면 NG */
+export const RESULT = {
+  OK: { label: '양호', cls: 'done' },
+  NG: { label: '불량', cls: 'miss' },
+}
+
+/** 점검 이력 기간: 오늘 기준 최근 N일 (수정안 4. 기본 7일) */
+export const PERIODS = [
+  { value: 1, label: '1일' },
+  { value: 7, label: '7일' },
+  { value: 30, label: '30일' },
+]
+
+/**
+ * 점검 관리 화면에서 쓰는 서류 양식 = F02 환기·배기설비 점검일지 하나 (팀 양식 PDF 의 F02 쪽)
+ * - 2026-11-20 재원님: 변전소(F03 수변전설비) 점검은 점검 관리에서 뺌 → 양식 고르는 칸도 없음
+ * - FORM_TYPES(위)는 수기 서류 등록(OCR)이 쓰는 공통 목록이라 F01 ~ F05 그대로 둠
+ */
+export const PAPER_FORM = 'F02'
+
+/** 스케줄 반복 */
+export const REPEATS = [
+  { value: 'ONCE', label: '한 번' },
+  { value: 'DAILY', label: '매일' },
+  { value: 'WEEKLY', label: '매주' },
+  { value: 'MONTHLY', label: '매월' },
+]
+
+/** 'YYYY-MM' 을 n달 옮기기 */
+export function shiftMonth(ym, n) {
+  const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + n, 1)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+}
+/** '2026-11' → '2026년 11월' */
+export const monthName = (ym) => `${ym.slice(0, 4)}년 ${Number(ym.slice(5, 7))}월`
+/** 'YYYY-MM-DD' → Date (그날 0시) */
+export const toDate = (s) => new Date(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)))
+/** 'YYYY-MM-DD' 에서 n일 앞뒤 */
+export const addDays = (s, n) => {
+  const d = toDate(s)
+  d.setDate(d.getDate() + n)
+  return ymd(d)
+}
+/** 상태별 개수 { DONE, PLANNED, DELAYED } */
+export function countStates(list) {
+  const c = { DONE: 0, PLANNED: 0, DELAYED: 0 }
+  list.forEach((it) => (c[it.status] += 1))
+  return c
 }
 
 const pad = (n) => String(n).padStart(2, '0')

@@ -19,6 +19,7 @@ import LevelBadge from '@/components/LevelBadge.vue'
 import { keyOf } from '@/features/site/stages'
 import { useAlertStore } from '@/stores/alert'
 import { LEVEL, SENSOR_TYPES } from '@/types/codes'
+import { blinkClass } from '@/utils/blink'
 
 const props = defineProps({
   /** 화면용 설비 목록 (seq 가 있는 것만 줄에 나옴) */
@@ -74,7 +75,7 @@ function openChecklist() {
       :key="eq.id"
       type="button"
       class="item"
-      :class="[`is-${keyOf(eq.level)}`, { open: eq.id === openId }]"
+      :class="[`is-${keyOf(eq.level)}`, { open: eq.id === openId }, blinkClass(eq.level) && ['blink-glow', 'weak', blinkClass(eq.level)]]"
       @mouseenter="pickedId = eq.id"
       @focus="pickedId = eq.id"
       @click="emit('select', eq)"

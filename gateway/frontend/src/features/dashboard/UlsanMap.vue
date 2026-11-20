@@ -7,11 +7,14 @@
     · 구역에 마우스를 올리면 hover 이벤트: { code, anchor: { x, y } } — anchor 는 구역 가운데 위치(%)
     · 지도 밖으로 마우스가 나가면 hover(null)
     · 구역을 누르면 select 이벤트: 공장 코드 (빈 곳 클릭은 아무것도 안 함)
+  - 2026-11-20 재원님 요청: 주의·경보·화재 공장 구역은 둘레가 굵어지고 바깥 빛이 커지며 깜빡임
+    (구역에 data-blink 를 붙이고 모양은 아래 스타일 + assets/styles/blink.css)
 -->
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
 import ulsanSvg from '@/assets/images/ulsan-map.svg?raw'
 import { LEVEL, LEVEL_META } from '@/types/codes'
+import { blinkKey } from '@/utils/blink'
 
 const props = defineProps({
   /** 사업장 현황의 공장 목록 [{ code, level, ... }] */
@@ -57,6 +60,10 @@ function applyLevels() {
     const level = ZONE_LEVEL[factory.level] ?? 'normal'
     svg.querySelectorAll(`.zone[data-zone="${zone}"]`).forEach((el) => {
       el.setAttribute('data-level', level)
+      // 점멸 단계 (정상이면 지움) — 화재는 경보와 같은 빨강이라 data-level 이 같아서 따로 둠
+      const blink = blinkKey(factory.level)
+      if (blink) el.setAttribute('data-blink', blink)
+      else el.removeAttribute('data-blink')
       const text = el.querySelector('text.lv')
       if (text) text.textContent = LEVEL_META[factory.level]?.label ?? ''
       const badge = el.querySelector('g[transform] path')
@@ -149,5 +156,45 @@ watch(() => props.factories, () => nextTick(applyLevels), { deep: true })
 /* 공장 구역은 누를 수 있다는 표시 */
 .ulsan-map-box :deep(.zone) {
   cursor: pointer;
+}
+
+/*
+ * 주의·경보·화재 구역: 테두리 굵게 + 빛 크게 (blink.css 의 blink-stroke · blink-light)
+ * - 둘레 선: 3px ↔ 6px(× 단계 배수), 바깥 빛: 30% ↔ 100% 진하기 + 조금 커짐
+ */
+.ulsan-map-box :deep(.zone[data-blink] .rim) {
+  --blink-w0: 3px;
+  --blink-w1: 6px;
+  animation: blink-stroke var(--blink-t) ease-in-out infinite;
+}
+
+.ulsan-map-box :deep(.zone[data-blink] .glow) {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink-light var(--blink-t) ease-in-out infinite;
+}
+
+/* 마우스 올림: 깜빡임 멈추고 가장 진한 모양으로 고정 */
+.ulsan-map-box :deep(.zone[data-blink]:hover .rim) {
+  animation: none;
+  stroke-width: 6px;
+}
+
+.ulsan-map-box :deep(.zone[data-blink]:hover .glow) {
+  animation: none;
+  opacity: 1;
+}
+
+/* 움직임 줄이기: 깜빡임 대신 굵은 둘레 + 진한 빛 */
+@media (prefers-reduced-motion: reduce) {
+  .ulsan-map-box :deep(.zone[data-blink] .rim) {
+    animation: none;
+    stroke-width: 6px;
+  }
+
+  .ulsan-map-box :deep(.zone[data-blink] .glow) {
+    animation: none;
+    opacity: 1;
+  }
 }
 </style>
