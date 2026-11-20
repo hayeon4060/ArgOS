@@ -33,6 +33,8 @@ import org.springframework.web.util.UriBuilder;
 
 /**
  * 중앙 서버 연계 API 호출. 중앙 → 연계는 HTTP 로 정해졌다 (Redis 는 미니 PC → 중앙 구간만).
+ * (2026-11-20 아키텍처) ARGOS_REDIS_ENABLED=true 면 제어 명령(설비 명령 · 승인 · 거절)은 Redis(argos:cmd)로 보낸다.
+ * 조회는 아직 HTTP.
  *
  * <pre>
  * - 응답의 { success, data } 를 벗겨 data 만 돌려준다
@@ -45,6 +47,7 @@ public class CentralClient {
 
     private final RestClient rest;
     private final ObjectMapper mapper;
+    private RedisBridge redis;
 
     public CentralClient(
             @Value("${argos.central.base-url:http://localhost:8081}") String baseUrl,
@@ -59,6 +62,12 @@ public class CentralClient {
         }
         this.rest = builder.build();
         this.mapper = mapper;
+    }
+
+    /** Redis 를 켰을 때만 주입됨 (없으면 전부 HTTP) */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRedis(RedisBridge redis) {
+        this.redis = redis;
     }
 
     public Master master() {
@@ -146,6 +155,10 @@ public class CentralClient {
     public CommandResult decideCommand(long commandId, String decision, Long userId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("userId", userId);
+        if (redis != null) {
+            body.put("commandId", commandId);
+            return redis.call("approve".equals(decision) ? "APPROVE" : "DENY", body, CommandResult.class);
+        }
         return post("/api/v1/internal/commands/" + commandId + "/" + decision, body,
                 new ParameterizedTypeReference<Envelope<CommandResult>>() { });
     }
@@ -183,6 +196,10 @@ public class CentralClient {
         body.put("value", value);
         body.put("alarmId", alarmId);
         body.put("userId", userId);
+        if (redis != null) {
+            body.put("equipmentId", equipmentId);
+            return redis.call("COMMAND", body, CommandResult.class);
+        }
         return post("/api/v1/internal/equipment/" + equipmentId + "/commands", body,
                 new ParameterizedTypeReference<Envelope<CommandResult>>() { });
     }

@@ -16,6 +16,14 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 21MB
+  # 데이터 수집 서버 ↔ 중앙 서버 Redis (argos.redis.enabled=true 일 때만 연결)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      repositories:
+        enabled: false
 
 server:
   port: ${GATEWAY_SERVER_PORT:8080}
@@ -28,6 +36,9 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    redis:
+      enabled: ${ARGOS_REDIS_ENABLED:false}
 
 argos:
   auth:
@@ -43,6 +54,11 @@ argos:
     base-url: ${CENTRAL_SERVER_BASE_URL:http://localhost:8081}
     api-key: ${CENTRAL_API_KEY:}
     feed-enabled: ${CENTRAL_FEED_ENABLED:true}
+
+  # Redis 로 수집 서버와 주고받기 (실시간 변화 argos:feed 받기 · 제어 명령 argos:cmd 보내기).
+  # false 면 지금처럼 HTTP 폴링 · HTTP 명령. 조회는 켜도 HTTP
+  redis:
+    enabled: ${ARGOS_REDIS_ENABLED:false}
 
   # 올린 파일 (점검 서류 스캔, 배치도, 월간 보고서)
   files:

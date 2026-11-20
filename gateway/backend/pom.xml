@@ -46,6 +46,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- 데이터 수집 서버 ↔ 중앙 서버 Redis (ARGOS_REDIS_ENABLED=true 일 때만 연결) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- API 명세서: /swagger-ui.html, /v3/api-docs (Postman 에서 Import 가능) -->
         <dependency>
             <groupId>org.springdoc</groupId>

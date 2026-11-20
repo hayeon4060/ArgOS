@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,12 +24,32 @@ public class LiveFeed {
     private static final int CAPACITY = 20_000;
 
     private final Deque<Item> items = new ArrayDeque<>();
-    private final String bootId = Long.toString(System.currentTimeMillis(), 36);
+    private final long bootMillis = System.currentTimeMillis();
+    private final String bootId = Long.toString(bootMillis, 36);
+    private final List<Consumer<Item>> sinks = new CopyOnWriteArrayList<>();
     private long seq;
+
+    /** 항목이 생길 때마다 불린다 (Redis 로 내보내기). 순서대로, 잠금 안에서 불리므로 오래 걸리면 안 됨 */
+    public void addSink(Consumer<Item> sink) {
+        sinks.add(sink);
+    }
+
+    public String bootId() {
+        return bootId;
+    }
+
+    /** 켜진 시각(ms). Redis 스트림 번호 앞자리로 쓴다 ({bootMillis}-{seq}) */
+    public long bootMillis() {
+        return bootMillis;
+    }
 
     public synchronized long append(String type, OffsetDateTime at, Map<String, Object> data) {
         seq++;
-        items.addLast(new Item(seq, type, at, data));
+        Item item = new Item(seq, type, at, data);
+        items.addLast(item);
+        for (Consumer<Item> sink : sinks) {
+            sink.accept(item);
+        }
         while (items.size() > CAPACITY) {
             items.pollFirst();
         }

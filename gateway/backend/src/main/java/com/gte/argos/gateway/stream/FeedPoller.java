@@ -9,6 +9,8 @@ import com.gte.argos.gateway.central.CentralDto.FeedItem;
 import com.gte.argos.gateway.central.CentralDto.FeedPage;
 import com.gte.argos.gateway.central.Codes;
 import com.gte.argos.gateway.central.MasterCache;
+import com.gte.argos.gateway.central.RedisBridge;
+import com.gte.argos.gateway.central.RedisKeys;
 import com.gte.argos.gateway.central.SimTime;
 import com.gte.argos.gateway.checklist.ChecklistRepository;
 import java.time.OffsetDateTime;
@@ -37,6 +39,9 @@ import org.springframework.stereotype.Component;
  * RESET (시연 리셋)          → reset (화면은 전부 다시 불러온다)
  * </pre>
  * 중앙 서버가 다시 켜지면(bootId 변경) 처음부터 다시 따라간다.
+ *
+ * (2026-11-20 아키텍처) ARGOS_REDIS_ENABLED=true 면 HTTP 폴링 대신 전용 스레드가 Redis 스트림 argos:feed 를
+ * 기다려 읽는다 (새 변화가 오면 바로). 처리 방식은 같다.
  */
 @Component
 public class FeedPoller {
@@ -54,6 +59,10 @@ public class FeedPoller {
     private final FireService fires;
     private final boolean enabled;
     private final com.gte.argos.gateway.common.ActivityLogger activity;
+
+    private RedisBridge redis;
+    private volatile boolean running;
+    private Thread redisReader;
 
     private String bootId;
     private long after = -1;
@@ -75,13 +84,58 @@ public class FeedPoller {
         this.enabled = enabled;
     }
 
-    @Scheduled(fixedDelay = 1000, initialDelay = 3000)
-    public synchronized void poll() {
-        if (!enabled) {
+    /** Redis 를 켰을 때만 주입됨 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRedis(RedisBridge redis) {
+        this.redis = redis;
+    }
+
+    @jakarta.annotation.PostConstruct
+    void startRedis() {
+        if (!enabled || redis == null) {
             return;
         }
+        running = true;
+        redisReader = new Thread(() -> {
+            while (running) {
+                if (!step((boot, a) -> redis.feed(boot, a, 500, java.time.Duration.ofSeconds(1)))) {
+                    pause();
+                }
+            }
+        }, "redis-feed-reader");
+        redisReader.setDaemon(true);
+        redisReader.start();
+        log.info("수집 서버 피드를 Redis({})로 받습니다", RedisKeys.FEED);
+    }
+
+    @jakarta.annotation.PreDestroy
+    void stopRedis() {
+        running = false;
+        if (redisReader != null) {
+            redisReader.interrupt();
+        }
+    }
+
+    private static void pause() {
         try {
-            FeedPage page = central.feed(Math.max(after, 0), 500);
+            Thread.sleep(1_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Scheduled(fixedDelay = 1000, initialDelay = 3000)
+    public void poll() {
+        if (!enabled || redis != null) {
+            return;
+        }
+        step((boot, a) -> central.feed(a, 500));
+    }
+
+    /** 피드 한 번 따라가기. 가져오기에 실패하면 false */
+    synchronized boolean step(java.util.function.BiFunction<String, Long, FeedPage> fetch) {
+        try {
+            FeedPage page = fetch.apply(bootId, Math.max(after, 0));
             if (after < 0 || !Objects.equals(bootId, page.bootId())) {
                 boolean restarted = bootId != null;
                 bootId = page.bootId();
@@ -91,7 +145,7 @@ public class FeedPoller {
                     hub.publish("reset", Map.of("reason", "CENTRAL_RESTARTED"), s -> true);
                 }
                 warned = false;
-                return;
+                return true;
             }
             if (page.gap()) {
                 hub.publish("reset", Map.of("reason", "GAP"), s -> true);
@@ -108,11 +162,13 @@ public class FeedPoller {
                 lastLevels = Levels.of(central.status(null));
             }
             warned = false;
+            return true;
         } catch (RuntimeException e) {
             if (!warned) {
                 log.warn("중앙 서버 피드를 가져오지 못했습니다: {}", e.getMessage());
                 warned = true;
             }
+            return false;
         }
     }
 
