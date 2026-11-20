@@ -1,8 +1,13 @@
 <!--
-  사업장 현황 지도 카드: 울산공장 지도 + 공장을 누르면 말풍선
+  사업장 현황 지도 카드: 울산공장 지도 + 공장 말풍선(공정 목록)
   - 제목: 단계 경로 '사업장 › 울산공장' (CardCrumb, 2026-11-18 '구역 현황'에서 바꿈)
-  - 처음 열 때 정상이 아닌 공장이 있으면 그 공장 말풍선을 바로 띄움 (설계안과 같음)
-  - 말풍선의 '공정 배치도 보기' → enter-factory 이벤트
+  - 2026-11-20 재원님 요청: 말풍선은 공장에 마우스를 올리면 뜨고, 공장을 누르면 바로 공장 화면으로
+    · 지도에서 공장을 누르면 select-factory 이벤트 (페이지가 이동 또는 안내 처리)
+    · 말풍선의 '공정 배치도 보기' 단추는 삭제 (누르면 바로 이동하므로)
+  - 말풍선 두 가지
+    · hovered: 마우스가 올라가 있는 공장
+    · pinned : 마우스 없이 띄운 공장 — 처음 열 때 정상이 아닌 공장(설계안과 같음), 아래 '전체 공장 상태'에서 고른 공장
+    · 보여 주는 것은 hovered 가 먼저. 지도 위에서 공장에 마우스를 올리면 pinned 는 지움
 -->
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
@@ -22,22 +27,32 @@ const props = defineProps({
   enterableFactoryId: { type: Number, default: null },
 })
 
-const emit = defineEmits(['enter-factory'])
+const emit = defineEmits(['select-factory'])
 
 const map = ref(null)
 
-// 열린 말풍선: { code, anchor } 또는 null
-const selected = ref(null)
+// 말풍선 { code, anchor } 또는 null — 위 주석의 hovered / pinned
+const hovered = ref(null)
+const pinned = ref(null)
+const selected = computed(() => hovered.value ?? pinned.value)
 const selectedFactory = computed(() => props.factories.find((f) => f.code === selected.value?.code) ?? null)
 
-function onSelect(value) {
-  selected.value = value
+/** 지도에서 마우스 올림 (null 이면 공장 밖) */
+function onHover(value) {
+  hovered.value = value
+  if (value) pinned.value = null
+}
+
+/** 지도에서 공장 클릭 → 공장 객체로 바꿔서 페이지에 알림 */
+function onSelect(code) {
+  const factory = props.factories.find((f) => f.code === code)
+  if (factory) emit('select-factory', factory)
 }
 
 /** 공장 코드로 말풍선 열기 (아래 '전체 공장 상태' 카드에서 공장을 눌렀을 때 페이지가 부름) */
 function open(code) {
   const anchor = map.value?.anchorOfCode(code)
-  if (anchor) selected.value = { code, anchor }
+  if (anchor) pinned.value = { code, anchor }
 }
 defineExpose({ open })
 
@@ -59,15 +74,16 @@ onMounted(async () => {
     </template>
 
     <div class="map-area">
-      <UlsanMap ref="map" :factories="factories" @select="onSelect" />
+      <UlsanMap ref="map" :factories="factories" @hover="onHover" @select="onSelect" />
       <ZonePopover
         v-if="selected && selectedFactory"
         :factory="selectedFactory"
         :anchor="selected.anchor"
         :enterable="selectedFactory.id === enterableFactoryId"
-        @enter="emit('enter-factory', $event)"
       />
-      <div class="hint"><AppIcon name="zoomin" :size="15" />공장을 누르면 공정 목록이 열립니다</div>
+      <div class="hint">
+        <AppIcon name="zoomin" :size="15" />공장에 마우스를 올리면 공정 목록, 누르면 공장 화면으로 이동합니다
+      </div>
     </div>
   </BaseCard>
 </template>
