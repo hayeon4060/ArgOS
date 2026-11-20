@@ -10,20 +10,24 @@
       그 밖의 수동(예전 SKIPPED 등)은 안내만 ('수동 모드라 바꾸지 않았습니다')
   - 자동/수동은 '설비 기준값 관리' 창 › 설비 설정의 '배기팬 자동 제어' 스위치로 정함 (2026-11-19 설비 정보 카드에서 옮김)
   - 대시보드에서 팬을 손으로 조절하는 창은 2026-11-19 삭제 → 수동·실패 때는 현장 확인 안내
+  - 2026-11-20 재원님 요청: 가스 주의 창(adjustable)이면 아래에 속도 직접 조절 20 ~ 60 Hz (FanSpeedControl, 공장 담당자만)
 -->
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { decideFan } from '@/api/equipment'
 import { useAuthStore } from '@/stores/auth'
-import { ROLE } from '@/types/codes'
+import { ROLE, RPM_PER_HZ } from '@/types/codes'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
+import FanSpeedControl from './FanSpeedControl.vue'
 
 const props = defineProps({
   /** 알림 응답의 fanAuto (가스 알림이 아니거나 배기팬이 없으면 부모가 그리지 않음) */
   fan: { type: Object, required: true },
   /** 색: 'warn' 주황 / 'alarm' 빨강 */
   tone: { type: String, default: 'warn' },
+  /** 속도 직접 조절을 붙일지 (가스 주의 창만 true — 경보 대응 창은 셧다운 · 대피가 먼저라 안 붙임) */
+  adjustable: { type: Boolean, default: false },
 })
 
 const auth = useAuthStore()
@@ -42,7 +46,19 @@ watch(
     handledElsewhere.value = false
   },
 )
-const f = computed(() => ({ ...props.fan, ...override.value }))
+/*
+ * 이 창에서 속도를 직접 정한 값 (FanSpeedControl 'sent')
+ * - 실제 서버는 아직 알림에 manualHz 를 안 실어 줌 → 다시 불러와도(SSE) 사라지지 않게 따로 둠
+ * - 다른 알림(발생 시각이 다름)이 오면 지움
+ */
+const sentHz = ref(null)
+watch(
+  () => props.fan.at,
+  () => (sentHz.value = null),
+)
+const f = computed(() => ({ ...props.fan, ...override.value, manualHz: sentHz.value ?? props.fan.manualHz ?? null }))
+/** 담당자가 속도를 직접 정했는지 (정했으면 제목 · rpm 을 그 값으로) */
+const manual = computed(() => f.value.manualHz != null)
 
 /** 받침에 맞는 '은/는' ('배기팬은', '팬모터는') */
 const eunNeun = (word) => {
@@ -60,12 +76,15 @@ const awaiting = computed(() => !isAuto.value && f.value.status === 'AWAITING' &
 const approved = computed(() => !isAuto.value && ['SENT', 'APPLIED'].includes(f.value.status))
 /** 승인 · 거절 버튼은 공장 담당자만 (본사 관리자는 열람만, 서버도 403) */
 const canDecide = computed(() => auth.role === ROLE.PLANT_ADMIN)
-/** 회전수 화살표(900 → 1,350)를 보여 줄지: 자동, 승인 대기, 승인한 뒤 */
-const showRpm = computed(() => isAuto.value || awaiting.value || approved.value)
+/** 회전수 화살표(900 → 1,350)를 보여 줄지: 자동, 승인 대기, 승인한 뒤, 직접 정한 뒤 */
+const showRpm = computed(() => isAuto.value || awaiting.value || approved.value || manual.value)
+/** 화살표 오른쪽 값: 직접 정했으면 그 값(Hz × 30), 아니면 자동 목표 회전수 */
+const targetRpm = computed(() => (manual.value ? f.value.manualHz * RPM_PER_HZ : f.value.rpm))
 
 /** 굵은 제목 줄 */
 const title = computed(() => {
   const { status, percent } = f.value
+  if (manual.value) return `배기팬 직접 조절 ${f.value.manualHz} Hz`
   if (isAuto.value) {
     if (status === 'FAILED') return `배기팬 ${percent}% 자동 변경 실패`
     if (status === 'SENT') return `배기팬 ${percent}%로 올리는 중`
@@ -83,6 +102,7 @@ const title = computed(() => {
 const text = computed(() => {
   const name = f.value.fanName
   const { status } = f.value
+  if (manual.value) return `${name} 속도를 담당자가 직접 정했습니다.`
   if (isAuto.value) {
     if (status === 'FAILED') return `${name} 명령이 전달되지 않았습니다. 현장에서 배기팬을 확인해 주세요.`
     return `${name} 회전수를 자동으로 올렸습니다.`
@@ -124,13 +144,13 @@ async function decide(approve) {
 <template>
   <div class="fan-auto" :class="[showRpm ? tone : 'manual', { fail: f.status === 'FAILED' }]">
     <!-- 돌고 있으면 아이콘이 돎 (자동 가동 · 승인해서 올림) -->
-    <span class="ico" :class="{ spin: (isAuto || approved) && f.status !== 'FAILED' }"><AppIcon name="fan" :size="20" /></span>
+    <span class="ico" :class="{ spin: (isAuto || approved || manual) && f.status !== 'FAILED' }"><AppIcon name="fan" :size="20" /></span>
     <div class="txt">
       <b>{{ title }}</b>
       <small>{{ text }}</small>
     </div>
     <span v-if="showRpm" class="rpm mono">
-      {{ rpmText(f.beforeRpm) }}<AppIcon name="cr" :size="12" /><em>{{ rpmText(f.rpm) }}</em><i>rpm</i>
+      {{ rpmText(f.beforeRpm) }}<AppIcon name="cr" :size="12" /><em>{{ rpmText(targetRpm) }}</em><i>rpm</i>
     </span>
     <!-- 수동 승인 대기: 공장 담당자만 승인 · 거절 버튼 -->
     <span v-if="awaiting && canDecide && !handledElsewhere" class="acts">
@@ -138,6 +158,8 @@ async function decide(approve) {
       <button type="button" class="btn" :disabled="!!busy" @click="decide(false)">{{ busy === 'deny' ? '거절 중' : '거절' }}</button>
     </span>
     <span v-else-if="!isAuto" class="tag">수동</span>
+    <!-- 가스 주의: 속도 직접 조절 20 ~ 60 Hz (공장 담당자만 — 승인 · 거절과 같은 권한) -->
+    <FanSpeedControl v-if="adjustable && canDecide" :fan="f" class="speed" @sent="sentHz = $event" />
   </div>
 </template>
 
@@ -243,10 +265,14 @@ async function decide(approve) {
   color: var(--color-text-weak);
 }
 
-/* 승인 · 거절 버튼 */
-/* 승인 · 거절 버튼: 알림 창 폭이 좁아서 글 아래 한 줄로 따로 둠 (오른쪽 정렬) */
-.fan-auto:has(.acts) {
+/* 승인 · 거절 버튼 · 속도 조절: 알림 창 폭이 좁아서 글 아래 한 줄로 따로 둠 */
+.fan-auto:has(.acts),
+.fan-auto:has(.speed) {
   flex-wrap: wrap;
+}
+
+.speed {
+  flex: 1 0 100%;
 }
 
 .acts {

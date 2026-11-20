@@ -7,6 +7,7 @@
  * - GET /sensors/series                  : 센서 추이 (전날 겹쳐 보기 compare=yesterday)
  * - PATCH /equipment/{equipmentId}/settings : 설비 설정 바로 저장 (사용 상태 · 배기팬 자동/수동, 2026-11-19 추가)
  * - POST /fan-commands/{commandId}/approve · deny : 수동 배기팬 승인 · 거절 (가스 알림의 fanAuto.status = AWAITING, 2026-11-20 추가)
+ * - POST /equipment/{equipmentId}/fan { hz }      : 배기팬 속도 직접 조절 20 ~ 60 Hz (가스 주의 창, 2026-11-20 추가)
  */
 import http from './http'
 import { USE_MOCK, mockFail, mockOk } from './mock'
@@ -14,7 +15,7 @@ import { serverNow } from './clock'
 import { THERMAL_BY_STATE, TOP_OVEN_ID, mockEquipment, mockEquipmentEvents, thermalOf } from './mock/equipmentData'
 import { buildSeries } from './mock/equipmentSeries'
 import { saveSettings } from './mock/layoutData'
-import { decideFanCommand, fanAutoMode } from './mock/fanAuto'
+import { decideFanCommand, fanAutoMode, setManualHz } from './mock/fanAuto'
 import { emitLive } from './live'
 import { scenario } from './mock/scenario'
 import { LEVEL } from '@/types/codes'
@@ -121,4 +122,24 @@ export function decideFan(commandId, approve) {
     return r.error ? mockFail(r.error) : mockOk(r.data)
   }
   return http.post(`/fan-commands/${commandId}/${approve ? 'approve' : 'deny'}`)
+}
+
+/**
+ * 배기팬 속도 직접 조절 (가스 주의 창의 슬라이더 '적용', 2026-11-20 재원님 요청)
+ * - 이미 있는 POST /equipment/{id}/fan 의 { hz } 를 씀 (새 API 없음). 공장 담당자만 (본사 관리자 403)
+ * - 서버는 20 ~ 60 Hz 만 받음 → 밖이면 400 HZ_OUT_OF_RANGE, 같은 명령 처리 중이면 409 COMMAND_PENDING
+ * - 접수(202)만 바로 오고 결과는 SSE command.result
+ * - TODO(백엔드: 요청에 alarmId 를 받아 명령 · 알림 타임라인에 잇기, 알림 fanAuto 에 직접 정한 값(manualHz) 싣기 — docs/api/fan-speed-control.md
+ * @param {number} equipmentId 배기팬 설비 id (알림 fanAuto.fanEquipmentId, 없으면 fanAuto.equipmentId)
+ * @param {number} hz 20 ~ 60
+ * @returns {Promise<{ commandId, equipmentId, status }>}
+ */
+export function setFanHz(equipmentId, hz) {
+  if (USE_MOCK) {
+    const r = setManualHz(equipmentId, hz)
+    if (r.error) return mockFail(r.error)
+    emitLive('command.result') // 실제 서버는 엣지 결과가 오면 SSE command.result → 열린 창이 다시 불러옴
+    return mockOk(r.data)
+  }
+  return http.post(`/equipment/${equipmentId}/fan`, { hz })
 }
