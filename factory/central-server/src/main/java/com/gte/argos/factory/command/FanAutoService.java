@@ -33,6 +33,15 @@ public class FanAutoService {
     private final JdbcTemplate jdbc;
     private final EquipmentCommandService commands;
 
+    /**
+     * 값이 정상으로 돌아와 경보가 자동으로 닫힘 (2026-11-20): 사람이 닫을 때와 같이
+     * 승인 대기 배기팬 명령을 취소하고, 경보 중 올린 배기팬을 평상시(30Hz)로 되돌린다
+     */
+    public void onAlarmClosed(long alarmId) {
+        commands.cancelAwaiting(alarmId);
+        commands.recoverFans(alarmId);
+    }
+
     public FanAutoService(JdbcTemplate jdbc, EquipmentCommandService commands) {
         this.jdbc = jdbc;
         this.commands = commands;

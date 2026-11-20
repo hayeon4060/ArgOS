@@ -147,6 +147,11 @@ public class FeedPoller {
                 if (restarted) {
                     hub.publish("reset", Map.of("reason", "CENTRAL_RESTARTED"), s -> true);
                 }
+                try {
+                    fires.sweepClosedAlarms(); // 건너뛴 피드에 있었을 자동 종료 경보의 화재 정리
+                } catch (RuntimeException e) {
+                    log.warn("화재 정리 실패: {}", e.getMessage());
+                }
                 warned = false;
                 return true;
             }
@@ -246,10 +251,18 @@ public class FeedPoller {
                     view.put("by", checklists.userNames(List.of(by)).get(by));
                 }
                 view.put("at", item.at());
-                fireCheck(a);
+                boolean closed = "CLOSED".equals(a.status());
+                view.put("closeReason", a.closeReason());
+                if (!closed) {
+                    fireCheck(a);
+                }
                 view.put("fireId", fireIds.byAlarm(alarmId));
                 hub.publish("alarm.updated", id, view, s -> s.scope().canProcess(a.processId(), masterCache.get()));
-                closeIfConfirmed(a);
+                if (closed && "AUTO_RECOVERED".equals(a.closeReason()) && "ALARM_CLEARED".equals(item.type())) {
+                    autoClosed(a);
+                } else {
+                    closeIfConfirmed(a);
+                }
             }
             case "COMMAND_RESULT" -> {
                 long equipmentId = num(d.get("equipmentId"));
@@ -404,6 +417,16 @@ public class FeedPoller {
             st.sensors().forEach(x -> s.put(x.sensorId(), x.stage()));
             st.equipment().forEach(x -> e.put(x.equipmentId(), x.stage()));
             return new Levels(s, e);
+        }
+    }
+
+    /** 값이 정상으로 돌아와 수집 서버가 경보를 자동 종료함: 조치 기록, 화재면 화재도 자동 해제 */
+    private void autoClosed(CentralDto.Alarm a) {
+        try {
+            checklists.addAction(a.alarmId(), "CLOSE", null, "OK", "값이 정상으로 돌아와 자동 종료", null, time.now());
+            fires.autoClear(a.alarmId());
+        } catch (RuntimeException e) {
+            log.warn("경보 {} 자동 종료 후처리 실패: {}", a.alarmId(), e.getMessage());
         }
     }
 

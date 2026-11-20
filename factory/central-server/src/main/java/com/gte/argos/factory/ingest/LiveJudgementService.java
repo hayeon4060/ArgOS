@@ -39,7 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 엣지·VMS 값의 시각은 받은 시각(서버 시계)으로 한다 (보낸 쪽 ts 는 쓰지 않음, 2026-11-20 결정)
  * </pre>
  *
- * 실시간 모드에서는 이벤트가 끝나도 경보를 닫지 않는다. 경보는 사람이 연계 서버에서 닫는다.
+ * 실시간 모드에서도 경보에 묶인 이벤트가 모두 끝나면(값이 정상으로 돌아오면) 경보를 자동 종료한다 (AUTO_RECOVERED,
+ * 2026-11-20). 사람이 먼저 닫을 수도 있다.
  */
 @Service
 public class LiveJudgementService {
@@ -95,9 +96,7 @@ public class LiveJudgementService {
             accepted++;
         }
         listener.flush();
-        for (FeedingListener.GasAlarm g : listener.drainGasAlarms()) {
-            fanAuto.onGasAlarm(g.alarmId(), g.unitId(), g.stage());
-        }
+        afterJudge();
         if (!values.isEmpty()) {
             feed.append("SENSOR_VALUES", clock.nowOffset(), Map.of("values", values));
         }
@@ -122,6 +121,7 @@ public class LiveJudgementService {
         state.record(sensorId, r.ts(), r.value());
         e.acceptExternal(r, stage);
         listener.flush();
+        afterJudge();
         feed.append("SENSOR_VALUES", clock.nowOffset(),
                 Map.of("values", List.<Object[]>of(new Object[] {sensorId, odt(r.ts()), r.value()})));
         return true;
@@ -163,8 +163,17 @@ public class LiveJudgementService {
     public synchronized void ingestEdgeStage(EdgeStage s) {
         engine().acceptEdgeStage(s);
         listener.flush();
+        afterJudge();
+    }
+
+    /** 판정 뒤: 가스 경보면 배기팬 자동 제어, 값이 돌아와 자동으로 닫힌 경보면 배기팬 복귀 · 승인 대기 취소 */
+    private void afterJudge() {
         for (FeedingListener.GasAlarm g : listener.drainGasAlarms()) {
             fanAuto.onGasAlarm(g.alarmId(), g.unitId(), g.stage());
+        }
+        for (Long alarmId : listener.drainClosedAlarms()) {
+            log.info("경보 {} 자동 종료 (값이 정상으로 돌아옴)", alarmId);
+            fanAuto.onAlarmClosed(alarmId);
         }
     }
 
@@ -232,7 +241,8 @@ public class LiveJudgementService {
             }
             sensorIdByTag = ids;
             listener = new FeedingListener(new JdbcJudgementStore(jdbc, clock.zone(), 1), feed, clock.zone());
-            engine = new JudgementEngine(sensors, listener, JudgementEngine.Options.live());
+            // 값이 정상으로 돌아오면 경보도 자동 종료 (2026-11-20, 전에는 사람이 닫을 때까지 열어 둠)
+            engine = new JudgementEngine(sensors, listener, new JudgementEngine.Options(6, true));
             restoreOpen();
         }
         return engine;
@@ -282,15 +292,17 @@ public class LiveJudgementService {
         }
         List<JudgementEngine.RestoredAlarm> alarms = new ArrayList<>();
         java.util.Set<Long> units = new java.util.HashSet<>();
+        List<Long> autoClosed = new ArrayList<>();
         for (Map<String, Object> r : jdbc.queryForList("""
                 SELECT alarm_id, unit_id, stage, hazard FROM alarm WHERE status <> 'CLOSED'
                 ORDER BY unit_id, raised_at DESC, alarm_id DESC
                 """)) {
             long unitId = ((Number) r.get("unit_id")).longValue();
-            if (!units.add(unitId)) {
-                continue; // 그 단위의 더 최근 경보를 이미 이어 받음
-            }
             long alarmId = ((Number) r.get("alarm_id")).longValue();
+            if (!units.add(unitId)) {
+                autoClosed.add(closeRecovered(alarmId, unitId)); // 그 단위의 더 최근 경보가 있음 (예전 재시작으로 겹친 경보)
+                continue;
+            }
             // 이 경보에 묶인 열린 이벤트 + 같은 단위 센서의 열린 이벤트 (예전 경보에 묶였던 것도 이 경보에 다시 묶는다)
             List<Long> linked = new ArrayList<>();
             for (Long eventId : jdbc.queryForList("""
@@ -307,6 +319,10 @@ public class LiveJudgementService {
                             alarmId, eventId);
                 }
             }
+            if (linked.isEmpty()) {
+                autoClosed.add(closeRecovered(alarmId, unitId)); // 값이 이미 정상으로 돌아와 있음
+                continue;
+            }
             long key = engine.nextAlarmKey();
             Stage stage = stage(((Number) r.get("stage")).intValue());
             com.gte.argos.factory.judge.Hazard hazard = com.gte.argos.factory.judge.Hazard.valueOf((String) r.get("hazard"));
@@ -314,9 +330,28 @@ public class LiveJudgementService {
             listener.restoreAlarm(key, alarmId, unitId, stage, hazard);
         }
         engine.restore(events, alarms);
-        if (!events.isEmpty() || !alarms.isEmpty() || closed > 0) {
-            log.info("열린 이벤트 {}건 · 경보 {}건을 이어 받음 (겹친 열린 이벤트 {}건 닫음)", events.size(), alarms.size(), closed);
+        if (!events.isEmpty() || !alarms.isEmpty() || closed > 0 || !autoClosed.isEmpty()) {
+            log.info("열린 이벤트 {}건 · 경보 {}건을 이어 받음 (겹친 열린 이벤트 {}건 닫음, 값이 돌아온 경보 {}건 자동 종료 {})",
+                    events.size(), alarms.size(), closed, autoClosed.size(), autoClosed);
         }
+        for (Long alarmId : autoClosed) {
+            fanAuto.onAlarmClosed(alarmId);
+        }
+    }
+
+    /** 값이 정상으로 돌아온 열린 경보를 자동 종료 (AUTO_RECOVERED) 하고 피드로 알린다. 닫은 경보 id */
+    private long closeRecovered(long alarmId, long unitId) {
+        OffsetDateTime now = clock.nowOffset();
+        jdbc.update("""
+                UPDATE alarm SET status = 'CLOSED', closed_at = ?, close_reason = 'AUTO_RECOVERED'
+                WHERE alarm_id = ? AND status <> 'CLOSED'
+                """, now, alarmId);
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("alarmId", alarmId);
+        data.put("unitId", unitId);
+        data.put("closed", true);
+        feed.append("ALARM_CLEARED", now, data);
+        return alarmId;
     }
 
     private static Stage stage(int code) {
