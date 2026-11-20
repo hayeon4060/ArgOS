@@ -74,7 +74,7 @@ export function changesOf(equipment, draft, defaults = {}) {
 
 /**
  * 저장 본문 (바뀐 설비만) — PUT /processes/{id}/layout
- * - update 한 줄: { id, pos: { x, y }, name, type, active } (pos 는 정해진 경우만)
+ * - update 한 줄: { id, pos: { x, y, z }, name, type, active } (pos 는 정해진 경우만)
  */
 export function bodyOf(version, equipment, draft) {
   const update = equipment
@@ -83,7 +83,9 @@ export function bodyOf(version, equipment, draft) {
       const now = currentOf(eq, draft)
       // 화면 반응형 값이라 보통 객체로 복사 (예시 데이터가 structuredClone 으로 복사함)
       const row = { id: eq.id, name: now.name, type: now.type, active: now.active }
-      if (now.pos) row.pos = { x: now.pos.x, y: now.pos.y }
+      // 높이(z)는 화면에서 안 바꾸지만 저장된 값을 그대로 실어 보냄 — 서버는 pos 를 받으면 x · y · z 를 함께 덮어써서, 빼면 z 가 지워짐 (2차 검증)
+      if (now.pos) row.pos = { x: now.pos.x, y: now.pos.y, z: eq.pos?.z ?? null }
+      // TODO(백엔드): 중앙 서버 배치 저장이 update 의 type(설비 종류)을 아직 반영하지 않음 → docs/api/frontend-api-audit-1120.md 9장
       return row
     })
   return { version, equipment: { create: [], update, delete: [] }, sensors: { create: [], update: [], delete: [] } }

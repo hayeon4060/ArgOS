@@ -9,7 +9,7 @@
 
 | 구분 | 건수 | 어디 |
 |---|---|---|
-| 프론트에서 고친 것 | 13 | 1장 |
+| 프론트에서 고친 것 | 13 + 2차 4 | 1장, 9장 |
 | 백엔드 요청 (프론트가 임시로 맞춰 둠, 반영되면 프론트 코드가 줄어듦) | 4 | 2 · 3 · 4 · 6장 |
 | 백엔드 버그로 보이는 것 | 1 | 5장 1번 |
 | 확인 · 선택 사항 | 6 | 5장 2 ~ 3번, 7장 |
@@ -101,4 +101,26 @@
 - 값(enum): 단계 `NORMAL / WARN / ALARM`, 센서 `CURRENT / TEMP / CO / IR`, 운전 `RUNNING / STOPPING / STOPPED`, 알림 상태, 체크리스트 상태, 유형 `FIRE / GAS`, 계절 `ALL / SPRING_FALL / SUMMER / WINTER`, 권한 3종, `fanAuto.status`, 점검 상태
 - 권한: 주의 확인 · 체크리스트 전송 · 조치 확인 · 셧다운 · 경보 종료 · 화재 해제 · 배기팬 승인은 공장 담당자만, 화재 잠금 풀기 · 사업장 목록은 본사만 — 화면 버튼 노출과 서버 검사가 같음
 - SSE: `alarm.created · alarm.updated · checklist.updated · level.changed · threshold.changed · command.result · fire.started · fire.updated · fire.cleared · equipment.updated · chat.message · master.changed · reset` 을 받으면 다시 불러옴. `sensor.value` · `ping` 은 쓰지 않음
+- 2차 검증에서 화면 동작까지 확인: 이용 로그(조건 · 유형 묶음 · 내려받기), 채팅(대화방 · 글 · 읽음), 사용자 관리(목록 · 상세 · 추가 · 수정 · 정지 · 삭제 · 초기화 · 내 정보) — 9장 외에는 차이 없음
 - mock 모드(`VITE_USE_MOCK` 기본 true)는 그대로 동작합니다 (화면 9개 + 주의 · 경보 · 화재 상황 전환 확인).
+
+## 9. 2차 검증 추가분 (이용 로그 · 채팅 · 사용자 · 공장 관리 배치 저장)
+
+1차에서 응답 필드 이름만 본 네 영역을 화면 동작까지 다시 맞춰 봤습니다.
+
+**프론트에서 고친 것 (4건)**
+
+| # | 내용 | 원인 (서버 기준) | 고친 파일 |
+|---|---|---|---|
+| 1 | 채팅 대화방에 상대가 없어도(`peer: null`) 패널이 열리게 '담당자 없음'으로 채움. 전에는 본사 관리자가 채팅을 열면 화면 오류 | `ChatService.peer`: 그 사업장에 공장 담당자가 없으면 null (아산 · 전주) | `api/chat.js` |
+| 2 | 채팅 알림 카드: 설비 이름이 없으면 제목만 표시 (`… · null` 방지) | 지워진 알림은 `equipmentName: null` | `features/chat/ChatMessageList.vue` |
+| 3 | 이용 로그 유형 `FACTORY` 를 '설비 수정' 칸에 넣음. 전에는 칸 없이 영문 코드로 보이고 유형 걸러 보기에서 빠짐 | `FactoryAdminService` 가 사업장 · 공장 · 공정 추가, 배치 저장, 배치도 올리기를 `FACTORY` 로 남김 | `features/log/logMeta.js` |
+| 4 | 배치 저장 때 `pos.z` 를 받은 값 그대로 실어 보냄. 전에는 `{ x, y }` 만 보내 저장할 때마다 설비 높이 값이 지워짐 | 중앙 `MasterAdminService.saveLayout`: `pos` 가 오면 `pos_x · pos_y · pos_z` 를 함께 덮어씀 | `features/factory/layoutDraft.js` |
+
+**백엔드 요청 (1건)**
+
+- **배치 저장이 설비 종류(`type`)를 반영하지 않습니다.** `PUT /processes/{id}/layout` 의 `equipment.update[]` 에서 `pos · rot · size · name · active · fanAuto · managerIds` 는 처리하는데 `type` 은 빠져 있습니다 (중앙 `MasterAdminService.saveLayout`). 공장 관리에서 종류를 바꾸고 저장하면 '저장했습니다'가 뜨지만 다시 불러오면 원래 종류입니다.
+  - 요청: `if (u.containsKey("type"))` → `UPDATE equipment SET equipment_type = ?` 추가. 종류 변경을 막을 계획이면 알려 주세요 (프론트에서 종류 칸을 읽기 전용으로 바꿈).
+  - 참고: 이용 로그는 배치 저장을 `FACTORY`, 설비 설정(`PATCH /equipment/{id}/settings`)을 `LAYOUT` 으로 남깁니다. 의도와 반대로 보이면 확인해 주세요 (화면은 둘 다 '설비 수정' 칸).
+
+**확인만 한 것 (차이 없음)**: 사용자 관리 전체, 이용 로그 조건(`from · to · factoryId · processId · type · page · size`)과 CSV, 채팅 글 30개씩 · 이전 글 `before` · 읽음.
