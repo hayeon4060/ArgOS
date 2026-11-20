@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import RoleMatrixCard from '@/features/user/RoleMatrixCard.vue'
 import RoleSummaryCard from '@/features/user/RoleSummaryCard.vue'
@@ -38,6 +39,9 @@ const filter = reactive({ role: '', factoryId: '', q: '', page: 1 })
 const list = reactive({ rows: null, total: 0, counts: null, inactiveCount: 0, busy: false })
 let seq = 0
 
+/** 처음 목록을 받았는지 — 받기 전에는 화면 대신 뼈대 (실패해도 받은 것으로) */
+const ready = ref(false)
+
 async function loadList() {
   const my = ++seq
   list.busy = true
@@ -48,7 +52,10 @@ async function loadList() {
   } catch (error) {
     if (my === seq) toast(error.message, { type: 'err' })
   } finally {
-    if (my === seq) list.busy = false
+    if (my === seq) {
+      list.busy = false
+      ready.value = true
+    }
   }
 }
 watch(() => [filter.role, filter.factoryId, filter.page], loadList)
@@ -142,7 +149,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="user-page">
+  <!-- 처음 들어올 때만 뼈대 (거르기 · 쪽 이동은 목록 카드가 스스로 표시) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="user" />
+
+  <div v-else class="user-page">
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />

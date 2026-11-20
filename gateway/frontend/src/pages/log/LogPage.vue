@@ -12,6 +12,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { serverNow } from '@/api/clock'
 import { exportLogs, getLogs } from '@/api/logs'
 import { getSiteTree } from '@/api/sites'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import LogFilterBar from '@/features/log/LogFilterBar.vue'
 import LogHourCard from '@/features/log/LogHourCard.vue'
@@ -52,6 +53,9 @@ const busy = ref(false)
 const loadKey = ref(0)
 let seq = 0
 
+/** 처음 로그를 받았는지 — 받기 전에는 화면 대신 뼈대 (실패해도 받은 것으로) */
+const ready = ref(false)
+
 async function load() {
   const my = ++seq
   busy.value = true
@@ -63,7 +67,10 @@ async function load() {
   } catch (error) {
     if (my === seq) toast(error.message, { type: 'err' })
   } finally {
-    if (my === seq) busy.value = false
+    if (my === seq) {
+      busy.value = false
+      ready.value = true
+    }
   }
 }
 
@@ -155,7 +162,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="log-page">
+  <!-- 처음 들어올 때만 뼈대 (다시 조회할 때는 표 카드가 스스로 표시) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="logs" />
+
+  <div v-else class="log-page">
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />
