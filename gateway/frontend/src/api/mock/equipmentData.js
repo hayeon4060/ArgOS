@@ -186,14 +186,25 @@ export const THERMAL_BY_STATE = {
   [LEVEL.FIRE]: { image: irFire, max: 486, min: 24.0, avg: 131, point: { x: 0.84, y: 0.62 }, scale: { min: 20, max: 500 } },
 }
 
+/**
+ * VMS 실시간 영상 주소 예시 (백엔드가 알려 준 실제 모양: GET /thermal/331/latest → streamUrl)
+ * - VMS 는 3단계(경보 · 화재)일 때만 영상을 줌 → 예시 데이터도 3단계일 때만 채움
+ * - mock 모드에서는 보통 이 주소에 닿지 않음 → 화면이 7초 뒤 사진으로 되돌아가는 모습을 볼 수 있음
+ */
+export const SAMPLE_STREAM_URL = 'http://192.168.0.16:9000/stream/IR-301'
+const isStage3 = (level) => level === LEVEL.ALARM || level === LEVEL.FIRE
+
 export function thermalOf(cameraId, equipmentId) {
   const top = Number(equipmentId) === TOP_OVEN_ID
   // 상도 건조로 구역만 상황에 따라 바뀜 (다른 설비는 공정 전체 정상 그림, 최고·최저 없음)
-  const t = THERMAL_BY_STATE[top ? scenario.state : LEVEL.NORMAL]
+  const level = top ? scenario.state : LEVEL.NORMAL
+  const t = THERMAL_BY_STATE[level]
   return {
     cameraId,
     tag: 'IR-01',
+    level,
     imageUrl: t.image,
+    streamUrl: isStage3(level) ? SAMPLE_STREAM_URL : null, // 3단계만 영상
     capturedAt: todayIso(designAt(SCENARIO_TIME)),
     max: top ? t.max : null,
     min: top ? t.min : null,

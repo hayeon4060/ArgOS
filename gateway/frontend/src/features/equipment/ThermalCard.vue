@@ -1,13 +1,14 @@
 <!--
   '열화상 카메라' 카드 (설계안 vEquip() 열화상)
   - 제목줄 오른쪽: 이 설비 구역의 최고 · 최저 온도 (구역이 정해지지 않은 설비는 없음)
-  - 그림: ThermalImage (LIVE, 구역 이름, 색 눈금, 최고 지점 표시)
+  - 그림: ThermalImage (LIVE, 구역 이름, 색 눈금, 최고 지점 표시) — 3단계(경보 · 화재)면 VMS 영상 (thermalStream.js)
   - 아래: 구역 설명 + 마지막 수신 시각
 -->
 <script setup>
 import { computed } from 'vue'
 import ThermalImage from './ThermalImage.vue'
 import BaseCard from '@/components/BaseCard.vue'
+import { liveStreamUrl } from './thermalStream'
 import { LEVEL } from '@/types/codes'
 
 const props = defineProps({
@@ -43,6 +44,7 @@ const time = computed(() => {
     <div class="body">
       <ThermalImage
         :image-url="thermal.imageUrl"
+        :stream-url="liveStreamUrl(thermal, level)"
         :max="thermal.max"
         :max-point="thermal.maxPoint"
         :scale="thermal.scale"

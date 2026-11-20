@@ -24,7 +24,9 @@ import { callWorkers, getAlarmResponse, getFire } from '@/api/emergency'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import ThermalImage from '@/features/equipment/ThermalImage.vue'
+import { liveStreamUrl } from '@/features/equipment/thermalStream'
 import { useAlertStore } from '@/stores/alert'
+import { LEVEL } from '@/types/codes'
 import { useLiveReload } from '@/utils/useLiveReload'
 import { clearToasts, toast } from '@/utils/toast'
 
@@ -176,6 +178,7 @@ function shake() {
         <div class="fire-cols">
           <ThermalImage
             :image-url="fire.thermal.imageUrl"
+            :stream-url="liveStreamUrl(fire.thermal, LEVEL.FIRE)"
             :max="fire.thermal.max"
             :max-point="fire.thermal.maxPoint"
             :label-offset="{ x: -150, y: -52 }"
@@ -205,6 +208,7 @@ function shake() {
             <ThermalImage
               v-if="response.thermal?.imageUrl"
               :image-url="response.thermal.imageUrl"
+              :stream-url="liveStreamUrl(response.thermal, response.level)"
               :max="response.thermal.max"
               :max-point="response.thermal.maxPoint"
               :label-offset="{ x: -150, y: 32 }"
