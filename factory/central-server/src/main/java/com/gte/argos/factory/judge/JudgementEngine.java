@@ -3,6 +3,7 @@ package com.gte.argos.factory.judge;
 import com.gte.argos.factory.judge.JudgementListener.TrendPoint;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -127,15 +128,127 @@ public final class JudgementEngine {
         }
     }
 
+    /**
+     * 엣지(DAS)가 보낸 1초 값 (Kafka argos.edge.raw). 단계는 엣지가 판정하므로 여기서는 판정하지 않고
+     * 1분 추이·알림 센서 값·진행 중 엣지 이벤트 샘플에만 넣는다.
+     */
+    public void acceptValue(SensorReading reading) {
+        SensorJudge judge = judgesByTag.get(reading.tag());
+        if (judge == null) {
+            unknownTagCount++;
+            return;
+        }
+        listener.onReading(judge.def().sensorId(), reading.ts(), reading.value());
+        TrendPoint finished = trendsByTag.get(reading.tag()).accept(reading.ts(), reading.value());
+        if (finished != null) {
+            listener.onTrend(finished);
+        }
+        ExternalEvent open = externalByTag.get(reading.tag());
+        if (open != null) {
+            listener.onEventSample(open.key, new JudgementListener.Sample(reading.ts(), reading.value()));
+            open.peak = open.lowSide ? Math.min(open.peak, reading.value()) : Math.max(open.peak, reading.value());
+        }
+    }
+
+    /** 통신 끊김 (argos.edge.raw quality = COMM_LOST). 1분 추이의 lost_n 으로 센다 */
+    public void acceptLost(String tag, java.time.Instant ts) {
+        TrendAggregator agg = trendsByTag.get(tag);
+        if (agg == null) {
+            unknownTagCount++;
+            return;
+        }
+        TrendPoint finished = agg.lost(ts);
+        if (finished != null) {
+            listener.onTrend(finished);
+        }
+    }
+
+    /**
+     * 엣지(DAS)가 판정한 단계 변경 (Kafka argos.edge.stage). 엔진은 다시 판정하지 않고 받은 단계로
+     * 센서 이벤트를 열고·바꾸고·닫으며, 경보는 지금처럼 관제 단위로 묶어서(조합) 만든다.
+     * <pre>
+     * START  : 이벤트 시작 (같은 구간 키가 이미 열려 있으면 다시 온 것으로 보고 무시)
+     *          다른 구간이 열려 있으면 (END 가 빠진 것) 그 구간을 먼저 닫는다
+     * UPDATE : 단계 올림 → 경보에도 반영 / 단계 내림(3 → 2) → 이벤트 단계만 (경보는 내려가지 않음)
+     *          열린 구간이 없으면 (서버가 도중에 켜짐) 그 단계로 새로 연다
+     * END    : 이벤트 끝. 엣지 peak_value 를 쓴다
+     * </pre>
+     */
+    public void acceptEdgeStage(EdgeStage s) {
+        SensorJudge judge = judgesByTag.get(s.tag());
+        if (judge == null) {
+            unknownTagCount++;
+            return;
+        }
+        SensorDef def = judge.def();
+        ExternalEvent open = externalByTag.get(s.tag());
+        if (open != null && !java.util.Objects.equals(open.edgeKey, s.edgeKey()) && s.phase() != EdgeStage.Phase.END) {
+            closeExternal(def, open, s.ts(), null); // 앞 구간의 END 가 빠짐
+            open = null;
+        }
+        if (s.phase() == EdgeStage.Phase.END || s.stage() == Stage.NORMAL) {
+            if (open != null && java.util.Objects.equals(open.edgeKey, s.edgeKey())) {
+                if (s.plcOk() != null) {
+                    listener.onEdgeEvent(open.key, null, s.plcOk());
+                }
+                closeExternal(def, open, s.ts(), s.peak());
+            } else {
+                listener.onEdgeEventEndedUnknown(s.edgeKey(), s.ts(), s.peak());
+            }
+            return;
+        }
+        if (open == null) {
+            boolean low = "LO".equals(s.rule());
+            long key = eventKeys.getAndIncrement();
+            double v = s.value() == null ? 0 : s.value();
+            ExternalEvent ev = new ExternalEvent(key, s.stage(), v, low, s.edgeKey());
+            externalByTag.put(s.tag(), ev);
+            List<JudgementListener.Sample> first = s.value() == null ? List.of()
+                    : List.of(new JudgementListener.Sample(s.ts(), s.value()));
+            long thresholdId = s.thresholdId() != null ? s.thresholdId() : -1;
+            listener.onEventOpened(key, def.sensorId(), thresholdId, s.stage(), s.ts(), s.ts(), low,
+                    s.rule() == null ? (low ? "LO" : "HI") : s.rule(), first);
+            listener.onEdgeEvent(key, s.edgeKey(), s.plcOk());
+            correlator.onEventOpened(def, key, s.stage(), low, s.ts());
+            return;
+        }
+        if (s.plcOk() != null) {
+            listener.onEdgeEvent(open.key, null, s.plcOk());
+        }
+        if (s.stage().code() > open.stage.code()) {
+            open.stage = s.stage();
+            listener.onEventEscalated(open.key, s.stage(), s.ts());
+            correlator.onEventEscalated(def, open.key, s.stage(), s.ts());
+        } else if (s.stage().code() < open.stage.code()) {
+            open.stage = s.stage();
+            listener.onEventStageLowered(open.key, s.stage(), s.ts());
+        }
+    }
+
+    private void closeExternal(SensorDef def, ExternalEvent open, java.time.Instant at, Double peak) {
+        externalByTag.remove(def.tag());
+        listener.onEventClosed(open.key, at, peak != null ? peak : open.peak);
+        correlator.onEventClosed(def, open.key, at);
+    }
+
     private static final class ExternalEvent {
         final long key;
+        final boolean lowSide;
+        /** 엣지 구간 키 (VMS 이벤트는 null) */
+        final String edgeKey;
         Stage stage;
         double peak;
 
         ExternalEvent(long key, Stage stage, double peak) {
+            this(key, stage, peak, false, null);
+        }
+
+        ExternalEvent(long key, Stage stage, double peak, boolean lowSide, String edgeKey) {
             this.key = key;
             this.stage = stage;
             this.peak = peak;
+            this.lowSide = lowSide;
+            this.edgeKey = edgeKey;
         }
     }
 

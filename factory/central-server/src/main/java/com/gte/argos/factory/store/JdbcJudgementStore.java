@@ -32,9 +32,10 @@ import org.springframework.jdbc.support.KeyHolder;
 public class JdbcJudgementStore implements JudgementListener {
 
     private static final String INSERT_TREND = """
-            INSERT INTO sensor_trend (sensor_id, ts, avg_v, min_v, max_v, n) VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sensor_trend (sensor_id, ts, avg_v, min_v, max_v, n, lost_n) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (sensor_id, ts) DO UPDATE
-               SET avg_v = EXCLUDED.avg_v, min_v = EXCLUDED.min_v, max_v = EXCLUDED.max_v, n = EXCLUDED.n
+               SET avg_v = EXCLUDED.avg_v, min_v = EXCLUDED.min_v, max_v = EXCLUDED.max_v, n = EXCLUDED.n,
+                   lost_n = EXCLUDED.lost_n
             """;
     private static final String INSERT_EVENT = """
             INSERT INTO sensor_event (sensor_id, threshold_id, stage, max_stage, rule, started_at, peak_value, edge_key)
@@ -92,7 +93,8 @@ public class JdbcJudgementStore implements JudgementListener {
 
     @Override
     public void onTrend(TrendPoint p) {
-        trendBatch.add(new Object[] {p.sensorId(), odt(p.minute()), p.avg(), p.min(), p.max(), p.n()});
+        trendBatch.add(new Object[] {p.sensorId(), odt(p.minute()), p.avg(), p.min(), p.max(), p.n(),
+                Math.min(p.lostN(), Short.MAX_VALUE)});
         trendCount++;
         if (trendBatch.size() >= batchSize) {
             flushTrends();
@@ -112,7 +114,11 @@ public class JdbcJudgementStore implements JudgementListener {
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(INSERT_EVENT, new String[] {"event_id"});
             ps.setLong(1, sensorId);
-            ps.setLong(2, thresholdId);
+            if (thresholdId > 0) {
+                ps.setLong(2, thresholdId);
+            } else {
+                ps.setNull(2, java.sql.Types.BIGINT); // 엣지가 서버 기준값을 받기 전 (엣지 내장 기본값으로 판정)
+            }
             ps.setInt(3, stage.code());
             ps.setInt(4, stage.code());
             ps.setString(5, rule == null ? (lowSide ? "LO" : "HI") : rule);
@@ -153,6 +159,42 @@ public class JdbcJudgementStore implements JudgementListener {
             jdbc.update("UPDATE sensor_event SET ended_at = ?, peak_value = ? WHERE event_id = ?",
                     odt(endedAt), peak, eventId);
         }
+    }
+
+    @Override
+    public void onEdgeEvent(long eventKey, String edgeKey, Boolean plcOk) {
+        Long eventId = eventIds.get(eventKey);
+        if (eventId == null) {
+            return;
+        }
+        if (edgeKey != null) {
+            // 엣지 구간 키로 바꾼다. 이미 있으면 (봇 시나리오 반복·엣지 재시작으로 같은 키) 뒤에 번호를 붙인다
+            String base = edgeKey.length() > 36 ? edgeKey.substring(0, 36) : edgeKey;
+            String candidate = base;
+            for (int n = 2; exists(candidate, eventId); n++) {
+                candidate = base + "-" + n;
+            }
+            jdbc.update("UPDATE sensor_event SET edge_key = ? WHERE event_id = ?", candidate, eventId);
+        }
+        if (plcOk != null) {
+            jdbc.update("UPDATE sensor_event SET plc_ok = ? WHERE event_id = ?", plcOk, eventId);
+        }
+    }
+
+    @Override
+    public void onEventStageLowered(long eventKey, Stage stage, Instant at) {
+        Long eventId = eventIds.get(eventKey);
+        if (eventId != null) {
+            jdbc.update("UPDATE sensor_event SET stage = ? WHERE event_id = ?", stage.code(), eventId);
+        }
+    }
+
+    @Override
+    public void onEdgeEventEndedUnknown(String edgeKey, Instant endedAt, Double peak) {
+        jdbc.update("""
+                UPDATE sensor_event SET ended_at = GREATEST(?, started_at), peak_value = COALESCE(?, peak_value)
+                WHERE ended_at IS NULL AND (edge_key = ? OR edge_key LIKE ?)
+                """, odt(endedAt), peak, edgeKey, edgeKey + "-%");
     }
 
     @Override
@@ -335,7 +377,13 @@ public class JdbcJudgementStore implements JudgementListener {
     }
 
     private boolean exists(String edgeKey) {
-        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM sensor_event WHERE edge_key = ?", Integer.class, edgeKey);
+        return exists(edgeKey, -1);
+    }
+
+    /** 이 키를 다른 이벤트가 쓰고 있는지 */
+    private boolean exists(String edgeKey, long exceptEventId) {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM sensor_event WHERE edge_key = ? AND event_id <> ?",
+                Integer.class, edgeKey, exceptEventId);
         return n != null && n > 0;
     }
 

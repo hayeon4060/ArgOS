@@ -84,6 +84,21 @@ public class FeedingListener implements JudgementListener {
     }
 
     @Override
+    public void onEdgeEvent(long eventKey, String edgeKey, Boolean plcOk) {
+        store.onEdgeEvent(eventKey, edgeKey, plcOk);
+    }
+
+    @Override
+    public void onEventStageLowered(long eventKey, Stage stage, Instant at) {
+        store.onEventStageLowered(eventKey, stage, at);
+    }
+
+    @Override
+    public void onEdgeEventEndedUnknown(String edgeKey, Instant endedAt, Double peak) {
+        store.onEdgeEventEndedUnknown(edgeKey, endedAt, peak);
+    }
+
+    @Override
     public void onAlarmOpened(long alarmKey, long unitId, Stage stage, Hazard hazard, Instant raisedAt) {
         store.onAlarmOpened(alarmKey, unitId, stage, hazard, raisedAt);
         unitByAlarmKey.put(alarmKey, unitId);

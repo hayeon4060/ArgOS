@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gte.argos.factory.kafka.EdgeMessages.EdgeResult;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -63,6 +64,56 @@ class EdgeMessagesTest {
         assertThat(r.result()).isEqualTo("REJECTED");
         assertThat(r.fanRpm()).isNull();
         assertThat(r.detail()).containsEntry("message", "equipment_id 39 인버터 없음");
+    }
+
+    @Test
+    void 센서값과_통신_끊김() throws Exception {
+        var ok = EdgeMessages.raw(json.readTree(
+                "{\"tag\":\"TE-305\",\"ts\":\"2026-11-16T09:02:15+09:00\",\"value\":152.4,\"quality\":\"GOOD\"}"));
+        assertThat(ok.tag()).isEqualTo("TE-305");
+        assertThat(ok.value()).isEqualTo(152.4);
+        assertThat(ok.lost()).isFalse();
+        var lost = EdgeMessages.raw(json.readTree("{\"tag\":\"TE-305\",\"value\":null,\"quality\":\"COMM_LOST\"}"));
+        assertThat(lost.lost()).isTrue();
+        assertThat(lost.value()).isNull();
+        assertThat(EdgeMessages.raw(json.readTree("{\"value\":1}"))).isNull();
+    }
+
+    @Test
+    void 단계_메시지_시각은_받은_시각() throws Exception {
+        java.time.Instant now = java.time.Instant.parse("2026-11-16T01:30:00Z");
+        var s = EdgeMessages.stage(json.readTree("""
+                { "edge_key": "P5-TE-305-20261116T090145", "phase": "END", "tag": "TE-305", "threshold_id": 5,
+                  "stage": 1, "prev_stage": 2, "max_stage": 3, "rule": "HI", "reason": "완화·복귀",
+                  "ts": "2026-11-16T09:12:05+09:00", "value": 144.6, "peak_value": 170.2,
+                  "plc_address": "D310,2", "plc_written": [1, 1446], "plc_ok": true }"""), now);
+
+        assertThat(s.phase()).isEqualTo(com.gte.argos.factory.judge.EdgeStage.Phase.END);
+        assertThat(s.stage()).isEqualTo(com.gte.argos.factory.judge.Stage.NORMAL);
+        assertThat(s.thresholdId()).isEqualTo(5L);
+        assertThat(s.peak()).isEqualTo(170.2);
+        assertThat(s.plcOk()).isTrue();
+        assertThat(s.ts()).isEqualTo(now);
+        assertThat(EdgeMessages.stage(json.readTree(
+                "{\"edge_key\":\"k\",\"phase\":\"START\",\"tag\":\"TE-305\",\"stage\":2,\"threshold_id\":null}"), now)
+                .thresholdId()).isNull();
+        assertThat(EdgeMessages.stage(json.readTree("{\"edge_key\":\"k\",\"phase\":\"BOOM\",\"tag\":\"T\",\"stage\":2}"),
+                now)).isNull();
+    }
+
+    @Test
+    void 기준값_메시지는_명세_필드와_엣지_연속_횟수() {
+        var def = new com.gte.argos.factory.judge.SensorDef(313, "IT-303", "IT", 5,
+                new com.gte.argos.factory.judge.ThresholdRule(8, 28.05, 31.88, 22.95, 17.85, 24, 6, 6, 0.05, null),
+                List.of());
+        Map<String, Object> m = EdgeMessages.threshold(def, 15, 15, 20);
+        assertThat(m).containsEntry("threshold_id", 8L).containsEntry("tag", "IT-303")
+                .containsEntry("warn_value", 28.05).containsEntry("low_alarm", 17.85)
+                .containsEntry("immediate_value", null).containsEntry("warn_samples", 15)
+                .containsEntry("alarm_samples", 15).containsEntry("release_samples", 20)
+                .containsEntry("release_margin", 0.05);
+        assertThat(EdgeMessages.threshold(new com.gte.argos.factory.judge.SensorDef(1, "X", "TE", 5, null, List.of()),
+                15, 15, 20)).isNull();
     }
 
     @Test
