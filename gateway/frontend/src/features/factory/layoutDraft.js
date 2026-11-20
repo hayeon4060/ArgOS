@@ -8,6 +8,8 @@
  *   (배기팬 자동 제어 equipment.fan_auto 는 2026-11-19부터 '설비 기준값 관리' 창에서 바로 저장 — 여기서는 안 다룸)
  * - 변경 줄: 위치 이동(좌표 + 함께 옮겨지는 센서), 이름 변경, 정보 변경(종류 · 사용 상태)
  * - 저장 본문: PUT /processes/{id}/layout 의 equipment.update
+ * - 2026-11-20: 새 설비(저장 전, created) — 변경 줄 '○○ 추가', 저장 본문 equipment.create
+ *   새 설비 한 줄: { id: 'n1'(tempId), tempId, isNew: true, key, name, type, active, pos, sensors: [], managers: [] }
  */
 
 /**
@@ -51,8 +53,14 @@ export const placeOf = (pos, key, defaults) => pos ?? defaults[key] ?? null
  * @param {object} defaults 설비 이름(key) → 그려진 자리 { x, y }
  * @returns {Array<{ id, key, type, title, detail }>}
  */
-export function changesOf(equipment, draft, defaults = {}) {
-  const out = []
+export function changesOf(equipment, draft, defaults = {}, created = []) {
+  const out = created.map((c) => ({
+    id: c.id,
+    key: c.key,
+    type: 'add',
+    title: `${c.name} 추가`,
+    detail: `${typeLabel(c.type)} · X ${fmt(c.pos.x)} · Y ${fmt(c.pos.y)}`,
+  }))
   for (const eq of equipment) {
     const now = currentOf(eq, draft)
     const was = currentOf(eq, {})
@@ -76,7 +84,7 @@ export function changesOf(equipment, draft, defaults = {}) {
  * 저장 본문 (바뀐 설비만) — PUT /processes/{id}/layout
  * - update 한 줄: { id, pos: { x, y, z }, name, type, active } (pos 는 정해진 경우만)
  */
-export function bodyOf(version, equipment, draft) {
+export function bodyOf(version, equipment, draft, created = []) {
   const update = equipment
     .filter((eq) => draft[eq.id] && !same(currentOf(eq, draft), currentOf(eq, {})))
     .map((eq) => {
@@ -88,5 +96,12 @@ export function bodyOf(version, equipment, draft) {
       // TODO(백엔드): 중앙 서버 배치 저장이 update 의 type(설비 종류)을 아직 반영하지 않음 → docs/api/frontend-api-audit-1120.md 9장
       return row
     })
-  return { version, equipment: { create: [], update, delete: [] }, sensors: { create: [], update: [], delete: [] } }
+  // 새 설비: tempId 는 응답 created.equipment 에서 실제 id 로 바뀜. code 는 비워 보내면 서버가 'EQ-{공정 id}-{n}' 로 만듦
+  const create = created.map((c) => ({ tempId: c.tempId, name: c.name, type: c.type, pos: { x: c.pos.x, y: c.pos.y, z: null } }))
+  return { version, equipment: { create, update, delete: [] }, sensors: { create: [], update: [], delete: [] } }
+}
+
+/** 새 설비(저장 전) 한 줄 만들기 */
+export function newEquipment(tempId, { name, type }, pos) {
+  return { id: tempId, tempId, isNew: true, key: tempId, name, type, active: true, pos, sensors: [], managers: [] }
 }

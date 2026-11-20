@@ -9,6 +9,7 @@
     카드 아래쪽에 고정된 파란 단추 (2026-11-19 재원님 요청: 잘 보이게, 내용이 길어 스크롤해도 늘 보임)
   - 이 설비의 변경 내용 (저장 전)
   - 고른 설비가 없으면 '선택한 설비가 없습니다'
+  - 새 설비(저장 전, eq.isNew)는 기준값 관리 단추 대신 '저장하면 기준값을 정할 수 있습니다' (서버 id 가 없어서)
   - 바꾼 값은 change(필드, 값) 로 화면에 알림 → 화면이 저장 전 변경에 모음
 -->
 <script setup>
@@ -30,7 +31,7 @@ const props = defineProps({
 const emit = defineEmits(['change', 'thresholds'])
 
 const typeLabel = (t) => SENSOR_TYPES.find((x) => x.type === t)?.label ?? t
-const TYPE_BADGE = { move: '위치 변경됨', name: '이름 변경됨', meta: '정보 변경됨' }
+const TYPE_BADGE = { move: '위치 변경됨', name: '이름 변경됨', meta: '정보 변경됨', add: '새 설비' }
 /** 옮긴 설비면 위치 칸을 파랗게 */
 const moved = computed(() => props.changes.some((c) => c.type === 'move'))
 
@@ -119,7 +120,8 @@ const typeOptions = computed(() => {
     </div>
 
     <!-- 기준값 관리 창 열기 (센서별 주의·경보 기준, 계절, 변경 이력, 사용 상태 · 배기팬 자동 제어) -->
-    <div v-if="eq" class="act">
+    <p v-if="eq?.isNew" class="act weak">저장하면 이 설비의 기준값을 정할 수 있습니다.</p>
+    <div v-else-if="eq" class="act">
       <button type="button" class="btn btn-primary th-btn" @click="emit('thresholds')">
         <AppIcon name="slider" :size="17" />설비 기준값 관리
       </button>
