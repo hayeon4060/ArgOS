@@ -7,7 +7,7 @@
  */
 import { alarmTrendPoints, alarmTrendPointsOf } from './equipmentSeries'
 import { mockAlarms, todayAt } from './data'
-import { THERMAL_BY_STATE, mockEquipmentEvents } from './equipmentData'
+import { SAMPLE_STREAM_URL, THERMAL_BY_STATE, mockEquipmentEvents } from './equipmentData'
 import { EQUIPMENT, equipmentLevel, runStateOf, sensorsNow } from './processData'
 import { fanAutoOf } from './fanAuto'
 import { GAS_WARN_VALUES, TOP_OVEN_VALUES, designAt, scenario, scenarioNow, workerName } from './scenario'
@@ -321,7 +321,8 @@ export function alarmResponse(alarmId) {
       : '배기팬 과부하로 배기량이 줄어 버너실 CO가 경보 기준을 넘었습니다.',
     reasonDetail: fire ? '' : '전류 27.5 A (평소의 153%) · CO 34 ppm · 온도 164 ℃ 상승 중', // 명세서에 없음 (사유 아래 한 줄)
     cameraId: 301,
-    thermal: { imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale, zoneName: fire ? '버너실 앞' : '배기팬 모터부', cameraTag: 'IR-01' },
+    // streamUrl: 경보 · 화재 창은 늘 3단계라 VMS 영상 주소 예시를 넣음 (닿지 않으면 화면이 사진으로 되돌림)
+    thermal: { imageUrl: t.image, streamUrl: SAMPLE_STREAM_URL, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale, zoneName: fire ? '버너실 앞' : '배기팬 모터부', cameraTag: 'IR-01' },
     // 상도 건조로 센서 3종 (명세서는 공정 센서 전부 — 설계안은 3종만)
     sensors: top.map((s) => ({
       id: s.id, tag: s.tag, type: s.type, equipmentName: '상도 건조로', value: s.value, unit: s.unit, warn: s.warn, alarm: s.alarm, level: s.level,
@@ -362,7 +363,8 @@ export function fireView() {
     detectedAt: todayAt(f.detectedAt),
     basis: '열화상 최고 온도가 화재 기준(150 ℃)을 3초 이상 넘었습니다. 온도 212 ℃ · CO 120 ppm 동시 상승',
     values: { thermalMax: t.max, temp: 212, co: 120 }, // 명세서에 없음 (감지 근거 숫자 칸)
-    thermal: { cameraId: 301, cameraTag: 'IR-01', imageUrl: t.image, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale },
+    // streamUrl: GET /fires/{id} 의 thermal.streamUrl (백엔드 피드백 2026-11-20)
+    thermal: { cameraId: 301, cameraTag: 'IR-01', imageUrl: t.image, streamUrl: SAMPLE_STREAM_URL, max: t.max, min: t.min, avg: t.avg, maxPoint: t.point, scale: t.scale },
     broadcast: {
       on: f.status === 'ACTIVE',
       startedAt: todayAt(designAt('16:58:05')), // 설계안 시각 → 지금 상황 기준

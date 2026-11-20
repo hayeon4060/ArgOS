@@ -2,7 +2,7 @@
   본사 화재 현황 '화재 상세' 카드 (화면설계안 v-dash.js vRegion() 화재일 때 오른쪽, 화면설계서 C5)
   - 머리(빨강): '화재 상세' + '경고 방송 송출 중' + 지금 시각
   - 지역 · 공장 · 공정 · 설비 · 감지 근거(열화상 최고 486 ℃ · 온도 212 ℃ · CO 120 ppm)
-  - 열화상(LIVE), 대응 현황(감지 → 경고 방송 → 자동 셧다운 → 본사 통보 → 경보 해제 대기), 차례로 나타남(.09초 간격)
+  - 열화상(LIVE, VMS 영상이 오면 영상 · 안 오면 사진), 대응 현황(감지 → 경고 방송 → 자동 셧다운 → 본사 통보 → 경보 해제 대기), 차례로 나타남(.09초 간격)
   - 현장에서 해제 비밀번호를 5회 틀려 잠기면 '해제 잠금 풀기(승인)' 단추 (POST /fires/{id}/approve-unlock)
   - 단추: 5공장 대시보드로 이동(그 공정 배치도), 공장 담당자 연락(채팅은 아직 없어 알림 띠만)
 -->
@@ -11,6 +11,8 @@ import { approveFireUnlock } from '@/api/emergency'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
 import ThermalImage from '@/features/equipment/ThermalImage.vue'
+import { liveStreamUrl } from '@/features/equipment/thermalStream'
+import { LEVEL } from '@/types/codes'
 import { toast } from '@/utils/toast'
 
 const props = defineProps({
@@ -65,6 +67,7 @@ function contact() {
     <div class="ir">
       <ThermalImage
         :image-url="fire.thermal.imageUrl"
+        :stream-url="liveStreamUrl(fire.thermal, LEVEL.FIRE)"
         :max="fire.thermal.max"
         :max-point="fire.thermal.maxPoint"
         :label-offset="{ x: -150, y: -52 }"
