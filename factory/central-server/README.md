@@ -267,3 +267,8 @@ docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine
 | --- | --- |
 | `ARGOS_REDIS_ENABLED` | `false` |
 | `REDIS_HOST` · `REDIS_PORT` · `REDIS_PASSWORD` | `localhost` · `6379` · (없음) |
+
+## 배기팬 기준 주파수 (2026-11-20 변경)
+
+정상 30Hz (900rpm) · 주의 45Hz · 경보 60Hz (`EquipmentCommandService.HZ_NORMAL`, `FanAutoService.HZ_WARN · HZ_ALARM`).
+경보 종료 복귀와 시연 리셋이 30Hz 로 돌아간다. 위에 '평상시 40Hz' 라고 적힌 곳은 이 값으로 읽는다. DB 는 `V6__fan_normal_30hz.sql`.

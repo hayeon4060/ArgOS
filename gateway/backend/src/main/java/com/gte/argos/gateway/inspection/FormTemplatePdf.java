@@ -31,7 +31,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 빈 서류 양식 PDF (GET /doc-forms/{formType}/template, docs/api/inspection-redesign-api.md 3-6).
- * 팀 양식 파일(ArgOS_서류양식.pdf)이 저장소에 없어서 doc_form.field_schema 로 빈 양식을 그린다:
+ * 팀 양식 원본(docs/ArgOS_서류양식.pdf → resources/forms/argos-doc-forms.pdf)에서 그 양식 쪽만 잘라 준다 (2026-11-20).
+ * 원본에 없는 양식이면 doc_form.field_schema 로 빈 양식을 그린다:
  * 기본 정보(info) · 측정(measure) 칸 표, 점검 항목(items) 표(항목 · 양호/불량/해당 없음 · 측정값 · 비고),
  * 이상 · 조치(issues) 표, 종합 판정(verdict) · 의견. 그 밖의 묶음은 '칸 이름 | 빈칸' 표.
  */
@@ -69,11 +70,43 @@ public class FormTemplatePdf {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "FORM_BROKEN", "양식 정보를 읽지 못했습니다.");
         }
         try {
-            return new Template("ARG-" + formType + "_" + name + ".pdf", draw(formType, name, fields));
+            byte[] page = original(formType);
+            return new Template("ARG-" + formType + "_" + name + ".pdf", page != null ? page : draw(formType, name, fields));
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "TEMPLATE_FAILED", "양식을 만들지 못했습니다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 팀 양식 원본(forms/argos-doc-forms.pdf = docs/ArgOS_서류양식.pdf, 쪽마다 양식 하나)에서 'ARG-{양식}' 이 적힌 쪽만.
+     * 원본이 없거나 그 양식 쪽이 없으면 null (→ 서버가 그린 양식)
+     */
+    static byte[] original(String formType) {
+        try (java.io.InputStream in = FormTemplatePdf.class.getResourceAsStream("/forms/argos-doc-forms.pdf")) {
+            if (in == null) {
+                return null;
+            }
+            com.lowagie.text.pdf.PdfReader reader = new com.lowagie.text.pdf.PdfReader(in);
+            com.lowagie.text.pdf.parser.PdfTextExtractor text = new com.lowagie.text.pdf.parser.PdfTextExtractor(reader);
+            String mark = "ARG-" + formType;
+            for (int i = 1; i <= reader.getNumberOfPages(); i++) {
+                if (text.getTextFromPage(i).replaceAll("\\s", "").contains(mark)) {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    Document doc = new Document(reader.getPageSizeWithRotation(i));
+                    com.lowagie.text.pdf.PdfCopy copy = new com.lowagie.text.pdf.PdfCopy(doc, out);
+                    doc.open();
+                    copy.addPage(copy.getImportedPage(reader, i));
+                    doc.close();
+                    reader.close();
+                    return out.toByteArray();
+                }
+            }
+            reader.close();
+            return null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

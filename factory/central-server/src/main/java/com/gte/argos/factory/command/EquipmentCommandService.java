@@ -32,10 +32,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 설비 명령 (테이블 명세서 v5 equipment_command).
  *
  * <pre>
- * 명령   FAN_HZ   배기팬 주파수 변경 (value = 목표 Hz, 20 ~ 60. 40 이 평상시). 회전수 = Hz × 30 (40Hz = 1200rpm)
+ * 명령   FAN_HZ   배기팬 주파수 변경 (value = 목표 Hz, 20 ~ 60. 30 이 평상시). 회전수 = Hz × 30 (30Hz = 900rpm)
  *        FAN_STOP 배기팬 정지
  *        SHUTDOWN · RESTART  설비 셧다운·재가동 (v5 에는 없지만 경보 셧다운 시연에 씀)
- * 보낸 쪽(source)  USER 사람이 화면에서 / AUTO 가스 알림 때 서버 자동 제어(FanAutoService) / RECOVERY 경보 종료 때 40Hz 복귀
+ * 보낸 쪽(source)  USER 사람이 화면에서 / AUTO 가스 알림 때 서버 자동 제어(FanAutoService) / RECOVERY 경보 종료 때 30Hz 복귀
  * 결과   PENDING → DONE | FAILED | EXPIRED(만료 시각 지남) | CANCELLED(셧다운으로 취소)
  *        AWAITING(수동 배기팬: 담당자 승인 대기) → 승인하면 PENDING 으로 실행 | 거절 DENIED | 알림 종료 CANCELLED
  *        DUPLICATE: 같은 설비에 같은 명령·값이 아직 PENDING 이면 실행하지 않고 기록만
@@ -66,8 +66,8 @@ public class EquipmentCommandService {
     public static final List<String> SOURCES = List.of("USER", "AUTO", "RECOVERY");
     public static final int HZ_MIN = 20;
     public static final int HZ_MAX = 60;
-    /** 평상시 주파수. 경보가 끝나면 여기로 되돌린다 */
-    public static final int HZ_NORMAL = 40;
+    /** 평상시 주파수. 경보가 끝나면 여기로 되돌린다 (2026-11-20 팀 기준: 정상 30 · 주의 45 · 경보 60 Hz) */
+    public static final int HZ_NORMAL = 30;
     /** 회전수 = Hz × 30 */
     public static final int RPM_PER_HZ = 30;
     /** 이 시간 안에 설비가 응답하지 않으면 만료 */
@@ -180,9 +180,9 @@ public class EquipmentCommandService {
     }
 
     /**
-     * 경보 종료 때 배기팬을 평상시 주파수(40Hz)로 되돌린다 (source RECOVERY, 요청자 없음).
+     * 경보 종료 때 배기팬을 평상시 주파수(30Hz)로 되돌린다 (source RECOVERY, 요청자 없음).
      * 대상: 이 경보로 보낸 FAN_HZ 명령(사람·자동)의 팬 + 경보 발생 뒤 같은 공정에서 사람이 FAN_HZ 를 바꾼 팬.
-     * 지금 가동 중이고 40Hz 가 아닌 팬만 보낸다. 돌려준 명령 목록.
+     * 지금 가동 중이고 30Hz 가 아닌 팬만 보낸다. 돌려준 명령 목록.
      */
     @Transactional
     public List<CommandResult> recoverFans(long alarmId) {

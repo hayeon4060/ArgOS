@@ -188,7 +188,9 @@ public class LiveJudgementService {
         jdbc.update("DELETE FROM sensor_trend WHERE ts >= ?", cutoff);
         daily.resetFromSimStart();
         jdbc.update("UPDATE equipment SET run_state = 'RUN', "
-                + "fan_rpm = CASE WHEN equipment_type = 'FAN' THEN 1200 ELSE fan_rpm END");
+                + "fan_rpm = CASE WHEN equipment_type = 'FAN' THEN "
+                + com.gte.argos.factory.command.EquipmentCommandService.HZ_NORMAL
+                * com.gte.argos.factory.command.EquipmentCommandService.RPM_PER_HZ + " ELSE fan_rpm END");
         engine = null;
         listener = null;
         state.clear();

@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test;
 class FanCommandTest {
 
     @Test
-    void 끄기는_FAN_STOP_켜기는_40Hz() {
+    void 끄기는_FAN_STOP_켜기는_평상시_30Hz() {
         assertThat(EquipmentActionService.fanCommand("OFF", null, null))
                 .isEqualTo(new FanCommand("FAN_STOP", null, "끄기"));
-        assertThat(EquipmentActionService.fanCommand("ON", null, null).hz()).isEqualTo(40);
+        assertThat(EquipmentActionService.fanCommand("ON", null, null).hz()).isEqualTo(30);
     }
 
     @Test

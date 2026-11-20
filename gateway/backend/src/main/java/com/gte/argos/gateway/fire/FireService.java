@@ -169,6 +169,19 @@ public class FireService {
         return out;
     }
 
+    /** 상단 바: 내 범위에서 진행 중인 화재 하나 (가장 최근) {id, location}. 없으면 null */
+    public Map<String, Object> activeFire() {
+        List<Map<String, Object>> active = list("ACTIVE", null);
+        if (active.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> f = active.get(0);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", f.get("id"));
+        out.put("location", f.get("location"));
+        return out;
+    }
+
     /** GET /fires/{fireId} */
     public Map<String, Object> detail(long fireId) {
         UserScope scope = currentUser.scope();
