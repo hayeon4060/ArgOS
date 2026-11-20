@@ -83,7 +83,7 @@ const view = computed(() => {
       <SegButtons v-model="tab" :options="TABS" small @update:model-value="page = 1" />
     </template>
 
-    <div class="body" :class="{ busy }">
+    <div class="body" :class="{ busy }" :style="{ '--rows': perPage }">
       <table v-if="view.length" class="tb">
         <colgroup>
           <col class="c-time" /><col class="c-hz" /><col /><col class="c-lv" /><col class="c-act" /><col class="c-dur" /><col class="c-state" /><col class="c-more" />
@@ -163,7 +163,14 @@ const view = computed(() => {
 
 .body {
   flex: 1;
-  min-height: 684px; /* 14행 + 머리줄 — 쪽마다 높이가 흔들리지 않게 */
+  /*
+   * 표 높이는 카드에 남은 높이를 그대로 씀 (페이지가 화면 높이에 맞춰 카드 높이를 정함)
+   * - container-type: size → 아래 td 가 이 칸 높이(100cqh)를 기준으로 줄 높이를 계산할 수 있게
+   * - 화면이 아주 낮아 14행이 안 들어가면 이 칸 안에서만 스크롤
+   */
+  min-height: 0;
+  overflow-y: auto;
+  container-type: size;
   transition: opacity 150ms;
 }
 
@@ -200,7 +207,12 @@ th {
 }
 
 td {
-  height: 46px;
+  /*
+   * 줄 높이 = (표 칸 높이 − 머리줄 41px) ÷ 한 쪽 행 수(--rows, 14) — 화면 높이에 맞춰 14행이 딱 들어가게
+   * 32px 보다 낮아지지 않고(글자·단추가 눌리지 않게) 46px(설계 값)보다 높아지지 않음
+   * 마지막 쪽처럼 행이 적어도 줄 높이는 같음
+   */
+  height: clamp(32px, calc((100cqh - 41px) / var(--rows, 14)), 46px);
   padding: 0 12px;
   border-bottom: 1px solid #f1f5f9;
   white-space: nowrap;
