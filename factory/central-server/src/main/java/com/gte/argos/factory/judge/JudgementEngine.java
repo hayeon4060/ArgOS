@@ -147,8 +147,20 @@ public final class JudgementEngine {
         if (open != null) {
             listener.onEventSample(open.key, new JudgementListener.Sample(reading.ts(), reading.value()));
             open.peak = open.lowSide ? Math.min(open.peak, reading.value()) : Math.max(open.peak, reading.value());
+            // 엣지가 재시작하면 END 를 보내지 않아 이벤트가 영영 열려 있게 된다 (2026-11-20).
+            // 엣지 이벤트 중 정상 값이 엣지 복귀 횟수만큼 이어지면 중앙이 닫는다
+            ThresholdRule rule = judge.def().rule();
+            if (open.edgeKey != null && rule != null) {
+                open.normalRun = rule.isRecovered(reading.value()) ? open.normalRun + 1 : 0;
+                if (open.normalRun >= EDGE_RELEASE_SAMPLES) {
+                    closeExternal(judge.def(), open, reading.ts(), null);
+                }
+            }
         }
     }
+
+    /** 엣지 END 없이 닫을 때 필요한 연속 정상 값 수 (엣지 복귀 기준 20회 = 20초) */
+    static final int EDGE_RELEASE_SAMPLES = 20;
 
     /** 통신 끊김 (argos.edge.raw quality = COMM_LOST). 1분 추이의 lost_n 으로 센다 */
     public void acceptLost(String tag, java.time.Instant ts) {
@@ -238,6 +250,8 @@ public final class JudgementEngine {
         final String edgeKey;
         Stage stage;
         double peak;
+        /** 엣지 이벤트 중 이어진 정상 값 수 */
+        int normalRun;
 
         ExternalEvent(long key, Stage stage, double peak) {
             this(key, stage, peak, false, null);
