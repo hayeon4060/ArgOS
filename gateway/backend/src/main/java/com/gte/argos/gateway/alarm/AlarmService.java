@@ -44,6 +44,16 @@ public class AlarmService {
     private final ChecklistRepository checklists;
     private final ThermalService thermal;
     private final com.gte.argos.gateway.fire.FireIds fireIds;
+    private com.gte.argos.gateway.chat.ChatService chat;
+    private com.gte.argos.gateway.fire.FireService fires;
+
+    /** 상단 바 채팅 · 화재 숫자용 (서로 기대지 않게 setter 로) */
+    @org.springframework.beans.factory.annotation.Autowired
+    void setSummarySources(@org.springframework.context.annotation.Lazy com.gte.argos.gateway.chat.ChatService chat,
+                           @org.springframework.context.annotation.Lazy com.gte.argos.gateway.fire.FireService fires) {
+        this.chat = chat;
+        this.fires = fires;
+    }
 
     public AlarmService(CentralClient central, MasterCache masterCache, CurrentUser currentUser, SimTime time,
                         ChecklistRepository checklists, ThermalService thermal,
@@ -619,6 +629,14 @@ public class AlarmService {
         return out;
     }
 
+    private static <T> T safe(java.util.function.Supplier<T> s, T fallback) {
+        try {
+            return s.get();
+        } catch (RuntimeException e) {
+            return fallback; // 상단 바 숫자 하나 때문에 요약 전체가 실패하지 않게
+        }
+    }
+
     /** GET /notifications/summary: 상단 바 숫자 */
     public Map<String, Object> summary() {
         UserScope scope = currentUser.scope();
@@ -644,8 +662,8 @@ public class AlarmService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("unackedAlarmCount", unacked);
         out.put("activeChecklistCount", activeChecklists);
-        out.put("unreadChatCount", 0);  // 채팅은 아직
-        out.put("activeFire", null);    // 화재 판정은 아직
+        out.put("unreadChatCount", safe(() -> chat.unreadTotal(scope), 0));
+        out.put("activeFire", safe(() -> fires.activeFire(), null));
         return out;
     }
 

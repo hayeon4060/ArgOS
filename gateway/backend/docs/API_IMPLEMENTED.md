@@ -453,3 +453,12 @@ DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `sou
 - 설비번호 `EF-nn`: 공정 안 설비(카메라 제외)를 설비 id 순으로 센 번호. 양식 '설비번호' 칸의 숫자로 설비를 찾는다
 - 상태 `DELAYED`(누락) 판정은 그대로 (예정 시각이 지났는데 안 함)
 - 시드의 예전 완료 건(스캔 · 전자 값 없음)은 `source` · `result` 가 null
+
+## 2026-11-20 남은 요청 정리
+
+| 항목 | 반영 |
+| --- | --- |
+| `GET /notifications/summary` | `unreadChatCount`: 볼 수 있는 대화방의 안 읽은 글 합계 (작업자는 0). `activeFire`: 내 범위의 진행 중 화재 `{id, location}` (없으면 null) |
+| `GET /doc-forms/{formType}/template` | 팀 양식 원본(`docs/ArgOS_서류양식.pdf`, 서버에는 `resources/forms/argos-doc-forms.pdf`)에서 그 양식 쪽(`ARG-F0n`)만 잘라 준다. 원본에 없는 양식만 서버가 그림 |
+| `GET /processes/{id}/status` | `units[{id, name, equipmentId, level, equipmentIds}]` 와 설비 줄의 `unitLevel`(속한 관제 단위 중 가장 높은 단계) 추가 (backend-feedback-1120 5장 3번) |
+| 수집 서버 `V5__co_immediate.sql` | CO(AT) 현재 기준값의 `immediate_value` 가 비어 있으면 200 ppm (DAS 즉시 3단계 판정) |

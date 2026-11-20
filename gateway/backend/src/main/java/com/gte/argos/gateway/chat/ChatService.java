@@ -200,6 +200,20 @@ public class ChatService {
         return v.isEmpty() ? 0 : v.get(0);
     }
 
+    /** 상단 바 채팅 숫자: 내가 볼 수 있는 대화방(사업장)의 안 읽은 글 합계 */
+    public int unreadTotal(UserScope scope) {
+        if (scope.isWorker()) {
+            return 0; // 공정 담당자는 채팅을 쓰지 않음
+        }
+        int n = 0;
+        for (CentralDto.Plant p : masterCache.get().plants()) {
+            if (scope.canSite(p.id(), masterCache.get())) {
+                n += unread(scope.userId(), p.id());
+            }
+        }
+        return n;
+    }
+
     private int unread(long userId, long roomId) {
         Integer n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM chat_message WHERE plant_id = :room AND sender_id <> :u

@@ -389,12 +389,48 @@ public class DashboardService {
         Status status = central.status(processId);
         Map<Long, Long> activeChecklist = checklists.activeChecklistByEquipment(openAlarmEquipment(processId));
 
+        // 관제 단위별 단계 (backend-feedback-1120 5장 3번): 단위 = 대표 설비 + 구성 센서가 달린 설비들
+        Map<Long, Long> equipmentOfSensor = new java.util.HashMap<>();
+        for (SensorStatus s : status.sensors()) {
+            equipmentOfSensor.put(s.sensorId(), s.equipmentId());
+        }
+        List<Map<String, Object>> units = new ArrayList<>();
+        Map<Long, Integer> unitStageOfEquipment = new java.util.HashMap<>();
+        for (CentralDto.Unit u : m.units()) {
+            if (u.processId() != processId || !u.active()) {
+                continue;
+            }
+            int stage = status.level("units", u.id());
+            java.util.Set<Long> eqIds = new java.util.LinkedHashSet<>();
+            if (u.equipmentId() != null) {
+                eqIds.add(u.equipmentId());
+            }
+            for (CentralDto.UnitMember mem : u.members()) {
+                Long eqId = equipmentOfSensor.get(mem.sensorId());
+                if (eqId != null) {
+                    eqIds.add(eqId);
+                }
+            }
+            for (Long eqId : eqIds) {
+                unitStageOfEquipment.merge(eqId, stage, Math::max);
+            }
+            Map<String, Object> ur = new LinkedHashMap<>();
+            ur.put("id", u.id());
+            ur.put("name", u.name());
+            ur.put("equipmentId", u.equipmentId());
+            ur.put("level", Codes.level(stage));
+            ur.put("equipmentIds", eqIds);
+            units.add(ur);
+        }
+
         List<Map<String, Object>> equipment = new ArrayList<>();
         for (EquipmentStatus e : status.equipment()) {
             Equipment eq = m.equipment(e.equipmentId());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", e.equipmentId());
             row.put("level", Codes.level(e.stage()));
+            // 이 설비가 속한 관제 단위 중 가장 높은 단계 (배기팬만 경보여도 건조로 단위는 경보)
+            row.put("unitLevel", Codes.level(Math.max(e.stage(), unitStageOfEquipment.getOrDefault(e.equipmentId(), 1))));
             row.put("runState", Codes.runState(e.runState()));
             row.put("fan", eq != null && "FAN".equals(eq.type()) ? fan(e) : null);
             row.put("activeChecklistId", activeChecklist.get(e.equipmentId()));
@@ -420,6 +456,7 @@ public class DashboardService {
         out.put("at", status.at());
         out.put("equipment", equipment);
         out.put("sensors", sensors);
+        out.put("units", units);
         return out;
     }
 
