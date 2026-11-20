@@ -37,7 +37,12 @@ const option = computed(() =>
   }),
 )
 
-const value = computed(() => Number(props.liveValue ?? props.sensor.value).toFixed(props.type.dec))
+// 값이 아직 없으면 '–' (예전엔 null → '0.0' 으로 보였음)
+const value = computed(() => {
+  const v = props.liveValue ?? props.sensor.value
+  return Number.isFinite(v) ? v.toFixed(props.type.dec) : '–'
+})
+// sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → sensorLevel.js)
 const valueClass = computed(() => ({
   warn: props.sensor.level === LEVEL.WARN,
   alarm: props.sensor.level === LEVEL.ALARM || props.sensor.level === LEVEL.FIRE,
@@ -103,11 +108,11 @@ function onZoom(e) {
 }
 
 .value.warn {
-  color: var(--color-level-warn-text);
+  color: var(--color-level-warn); /* #F97316 */
 }
 
 .value.alarm {
-  color: var(--color-level-alarm-text);
+  color: var(--color-level-alarm); /* #DC2626 */
 }
 
 .value small {

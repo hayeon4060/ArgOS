@@ -1,9 +1,11 @@
 <!--
   센서 게이지 하나 (설계안 vEquip() '센서 현재값'의 .g)
   - 고리 게이지 + '전류 CT-17' + 기준 글자 두 줄
-    · 정상: '평소 18.0 A'  / 주의·경보: '주의 기준 21.6 A 초과' (주황·빨강 굵게)
+    · 정상: '평소 18.0 A'  / 주의·경보: '주의 기준 21.6 A 초과' (주황 #F97316 · 빨강 #DC2626 굵게)
+      (서버가 평소 값(usual)을 아직 안 줌 → 값이 없으면 '정상 범위', 예전엔 '평소 NaN' 이 보였음)
     · '주의 21.6 · 경보 27 A'
   - sensor 가 없으면(이 설비에 그 종류 센서가 없음) 점선 동그라미 + '전류 센서 없음'
+  - sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → sensorLevel.js)
 -->
 <script setup>
 import { computed } from 'vue'
@@ -36,12 +38,16 @@ const option = computed(() =>
 
 const fmt = (v) => Number(v).toFixed(props.type.dec)
 
+const isWarn = computed(() => props.sensor?.level === LEVEL.WARN)
+const isAlarm = computed(() => props.sensor?.level === LEVEL.ALARM || props.sensor?.level === LEVEL.FIRE)
+
 /** 첫째 줄: 평소 값 또는 넘은 기준 */
 const stateText = computed(() => {
   const s = props.sensor
-  if (s.level === LEVEL.WARN) return `주의 기준 ${s.warn} ${s.unit} 초과`
-  if (s.level === LEVEL.ALARM || s.level === LEVEL.FIRE) return `경보 기준 ${s.alarm} ${s.unit} 초과`
-  return `평소 ${fmt(s.usual)} ${s.unit}`
+  if (isWarn.value) return `주의 기준 ${s.warn} ${s.unit} 초과`
+  if (isAlarm.value) return `경보 기준 ${s.alarm} ${s.unit} 초과`
+  // 평소 값이 없으면 (지금 서버 응답) NaN 대신 '정상 범위'
+  return Number.isFinite(s.usual) ? `평소 ${fmt(s.usual)} ${s.unit}` : '정상 범위'
 })
 </script>
 
@@ -52,7 +58,7 @@ const stateText = computed(() => {
       <div class="name">
         <AppIcon :name="type.icon" :size="15" />{{ type.label }} <span class="mono">{{ sensor.tag }}</span>
       </div>
-      <div class="th" :class="{ warn: sensor.level === LEVEL.WARN, alarm: sensor.level === LEVEL.ALARM || sensor.level === LEVEL.FIRE }">
+      <div class="th" :class="{ warn: isWarn, alarm: isAlarm }">
         {{ stateText }}
       </div>
       <div class="th">주의 {{ sensor.warn }} · 경보 {{ sensor.alarm }} {{ sensor.unit }}</div>
@@ -112,12 +118,12 @@ const stateText = computed(() => {
 }
 
 .th.warn {
-  color: var(--color-level-warn-text);
+  color: var(--color-level-warn); /* #F97316 */
   font-weight: 700;
 }
 
 .th.alarm {
-  color: var(--color-level-alarm-text);
+  color: var(--color-level-alarm); /* #DC2626 */
   font-weight: 700;
 }
 

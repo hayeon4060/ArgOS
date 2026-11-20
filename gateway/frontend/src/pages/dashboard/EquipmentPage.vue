@@ -22,6 +22,7 @@ import ThresholdModal from '@/features/threshold/ThresholdModal.vue'
 import SensorGaugeCard from '@/features/equipment/SensorGaugeCard.vue'
 import ThermalCard from '@/features/equipment/ThermalCard.vue'
 import TrendCard from '@/features/equipment/TrendCard.vue'
+import { withShownLevels, worseLevel } from '@/features/equipment/sensorLevel'
 import { useLiveValues } from '@/features/equipment/useLiveValues'
 import { buildProcessEquipment, layoutPlacement } from '@/features/process/processEquipment'
 import { useLiveReload } from '@/utils/useLiveReload'
@@ -100,6 +101,18 @@ watch(range, loadSeries)
 /* ───────── 실시간 값 (예시: 2초마다 조금씩) ───────── */
 const { values: liveValues, elapsedSec } = useLiveValues(() => equipment.value?.sensors)
 
+/*
+ * 화면에 보여 줄 단계 (2026-11-20): 서버 단계 + 지금 값이 기준을 넘었는지 → 더 높은 쪽 (sensorLevel.js)
+ * - 게이지 · 추이 · 제목 줄 상태 배지 · 설비 위치 그림의 이 설비가 모두 같은 단계를 씀
+ * - 열화상 카드는 카메라 장면 색이라 서버 단계 그대로 (온도 센서 값만 넘었는데 '최고 52 ℃'가 주황이 되지 않게)
+ */
+const shown = computed(() => (equipment.value ? withShownLevels(equipment.value, liveValues.value) : null))
+
+/** 설비 위치 그림: 이 설비 칸도 위와 같은 단계로 (다른 설비는 공정 상태 그대로) */
+const locationEquipment = computed(() =>
+  processEquipment.value.map((e) => (e.id === shown.value?.id ? { ...e, level: worseLevel(e.level, shown.value.level) } : e)),
+)
+
 /* ───────── 경로·링크 ───────── */
 const crumbs = computed(() => {
   const { siteId, factoryId, processId } = route.params
@@ -145,7 +158,7 @@ function onSelectEquipment(eq) {
   <div v-else class="equipment-page">
     <EquipmentTopBar
       :crumbs="crumbs"
-      :level="equipment.level"
+      :level="shown.level"
       :checklist="equipment.activeChecklist"
       :back-to="backTo"
       @thresholds="thresholdOpen = true"
@@ -154,7 +167,7 @@ function onSelectEquipment(eq) {
     <div class="grid">
       <EquipmentLocationCard
         class="location"
-        :equipment="processEquipment"
+        :equipment="locationEquipment"
         :focus-key="focusKey"
         :positions="placement.positions"
         :inactive="placement.inactive"
@@ -162,13 +175,13 @@ function onSelectEquipment(eq) {
         :sub="locationSub"
         @select="onSelectEquipment"
       />
-      <SensorGaugeCard class="gauges" :sensors="equipment.sensors" :live-values="liveValues" />
+      <SensorGaugeCard class="gauges" :sensors="shown.sensors" :live-values="liveValues" />
       <ThermalCard v-if="thermal" class="thermal" :thermal="thermal" :process-name="equipment.path?.[2] ?? ''" :level="equipment.level" :elapsed-sec="elapsedSec" />
 
       <TrendCard
         v-model:pick="range"
         class="trend"
-        :sensors="equipment.sensors"
+        :sensors="shown.sensors"
         :data="series"
         :range="seriesRange"
         :loading="seriesLoading"
