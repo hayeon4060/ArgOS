@@ -1,7 +1,10 @@
 <!--
-  전일 시간대별 알림 카드: 어제 주간(07~19시) · 야간(19~07시) 두 줄 (GET /alarms/hourly?date=어제)
-  - 2026-11-18: 제목 '시간대별 알림' → '전일 시간대별 알림', 부제(주간 · 야간) 삭제, 줄 높이 140 → 106px
-  - 줄마다 왼쪽에 이름·시간·알림/조치 건수, 오른쪽에 차트(HourlyChart)
+  전일 시간대별 알림 카드: 어제 하루 00~24시 한 줄 (GET /alarms/hourly?date=어제)
+  - 2026-11-18: 제목 '시간대별 알림' → '전일 시간대별 알림', 부제(주간 · 야간) 삭제
+  - 2026-11-20 재원님 요청: 주간(07~19시) · 야간(19~07시) 두 줄 → 구분 없이 하루 한 줄
+    (두 칸 응답을 합치는 일은 api/dashboard.js 의 getHourlyAlarms 가 함)
+  - 왼쪽에 '하루'·시간·알림/조치 건수, 오른쪽에 차트(HourlyChart)
+  - 사업장 현황·공장 대시보드가 같이 씀
 -->
 <script setup>
 import HourlyChart from './HourlyChart.vue'
@@ -9,15 +12,9 @@ import BaseCard from '@/components/BaseCard.vue'
 import { CHART_COLORS } from '@/utils/chartColors'
 
 defineProps({
-  /** { day: { alarmCount, actionCount, hours }, night: { ... } } */
+  /** { alarmCount, actionCount, hours: [{ hour, warn, alarm, action }] } */
   hourly: { type: Object, required: true },
 })
-
-// 두 줄 설정: 이름, 시간 표시, 시작 시각, 응답의 키
-const SHIFTS = [
-  { key: 'day', label: '주간', range: '07–19시', startHour: 7 },
-  { key: 'night', label: '야간', range: '19–07시', startHour: 19 },
-]
 
 // 범례 (차트 색과 같게)
 const LEGEND = [
@@ -33,18 +30,16 @@ const LEGEND = [
       <span v-for="l in LEGEND" :key="l.label" class="legend"><i :style="{ background: l.color }" />{{ l.label }}</span>
     </template>
 
-    <div class="shifts">
-      <div v-for="s in SHIFTS" :key="s.key" class="shift">
-        <div class="label">
-          <b>{{ s.label }}</b>
-          <span class="mono">{{ s.range }}</span>
-          <em>
-            알림 <b class="mono">{{ hourly[s.key].alarmCount }}</b> ·
-            조치 <b class="mono">{{ hourly[s.key].actionCount }}</b>
-          </em>
-        </div>
-        <HourlyChart :hours="hourly[s.key].hours" :start-hour="s.startHour" />
+    <div class="body">
+      <div class="label">
+        <b>하루</b>
+        <span class="mono">00–24시</span>
+        <em>
+          알림 <b class="mono">{{ hourly.alarmCount }}</b> ·
+          조치 <b class="mono">{{ hourly.actionCount }}</b>
+        </em>
       </div>
+      <HourlyChart :hours="hourly.hours" />
     </div>
   </BaseCard>
 </template>
@@ -62,14 +57,12 @@ const LEGEND = [
   border-radius: 3px;
 }
 
-.shifts {
-  padding: 8px 12px 4px 8px;
-}
-
-.shift {
+/* 카드 높이를 예전 두 줄(106px × 2 + 여백 12px)과 같게 */
+.body {
   display: flex;
   align-items: flex-start;
-  height: 106px;
+  height: 224px;
+  padding: 8px 12px 4px 8px;
 }
 
 .label {

@@ -8,6 +8,7 @@
 | `alarm-modal-hazard.md` | (2026-11-19 요청) 주의·경보 창 유형 문구, 경보 대응 `title` 에 유형 넣기 |
 | `warn-detail-trends.md` | (2026-11-19 요청) 주의 상세 창 추이 그래프 2개 — `GET /alarms/{id}/detail` 에 `trends[]` 추가 |
 | `erd-final-frontend-check.md` | (2026-11-19) 최종 ERD ↔ 프론트 대조: 프론트에서 고친 것, ERD에 없는데 화면이 쓰는 값(확인 요청), 아직 화면에 없는 ERD 기능 |
+| `hourly-alarm-one-day.md` | (2026-11-20 요청) 전일 시간대별 알림 주간/야간 → 하루 00~24시 한 줄 — `GET /alarms/hourly` 범위를 `date 00~24시` 로, `hours[]` 추가 |
 
 ## 이 문서의 성격
 

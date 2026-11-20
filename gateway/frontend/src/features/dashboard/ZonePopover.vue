@@ -1,6 +1,8 @@
 <!--
-  지도에서 공장을 눌렀을 때 뜨는 말풍선 (설계안 v-dash.js vSite() 의 pop)
-  - 들어갈 수 있는 공장(5공장): 공정 목록과 단계 + '공정 배치도 보기'
+  지도에서 공장에 마우스를 올렸을 때 뜨는 말풍선 (설계안 v-dash.js vSite() 의 pop)
+  - 2026-11-20: 누르기 → 마우스 올리기로 바뀌어 '공정 배치도 보기' 단추 삭제 (공장을 누르면 바로 이동)
+    말풍선은 마우스를 받지 않음(pointer-events: none) — 말풍선이 지도를 가려 깜빡이는 것을 막음
+  - 들어갈 수 있는 공장(5공장): 공정 목록과 단계
   - 그 외 공장: 오늘 알림 건수 + '아직 등록되지 않음' 안내
   - 위치: anchor(구역 가운데, %) 의 오른쪽에 띄움 (2026-11-19 재원님 요청: 왼쪽 말고 오른쪽)
     오른쪽 자리가 모자라면 점과의 간격(70px)을 줄여서 지도 안에 넣고, 그래도 안 들어갈 때만 왼쪽에 띄움
@@ -20,8 +22,6 @@ const props = defineProps({
   /** 공정 배치도로 들어갈 수 있는 공장인지 */
   enterable: { type: Boolean, default: false },
 })
-
-const emit = defineEmits(['enter'])
 
 /* 말풍선 자리: 점에서 70px 띄우고 너비 292px (아래 CSS 와 같은 값), 간격은 24px 까지 줄일 수 있음 */
 const GAP = 70
@@ -59,7 +59,7 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
   <!-- 구역 가운데 점 -->
   <span class="dot" :style="{ ...style, background: LEVEL_META[factory.level].color }" />
 
-  <div ref="root" class="zone-popover" :class="{ left: onLeft }" :style="popStyle" @click.stop>
+  <div ref="root" class="zone-popover" :class="{ left: onLeft }" :style="popStyle">
     <div class="head">
       {{ factory.name }}
       <LevelBadge :level="factory.level" />
@@ -72,9 +72,6 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
         <span class="name">{{ p.name }}</span>
         <LevelBadge :level="p.level" />
       </div>
-      <button type="button" class="go" @click="emit('enter', factory)">
-        공정 배치도 보기 <AppIcon name="cr" :size="16" />
-      </button>
     </template>
 
     <template v-else>
@@ -113,6 +110,7 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
   border-radius: var(--radius-md);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
   animation: pop-in var(--m-pop-in) both; /* 4px 위에서 내려오며 나타남 (motion.css) */
+  pointer-events: none; /* 마우스는 아래 지도가 받음 */
 }
 
 .zone-popover.left {
@@ -182,26 +180,5 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
 .note .app-icon {
   margin-top: 2px;
   color: var(--color-text-weak);
-}
-
-.go {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 11px;
-  border: none;
-  border-top: 1px solid var(--color-border);
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  background: none;
-  color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.go:hover {
-  background: var(--color-primary-soft);
 }
 </style>
