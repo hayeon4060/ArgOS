@@ -299,6 +299,22 @@ public class DashboardService {
     // B3 공정 배치도
     // ---------------------------------------------------------------
 
+    /**
+     * 공정 흐름 순서 (화면 아래 설비 줄 번호). DB 에 순서 칸이 없어 관제 단위 대표 설비(전처리 · 전착 탱크 · 건조로 …)를
+     * 관제 단위 번호 순으로 1, 2, … 로 매긴다. 펌프 · 배기팬 · 버너 · 카메라는 null
+     */
+    static Map<Long, Integer> flowOrder(MasterCache.Snapshot m, long processId) {
+        Map<Long, Integer> out = new java.util.HashMap<>();
+        int n = 1;
+        for (CentralDto.Unit u : m.units().stream().filter(u -> u.processId() == processId && u.equipmentId() != null)
+                .sorted(java.util.Comparator.comparingLong(CentralDto.Unit::id)).toList()) {
+            if (!out.containsKey(u.equipmentId())) {
+                out.put(u.equipmentId(), n++);
+            }
+        }
+        return out;
+    }
+
     /** GET /processes/{processId}/layout */
     public Map<String, Object> processLayout(long processId) {
         UserScope scope = currentUser.scope();
@@ -313,6 +329,7 @@ public class DashboardService {
             ids.add(e.id());
         }
         Map<Long, List<Map<String, Object>>> managers = factoryAdmin.managersOf(ids);
+        Map<Long, Integer> seq = flowOrder(m, processId);
         List<Map<String, Object>> equipment = new ArrayList<>();
         List<Map<String, Object>> sensors = new ArrayList<>();
         for (Equipment e : m.equipmentOf(processId)) {
@@ -326,6 +343,8 @@ public class DashboardService {
             row.put("pos", xyz("x", e.posX(), "y", e.posY(), "z", e.posZ()));
             row.put("rot", rot.getOrDefault(String.valueOf(e.id()), 0));
             row.put("active", e.active());
+            row.put("seq", seq.get(e.id()));
+            row.put("fanAuto", e.fanAuto());
             row.put("managers", managers.getOrDefault(e.id(), List.of()));
             equipment.add(row);
             for (Sensor s : m.sensorsOf(e.id())) {

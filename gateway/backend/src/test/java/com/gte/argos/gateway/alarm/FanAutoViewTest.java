@@ -19,6 +19,10 @@ class FanAutoViewTest {
         assertThat(v).containsEntry("percent", 75).containsEntry("rpm", 1350).containsEntry("beforeRpm", 1200)
                 .containsEntry("status", "APPLIED").containsEntry("equipmentId", 41L);
         assertThat(AlarmViews.fanAuto(alarm("FIRE", f))).isNull();
+        CentralDto.FanAuto waiting = new CentralDto.FanAuto(41L, 42, "상도 건조로 배기팬", "MANUAL", 75, 1350, 1200,
+                "AWAITING", T, 7L);
+        assertThat(AlarmViews.fanAuto(alarm("GAS", waiting))).containsEntry("commandId", 7L)
+                .containsEntry("status", "AWAITING").containsEntry("mode", "MANUAL");
         assertThat(AlarmViews.fanAuto(alarm("GAS", null))).isNull();
     }
 

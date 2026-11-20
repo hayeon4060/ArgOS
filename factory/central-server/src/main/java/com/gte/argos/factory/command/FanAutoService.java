@@ -15,7 +15,8 @@ import org.springframework.stereotype.Service;
  * <pre>
  * 가스(GAS) 알림이 주의(2)로 생기면 45Hz(75%, 1350rpm), 경보(3)로 생기거나 올라가면 60Hz(100%, 1800rpm)
  * - 대상: 그 관제 단위 센서가 달린 배기팬 (equipment_type = 'FAN')
- * - equipment.fan_auto = true 인 팬만. false(수동)면 명령 없음 → 알림 응답 fanAuto.status = SKIPPED
+ * - equipment.fan_auto = true 인 팬은 바로 명령. false(수동)면 승인 대기(AWAITING) 명령만 남김
+ *   → 담당자가 승인하면 실행, 거절하면 DENIED (docs/api/erd-final-frontend-check.md 4장 1번)
  * - 명령은 equipment_command 에 source = AUTO, alarm_id 를 채워 남긴다. 요청자 없음
  * - 화재(FIRE)는 대상 아님 (화재는 셧다운)
  * - 실시간에서만 부른다 (7일치 가져오기는 명령을 보내지 않음)
@@ -64,11 +65,13 @@ public class FanAutoService {
         List<EquipmentCommandService.CommandResult> out = new ArrayList<>();
         for (Map<String, Object> fan : fans(unitId)) {
             long fanId = ((Number) fan.get("equipment_id")).longValue();
-            if (!Boolean.TRUE.equals(fan.get("fan_auto"))) {
-                continue; // 수동
-            }
             Number rpm = (Number) fan.get("fan_rpm");
             if (rpm != null && rpm.intValue() >= targetRpm) {
+                continue;
+            }
+            if (!Boolean.TRUE.equals(fan.get("fan_auto"))) {
+                long id = commands.await(fanId, hz, alarmId, rpm == null ? null : rpm.intValue());
+                log.info("가스 알림 {} ({}단계): 수동 배기팬 {} {}Hz 승인 대기 (명령 {})", alarmId, stage, fanId, hz, id);
                 continue;
             }
             try {

@@ -47,6 +47,7 @@ public final class AlarmViews {
         m.put("beforeRpm", f.beforeRpm());
         m.put("status", f.status());
         m.put("at", f.at());
+        m.put("commandId", f.commandId());
         return m;
     }
 
@@ -77,6 +78,7 @@ public final class AlarmViews {
         row.put("ackedBy", a.ackedBy() == null ? null : userNames.get(a.ackedBy()));
         row.put("ackedAt", a.ackedAt());
         row.put("closedAt", a.closedAt());
+        row.put("closeReason", a.closeReason());
         row.put("valueStillOver", a.valueStillOver());
         row.put("fanAuto", fanAuto(a));
         if (checklist != null) {

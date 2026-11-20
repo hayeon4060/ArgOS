@@ -131,10 +131,11 @@ public final class InternalDto {
      * @param equipmentId    배기팬이 달린 설비 (관제 단위 대표 설비 = 화면의 설비)
      * @param fanEquipmentId 배기팬 설비
      * @param mode           AUTO | MANUAL (명령이 있으면 AUTO, 없으면 지금 스위치 값)
-     * @param status         SENT | APPLIED | FAILED | SKIPPED
+     * @param status         SENT | APPLIED | FAILED | SKIPPED | AWAITING(수동 승인 대기) | DENIED(거절)
+     * @param commandId      그 명령 (승인 · 거절할 때 씀). 명령이 없으면 null
      */
     public record FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
-                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at, Long commandId) {
     }
 
     /**

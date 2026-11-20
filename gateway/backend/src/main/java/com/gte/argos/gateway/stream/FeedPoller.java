@@ -208,7 +208,8 @@ public class FeedPoller {
                     av.put("fanAuto", com.gte.argos.gateway.alarm.AlarmViews.fanAuto(a));
                     av.put("at", item.at());
                     hub.publish("alarm.updated", id + "-a", av, s -> s.scope().canProcess(a.processId(), masterCache.get()));
-                    if ("AUTO".equals(d.get("source")) && "SENT".equals(d.get("status")) && eq != null) {
+                    if ("AUTO".equals(d.get("source")) && "SENT".equals(d.get("status")) && d.get("approvedBy") == null
+                            && eq != null) {
                         int hz = d.get("value") == null ? 0 : ((Number) d.get("value")).intValue();
                         activity.logAs(null, "FAN", masterCache.get().process(eq.processId()) == null ? null
                                         : plantOf(eq.processId()), eq.processId(), "equipment_command",

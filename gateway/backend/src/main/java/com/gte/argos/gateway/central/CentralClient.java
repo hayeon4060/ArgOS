@@ -137,6 +137,19 @@ public class CentralClient {
         }
     }
 
+    public CommandResult findCommand(long commandId) {
+        return get(u -> u.path("/api/v1/internal/commands/{id}").build(commandId),
+                new ParameterizedTypeReference<Envelope<CommandResult>>() { });
+    }
+
+    /** 수동 배기팬 승인 대기 명령 승인 · 거절 (decision = approve | deny) */
+    public CommandResult decideCommand(long commandId, String decision, Long userId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("userId", userId);
+        return post("/api/v1/internal/commands/" + commandId + "/" + decision, body,
+                new ParameterizedTypeReference<Envelope<CommandResult>>() { });
+    }
+
     public CentralDto.AlarmSeries alarmSeries(long alarmId) {
         return get(u -> u.path("/api/v1/internal/alarms/{id}/series").build(alarmId),
                 new ParameterizedTypeReference<Envelope<CentralDto.AlarmSeries>>() { });

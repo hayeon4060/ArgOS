@@ -132,7 +132,17 @@ public final class CentralDto {
                         long factoryId, long plantId, int stage, String hazard, String status,
                         OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
                         Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
-                        boolean valueStillOver, List<Event> events, FanAuto fanAuto) {
+                        boolean valueStillOver, List<Event> events, FanAuto fanAuto, String closeReason) {
+
+        /** closeReason: 종료 사유 AUTO_RECOVERED | ACTION_DONE | MANUAL (열려 있으면 null) */
+        public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                     long factoryId, long plantId, int stage, String hazard, String status,
+                     OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                     Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                     boolean valueStillOver, List<Event> events, FanAuto fanAuto) {
+            this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, fanAuto, null);
+        }
 
         public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
                      long factoryId, long plantId, int stage, String hazard, String status,
@@ -140,7 +150,7 @@ public final class CentralDto {
                      Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
                      boolean valueStillOver, List<Event> events) {
             this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
-                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, null);
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, null, null);
         }
 
         /** 화면에 대표로 보여줄 이벤트: 단계가 가장 높고, 같으면 먼저 시작한 것 */
@@ -158,10 +168,15 @@ public final class CentralDto {
         }
     }
 
-    /** 가스 알림의 배기팬 자동 제어 결과. status SENT | APPLIED | FAILED | SKIPPED */
+    /** 가스 알림의 배기팬 자동 제어 결과. status SENT | APPLIED | FAILED | SKIPPED | AWAITING | DENIED */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
-                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at, Long commandId) {
+
+        public FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                       Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+            this(equipmentId, fanEquipmentId, fanName, mode, percent, rpm, beforeRpm, status, at, null);
+        }
     }
 
     /** 알림 상세 그래프 (중앙 /internal/alarms/{id}/series) */

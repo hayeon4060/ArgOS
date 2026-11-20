@@ -375,3 +375,29 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 - `GET /alarms/{id}/detail` 에 `trends[]` 추가: 같은 관제 단위 센서 3종(전류 → 온도 → CO 순, 열화상 제외)
   `{ sensorId, tag, type(CURRENT·TEMP·CO), unit, warn, alarm, points: [[시각, 값]] }`. 기간·간격은 `trend` 와 같음 (발생 30분 전 ~ 지금, 1분)
 - `trend` 는 그대로 (알림이 난 센서)
+
+### 최종 ERD 대조 요청 반영 (`docs/api/erd-final-frontend-check.md`, 2026-11-19)
+
+**배기팬 수동 승인 (4장 1번)**
+
+- 수동(`fanAuto: false`) 설비에 가스 알림이 나면 명령을 바로 보내지 않고 **승인 대기**로 남김 → 알림 응답
+  `fanAuto { mode: "MANUAL", status: "AWAITING", percent, rpm, beforeRpm, commandId }`. 경보로 올라가면 같은 명령의 목표가 60 Hz 로 바뀜
+- `POST /fan-commands/{commandId}/approve` — 승인 → 실행 (`SENT` → `APPLIED`)
+- `POST /fan-commands/{commandId}/deny` — 거절 → `DENIED`
+  - 둘 다 공장 담당자만 (본사 관리자 403), 승인 대기가 아니면 409 `COMMAND_NOT_AWAITING`. 응답 `{ commandId, equipmentId, status, hz, rpm }`
+  - 이용 로그 `FAN` (`중도 건조로 배기팬 60Hz · 1800rpm 승인 (가스 알림 수동)`), SSE `command.result` + `alarm.updated`
+- 승인 대기 중에 알림이 종료되면 명령은 취소 (`fanAuto.status` `FAILED`)
+- `fanAuto` 에 `commandId` 추가 (명령이 없으면 null). 상태 대응은 문서 4장 표와 같음 + `AWAITING` · `DENIED`
+
+**그 밖**
+
+| 요청 | 반영 |
+| --- | --- |
+| 3장 5번 설비 `seq` (공정 흐름 순서) | `GET /processes/{id}/layout` 의 `equipment[].seq`. DB 순서 칸이 없어 관제 단위 대표 설비를 단위 순서로 1~5 (전처리 탱크 · 전착 탱크 · 전착 · 중도 · 상도 건조로), 나머지 null. `equipment[].fanAuto` 도 같이 |
+| 4장 4번 `closeReason` | `GET /alarms` items, `GET /stats/alarms` 줄, `GET /stats/alarms/{id}` 에 `closeReason` (AUTO_RECOVERED · ACTION_DONE · MANUAL) |
+| 1장 1번 하한 기준 | 저장 · 미리보기 모두 `lowWarn` · `lowAlarm` 을 그대로 받음 (백엔드 변경 없음) |
+| 3장 7 · 8 · 9 · 10번 | 지금 서버 DB 로 이미 처리됨: 기준값 판 번호 `version`, 변경 사유 → 이력, 조치 확인 `result`·`memo` 와 경보 종료 `result`·`followUp` → `alarm_action.detail`, 타임라인 단계 REPORT · CONFIRM · CLOSE · CALL · FAN |
+| 3장 11번 `onDuty` | 근무조와 사람을 잇는 표가 없어 그대로 `true` |
+
+실제 서버 설비 코드 (5장 7번, 공정 12): `PT-TANK` 전처리 탱크 · `PT-PUMP` · `ED-TANK` · `ED-PUMP` · `ED-OVEN` · `ED-FAN` · `ED-BURNER` ·
+`PR-OVEN` 중도 건조로 · `PR-FAN` · `PR-BURNER` · `TC-OVEN` 상도 건조로 · `TC-FAN` · `TC-BURNER` · `IR-CAM-01`
