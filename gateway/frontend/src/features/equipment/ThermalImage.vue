@@ -96,20 +96,27 @@ const point = computed(() => (props.maxPoint ? { left: `${props.maxPoint.x * 100
       @error="onVideoError"
     />
     <img v-else-if="src" class="frame" :class="{ live }" :src="src" alt="열화상 카메라 장면" />
-    <div class="tl">
-      <span class="tag"><template v-if="live"><i />LIVE</template><template v-else>SNAPSHOT</template></span>
-      <span v-if="zoneName" class="tag name">{{ zoneName }}</span>
-    </div>
-    <div class="bar"><img :src="colorBar" alt="" /></div>
-    <span class="bt top">{{ scale.max }}℃</span>
-    <span class="bt bottom">{{ scale.min }}℃</span>
-    <template v-if="point && max != null">
-      <div class="mk" :style="point" />
-      <div class="ml" :style="{ left: `calc(${point.left} + ${labelOffset.x}px)`, top: `calc(${point.top} + ${labelOffset.y}px)` }">
-        <small>{{ maxLabel }}</small>{{ max }} ℃
+    <!--
+      사진 위 표시(LIVE · 구역 이름 · 색 눈금 · 최고 지점 · 시각)는 사진일 때만.
+      VMS 영상에는 LIVE · 카메라 이름 · 색 눈금 · 최고 지점이 이미 그려져 있어 겹치고,
+      최고 지점은 사진 한 장 기준이라 움직이는 영상과 맞지 않음
+    -->
+    <template v-if="!showVideo">
+      <div class="tl">
+        <span class="tag"><template v-if="live"><i />LIVE</template><template v-else>SNAPSHOT</template></span>
+        <span v-if="zoneName" class="tag name">{{ zoneName }}</span>
       </div>
+      <div class="bar"><img :src="colorBar" alt="" /></div>
+      <span class="bt top">{{ scale.max }}℃</span>
+      <span class="bt bottom">{{ scale.min }}℃</span>
+      <template v-if="point && max != null">
+        <div class="mk" :style="point" />
+        <div class="ml" :style="{ left: `calc(${point.left} + ${labelOffset.x}px)`, top: `calc(${point.top} + ${labelOffset.y}px)` }">
+          <small>{{ maxLabel }}</small>{{ max }} ℃
+        </div>
+      </template>
+      <span v-if="time" class="tag bl mono">{{ time }}</span>
     </template>
-    <span v-if="time" class="tag bl mono">{{ time }}</span>
   </div>
 </template>
 
@@ -127,6 +134,12 @@ const point = computed(() => (props.maxPoint ? { left: `${props.maxPoint.x * 100
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 영상은 화면 안에 글자(카메라 이름 · 눈금)가 그려져 있어 잘리지 않게 전체를 보여 줌
+   (본사 화재 상세처럼 넓은 칸이면 양옆이 어두운 바탕으로 남음) */
+video.frame {
+  object-fit: contain;
 }
 
 /* 실시간일 때 밝기가 살짝 일렁임 (설계안 irflick 3초) */
