@@ -401,3 +401,14 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 
 실제 서버 설비 코드 (5장 7번, 공정 12): `PT-TANK` 전처리 탱크 · `PT-PUMP` · `ED-TANK` · `ED-PUMP` · `ED-OVEN` · `ED-FAN` · `ED-BURNER` ·
 `PR-OVEN` 중도 건조로 · `PR-FAN` · `PR-BURNER` · `TC-OVEN` 상도 건조로 · `TC-FAN` · `TC-BURNER` · `IR-CAM-01`
+
+## Redis 연동 (2026-11-20 아키텍처, A단계)
+
+`docs/아키텍쳐.png` 기준 이름: **이 서버 = 중앙 서버**, `factory/central-server` = **데이터 수집 서버**.
+`ARGOS_REDIS_ENABLED=true` (두 서버 같은 값)면:
+
+- 실시간 변화: 1초 HTTP 폴링(`/internal/feed`) 대신 Redis 스트림 `argos:feed` 를 전용 스레드가 기다려 읽는다. SSE 이벤트 종류·모양은 그대로
+- 제어 명령: 배기팬 명령(`POST /equipment/{id}/fan`), 설비 정지(`/shutdown`), 수동 배기팬 승인·거절(`/fan-commands/{id}/approve|deny`) 이 Redis `argos:cmd` 로 간다. 응답 모양·오류 코드는 그대로, 수집 서버가 10초 안에 답하지 않으면 504 `UPSTREAM_TIMEOUT`
+- 조회와 그 밖의 저장은 아직 HTTP
+
+Redis 키 규격은 `factory/central-server/README.md` 의 "Redis 연동" 절.

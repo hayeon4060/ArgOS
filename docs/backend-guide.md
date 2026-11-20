@@ -13,6 +13,14 @@
 - JDK 17 이상. 시스템 기본이 JDK 11 이라 아래 명령에서 `JAVA_HOME` 을 직접 지정한다.
 - Maven 은 IntelliJ 에 들어 있는 것을 쓴다 (PATH 에 mvn 없음).
 
+### 서버 이름 (2026-11-20 아키텍처, `docs/아키텍쳐.png`)
+| 아키텍처 이름 | 폴더 | 포트 | 이 문서의 옛 이름 |
+| --- | --- | --- | --- |
+| 데이터 수집 서버 | `factory/central-server` | 8081 | 중앙 서버 |
+| 중앙 서버 | `gateway/backend` | 8080 | 연계 서버 |
+
+두 서버 사이는 Redis (켜기는 아래 "Redis 로 주고받기"). 아래 실행 방법의 "중앙 · 연계"는 옛 이름 그대로 둔다.
+
 ### 실행 순서
 **① 중앙 서버(8081) → ② 연계 서버(8080) → ③ 프론트(5173)**
 연계 서버는 중앙 서버에서 데이터를 받아 오므로 중앙을 먼저 켠다. 순서가 바뀌면 API 가 502.
@@ -50,6 +58,15 @@ $env:GATEWAY_JWT_SECRET_BASE64="<로컬용 비밀키>"
 cd C:\Users\hayeon\workspace\ArgOS\gateway\frontend
 npm run dev
 ```
+
+#### (선택) Redis 로 주고받기
+기본은 HTTP. Redis 로 바꾸려면 Redis 를 먼저 켜고, **①·② 두 서버 모두** 같은 환경변수를 추가한다.
+```powershell
+docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine   # 처음 한 번. 다음부터는 docker start argos-redis
+$env:ARGOS_REDIS_ENABLED="true"
+```
+- 켜졌는지: 수집 서버 로그 `Redis 내보내기 켜짐`, 중앙 서버 로그 `수집 서버 피드를 Redis(argos:feed)로 받습니다`
+- 키 규격: `factory/central-server/README.md` 의 "Redis 연동"
 
 ### 켜졌는지 확인
 | 확인 | 주소 |
@@ -148,6 +165,10 @@ python make_collection.py
 | ✅ | ERD v5: 즉시 경보 · 회복 여유값 · 일 집계(`sensor_daily`) · 이벤트 키 · 명령 상태 확장 (`feature/erd-v5`) |
 | ✅ | 배기팬 자동 제어 (가스 주의 45Hz · 경보 60Hz, 종료 때 40Hz 복귀), 설비 설정 저장 |
 | ✅ | 보관 기간: 1분 추이 · 샘플 31일 (조회 30일 기준). 이벤트 · 알림 · 명령은 지우지 않음 |
+| 🔀 | Redis 연동 A단계: 실시간 변화 `argos:feed` · 지금 값 `argos:live` · 1초 값 `argos:raw:*` 내보내기, 제어 명령 `argos:cmd` 받기 (`ARGOS_REDIS_ENABLED`) |
+| ⏸ | Redis 연동 B단계: DB 쓰기를 중앙 서버로 (수집 서버는 Redis 로만 보냄), DB 하나로 합치기 |
+| ⏸ | Redis 연동 C단계: 조회 API 를 중앙 서버로 |
+| ⏸ | Kafka (`argos.edge.raw` · `stage` · `cmd` · `cmd.result` · `argos.config.threshold`) |
 | 🔀 | VMS 열화상 IR-301 받는 API (`POST /api/v1/vms/ir`, 시험용 · 인증 없음) |
 
 ### 연계 서버 (8080) — 화면별
