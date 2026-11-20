@@ -13,6 +13,7 @@
 | `frontend-api-audit-1120.md` | (2026-11-20) 프론트 ↔ 백엔드 API 전수 비교: 프론트에서 고친 17건, 백엔드 요청(알림 `fireId`, 체크리스트 목록 `equipmentId`, 통계 `siteId`, 점검 목록 값, 배치 저장 설비 종류), 월별 보고서 31일 달 400 |
 | `inspection-redesign-api.md` | (2026-11-20 요청) 점검 관리 개편 A안: 점검 건 목록 `GET /inspections/schedule` 에 `month` · `from&to` 와 구분 · 결과 칸, 스케줄 추가, 전자 서류 양식 보기 · 저장, 빈 양식 PDF, 스캔본 ↔ 점검 건 연결(`PUT /inspections/{id}` 의 `scheduleId`). 점검 관리는 F02 만 (변전소 F03 제외) |
 | `scope-add.md` | (2026-11-20 요청) 사업장 · 공장 · 공정 추가 화면 연결 (`POST /sites · /factories · /processes`), 요청: `code` 비우면 서버가 만들기, 위경도 없는 사업장 |
+| `equipment-add.md` | (2026-11-20 요청) 새 공정에 설비 추가: 지금 있는 설비 15종에서 골라 빈 배치판에 놓고 `PUT /processes/{id}/layout` 의 `equipment.create` 로 저장 (새 API · ERD 없음), 확인: `equipment_type` null 허용 |
 
 ## 이 문서의 성격
 

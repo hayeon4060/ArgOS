@@ -8,7 +8,7 @@
  * - POST /processes                    : 공정 추가 (공장 관리 공정 드롭다운 '공정 추가', 명세서 H1)
  */
 import http from './http'
-import { addProcess, addedProcessName } from './mock/addedScope'
+import { addProcess, addedLayout, addedProcessName, saveAddedLayout } from './mock/addedScope'
 import { mockSiteTrees } from './mock/data'
 import { saveLayout } from './mock/layoutData'
 import { USE_MOCK, mockFail, mockOk } from './mock'
@@ -26,9 +26,15 @@ function mockProcess(processId) {
   const name = addedProcessName(processId)
   if (!name) return null
   const id = Number(processId)
+  const lay = addedLayout(id) // 공장 관리에서 놓고 저장한 설비 (처음엔 없음)
   return {
-    layout: { processId: id, name, version: 1, floorplan: null, equipment: [], sensors: [] },
-    status: { processId: id, level: LEVEL.NORMAL, equipment: [], sensors: [] },
+    layout: { processId: id, name, version: lay.version, floorplan: null, equipment: structuredClone(lay.equipment), sensors: [] },
+    status: {
+      processId: id,
+      level: LEVEL.NORMAL,
+      equipment: lay.equipment.map((e) => ({ id: e.id, level: LEVEL.NORMAL, runState: 'RUNNING', fan: null })),
+      sensors: [],
+    },
     inspections: { doneCount: 0, totalCount: 0, items: [] },
   }
 }
@@ -67,7 +73,8 @@ export function getTodayInspections(processId) {
  */
 export function saveProcessLayout(processId, body) {
   if (USE_MOCK) {
-    const r = saveLayout(processId, body)
+    // 공장 관리에서 추가한 공정은 addedScope.js, 도장 공정은 layoutData.js
+    const r = addedProcessName(processId) ? saveAddedLayout(processId, body) : saveLayout(processId, body)
     return r.error ? mockFail(r.error) : mockOk(r.data)
   }
   return http.put(`/processes/${processId}/layout`, body)

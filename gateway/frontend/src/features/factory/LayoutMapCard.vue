@@ -5,13 +5,16 @@
   - 위치는 배치도 화면 좌표 { x, y } (DB pos_x · pos_y) — move(설비 이름, { x, y })
   - 오른쪽 위: 고른 설비 사용 ON/OFF, 격자에 맞추기 스위치
   - 아래 왼쪽 안내: '설비를 끌어서 옮기면 연결된 센서도 함께 이동합니다'
-  - 설비가 0대(막 추가한 공정)면 도장 공정 그림 대신 격자 바닥만 + '아직 설비가 없습니다' (2026-11-20)
-    (PaintMap 은 도장 공정 그림이라 설비가 없어도 도장 설비가 그려짐)
+  - blank(도장 공정 그림이 없는 공정, 예: 공장 관리에서 새로 추가한 공정)면 PaintMap 대신 빈 배치판(BlankLayoutMap) (2026-11-20)
+    · PaintMap 은 도장 공정 고정 그림이라 다른 공정 설비를 그릴 수 없음
+    · 빈 배치판에서는 설비 id 로 고르고 옮김: select(id) · move(id, { x, y })
+    · 설비가 0대면 가운데에 '아직 설비가 없습니다' + '설비 추가' 단추(add)
 -->
 <script setup>
 import { onMounted, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
+import BlankLayoutMap from './BlankLayoutMap.vue'
 import PaintMap from '@/features/process/PaintMap.vue'
 
 defineProps({
@@ -24,9 +27,14 @@ defineProps({
   /** 고른 설비 { name, active } (없으면 null) */
   selected: { type: Object, default: null },
   sub: { type: String, default: '' },
+  /** 도장 공정 그림이 없는 공정 → 빈 배치판 */
+  blank: { type: Boolean, default: false },
+  /** 빈 배치판용 설비 [{ id, name, type, pos, active, isNew }] */
+  boardEquipment: { type: Array, default: () => [] },
+  selectedId: { type: [Number, String], default: null },
 })
 
-const emit = defineEmits(['select', 'move', 'moved', 'use', 'defaults'])
+const emit = defineEmits(['select', 'move', 'moved', 'use', 'defaults', 'add'])
 const snap = ref(true)
 const map = ref(null)
 
@@ -52,13 +60,22 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
       </span>
     </template>
 
-    <!-- 설비 없는 공정: 빈 격자 바닥 -->
-    <div v-if="!equipment.length" class="map blank">
-      <div class="blank-msg">
+    <!-- 도장 공정 그림이 없는 공정: 빈 배치판 -->
+    <div v-if="blank" class="map">
+      <BlankLayoutMap
+        :equipment="boardEquipment"
+        :selected-id="selectedId"
+        :snap="snap"
+        @select="emit('select', $event)"
+        @drag="(id, pos) => emit('move', id, pos)"
+      />
+      <div v-if="!boardEquipment.length" class="blank-msg">
         <AppIcon name="layers" :size="28" />
         <b>아직 설비가 없습니다</b>
-        <span>설비를 추가하면 이 배치도 위에 놓입니다.</span>
+        <span>지금 있는 설비 목록에서 골라 이 배치도에 놓을 수 있습니다.</span>
+        <button type="button" class="btn btn-primary" @click="emit('add')"><AppIcon name="plus" :size="16" />설비 추가</button>
       </div>
+      <p v-else class="hint"><AppIcon name="info" :size="15" />설비를 끌어서 옮긴 뒤 '저장'을 누르세요</p>
     </div>
 
     <div v-else class="map">
@@ -83,23 +100,17 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
 <style scoped>
 .map {
   position: relative;
+  overflow: hidden;
   height: calc(100% - 48px);
   min-height: 560px;
   background: #f8fafc;
 }
 
-.map.blank {
-  display: grid;
-  place-items: center;
-  /* 격자 바닥 (1칸 32px) */
-  background-color: #f8fafc;
-  background-image:
-    linear-gradient(to right, #e2e8f0 1px, transparent 1px),
-    linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
 .blank-msg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -120,6 +131,12 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
 .blank-msg b {
   font-size: 15px;
   color: var(--color-text);
+}
+
+.blank-msg .btn {
+  height: 38px;
+  margin-top: 8px;
+  padding: 0 16px;
 }
 
 .hint {

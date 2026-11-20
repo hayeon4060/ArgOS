@@ -69,6 +69,54 @@ export const addedFactoriesOf = (siteId) => ADDED.factories.filter((f) => f.site
 export const extraProcessesOf = (factoryId) =>
   ADDED.extraProcesses.filter((p) => p.factoryId === factoryId).map(({ factoryId: _, ...p }) => p)
 
+/* ───────── 추가한 공정의 배치 (GET · PUT /processes/{id}/layout) ─────────
+ * - { 공정 id: { version, equipment: [GET layout 의 설비 한 줄] } } — 처음엔 설비 없음
+ * - 새 설비 code 는 서버처럼 'EQ-{공정 id}-{n}' (MasterAdminService.code)
+ */
+const LAYOUTS = {}
+
+/** 추가한 공정의 배치 (없으면 빈 배치로 만듦) */
+export function addedLayout(processId) {
+  return (LAYOUTS[processId] ??= { version: 1, equipment: [] })
+}
+
+/**
+ * PUT /processes/{id}/layout — 추가한 공정 (도장 공정 12 는 layoutData.js)
+ * - create: 새 설비 (tempId → 실제 id 를 응답 created.equipment 로), update: 이름 · 종류 · 사용 · 위치
+ */
+export function saveAddedLayout(processId, body) {
+  const lay = addedLayout(processId)
+  if (body.version !== lay.version) {
+    return { error: { code: 'LAYOUT_CONFLICT', message: '다른 사람이 먼저 저장했습니다. 다시 불러와 주세요.', status: 409 } }
+  }
+  const createdIds = {}
+  for (const c of body.equipment?.create ?? []) {
+    const id = nextId++
+    lay.equipment.push({
+      id,
+      code: `EQ-${processId}-${lay.equipment.length + 1}`,
+      name: c.name,
+      type: c.type ?? null,
+      seq: null,
+      pos: { x: c.pos?.x ?? null, y: c.pos?.y ?? null, z: null },
+      active: true,
+      managers: [],
+      fanAuto: c.type === 'FAN' ? true : null,
+    })
+    createdIds[c.tempId] = id
+  }
+  const updates = body.equipment?.update ?? []
+  for (const u of updates) {
+    const eq = lay.equipment.find((e) => e.id === u.id)
+    if (!eq) continue
+    for (const f of ['name', 'type', 'active']) if (u[f] !== undefined) eq[f] = u[f]
+    if (u.pos) eq.pos = { x: u.pos.x, y: u.pos.y, z: null }
+  }
+  lay.version += 1
+  const changedCount = Object.keys(createdIds).length + updates.length
+  return { data: { version: lay.version, created: { equipment: createdIds, sensors: {} }, changedCount } }
+}
+
 /** 추가한 공정 이름 (없으면 null) — 빈 배치도를 만들 때 씀 */
 export function addedProcessName(processId) {
   const id = Number(processId)
