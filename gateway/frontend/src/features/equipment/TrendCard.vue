@@ -98,13 +98,14 @@ const missing = computed(() =>
       </div>
 
       <template v-else>
+        <!-- 끝 점 = 지금 값 (실시간 값이 없으면 설비 상세의 value → 왼쪽 큰 숫자와 끝 점 숫자가 같게, 2026-11-20) -->
         <TrendRow
           v-for="r in rows"
           :key="`${r.sensor.id}-${range}`"
           :type="r.type"
           :sensor="r.sensor"
           :series="r.series"
-          :live-value="liveValues[r.sensor.id] ?? null"
+          :live-value="liveValues[r.sensor.id] ?? r.sensor.value ?? null"
           :show-prev="showPrev"
           :whole-day="range === 'today'"
           :zoom="zoom"

@@ -24,7 +24,7 @@ import ThermalCard from '@/features/equipment/ThermalCard.vue'
 import TrendCard from '@/features/equipment/TrendCard.vue'
 import { useLiveValues } from '@/features/equipment/useLiveValues'
 import { buildProcessEquipment, layoutPlacement } from '@/features/process/processEquipment'
-import { withShownLevels } from '@/utils/sensorLevel'
+import { withShownLevels, worseLevel } from '@/utils/sensorLevel'
 import { useLiveReload } from '@/utils/useLiveReload'
 
 const route = useRoute()
@@ -106,7 +106,13 @@ const { values: liveValues, elapsedSec } = useLiveValues(() => equipment.value?.
  * - 게이지 · 추이 · 제목 줄 상태 배지가 같은 단계를 씀 (설비 위치 그림은 buildProcessEquipment 가 같은 규칙으로 정함)
  * - 열화상 카드는 카메라 장면 색이라 서버 단계 그대로 (온도 센서 값만 넘었는데 '최고 52 ℃'가 주황이 되지 않게)
  */
-const shown = computed(() => (equipment.value ? withShownLevels(equipment.value, liveValues.value) : null))
+const shown = computed(() => {
+  if (!equipment.value) return null
+  const s = withShownLevels(equipment.value, liveValues.value)
+  // 공정 상태(GET /processes/{id}/status)의 이 설비 단계가 더 높으면 그것도 반영 (설비 위치 그림은 빨간데 배지만 '정상'이던 문제)
+  const fromProcess = processEquipment.value.find((e) => e.id === s.id)?.level
+  return { ...s, level: worseLevel(s.level, fromProcess) }
+})
 
 /* ───────── 경로·링크 ───────── */
 const crumbs = computed(() => {
