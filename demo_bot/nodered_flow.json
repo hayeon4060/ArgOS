@@ -1,0 +1,8 @@
+[
+  {"id":"argos_tab","type":"tab","label":"ArgOS 시연 봇 수신","disabled":false,"info":"시연 봇이 보내는 센서 데이터를 받는 예제"},
+  {"id":"argos_in","type":"http in","z":"argos_tab","name":"POST /sensors","url":"/sensors","method":"post","upload":false,"swaggerDoc":"","x":150,"y":100,"wires":[["argos_split","argos_reply"]]},
+  {"id":"argos_split","type":"function","z":"argos_tab","name":"센서별로 분리","func":"const list = Array.isArray(msg.payload) ? msg.payload : [msg.payload];\nreturn [list.map(r => ({ payload: r }))];","outputs":1,"timeout":0,"noerr":0,"initialize":"","finalize":"","libs":[],"x":380,"y":80,"wires":[["argos_debug"]]},
+  {"id":"argos_debug","type":"debug","z":"argos_tab","name":"센서값","active":true,"tosidebar":true,"console":false,"tostatus":true,"complete":"payload","targetType":"msg","statusVal":"payload.value","statusType":"auto","x":590,"y":80,"wires":[]},
+  {"id":"argos_reply","type":"function","z":"argos_tab","name":"200 응답","func":"const n = Array.isArray(msg.payload) ? msg.payload.length : 1;\nmsg.statusCode = 200;\nmsg.payload = { ok: true, count: n };\nreturn msg;","outputs":1,"timeout":0,"noerr":0,"initialize":"","finalize":"","libs":[],"x":380,"y":140,"wires":[["argos_out"]]},
+  {"id":"argos_out","type":"http response","z":"argos_tab","name":"","statusCode":"","headers":{},"x":570,"y":140,"wires":[]}
+]
