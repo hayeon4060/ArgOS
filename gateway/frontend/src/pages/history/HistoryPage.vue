@@ -20,6 +20,7 @@ import { ROLE } from '@/types/codes'
 import { saveFile } from '@/utils/saveFile'
 import { toast } from '@/utils/toast'
 import { useLiveReload } from '@/utils/useLiveReload'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import AlarmDetailPanel from '@/features/history/AlarmDetailPanel.vue'
 import AlarmHistoryTable from '@/features/history/AlarmHistoryTable.vue'
 import FilterBar from '@/features/history/FilterBar.vue'
@@ -54,6 +55,9 @@ const data = reactive({ summary: null, trend: null, byProcess: null })
 const busy = ref(false)
 let seq = 0 // 늦게 온 이전 조회 결과는 버림
 
+/** 처음 조회(카드 + 알림 이력 표)가 끝났는지 — 끝나기 전에는 화면 대신 뼈대 (실패해도 끝난 것으로) */
+const ready = ref(false)
+
 async function query({ silent = false } = {}) {
   const my = ++seq
   if (!silent) busy.value = true
@@ -71,7 +75,8 @@ async function query({ silent = false } = {}) {
   if (my !== seq) return
   // 새 조건이면 표는 1쪽부터 (쪽이 바뀌면 아래 watch 가 표를 불러옴)
   if (!silent && table.page !== 1) table.page = 1
-  else loadTable()
+  else await loadTable()
+  ready.value = true
 }
 
 /* ───────── 알림 이력 표 (유형·탭·쪽은 표만 다시 불러옴) ───────── */
@@ -182,7 +187,10 @@ useLiveReload(() => query({ silent: true }))
 </script>
 
 <template>
-  <div class="history-page">
+  <!-- 처음 들어올 때만 뼈대 (다시 조회할 때는 아래 카드를 흐리게, 조용히 다시 받을 때는 그대로) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="history" />
+
+  <div v-else class="history-page">
     <FilterBar
       :filter="filter"
       :factories="factories"

@@ -14,6 +14,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getEquipment, getEquipmentEvents, getSensorSeries, getThermalLatest } from '@/api/equipment'
 import { getProcessLayout, getProcessStatus } from '@/api/process'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import EquipmentLocationCard from '@/features/equipment/EquipmentLocationCard.vue'
 import EquipmentTopBar from '@/features/equipment/EquipmentTopBar.vue'
 import EventLogCard from '@/features/equipment/EventLogCard.vue'
@@ -38,7 +39,7 @@ const focusKey = computed(() => processEquipment.value.find((e) => e.id === equi
 const loading = ref(true)
 const errorMessage = ref('')
 
-/** 설비 정보·이벤트·열화상·설비 위치 그림 불러오기 (silent: 상황이 바뀌어 다시 부를 때는 '불러오는 중' 없이) */
+/** 설비 정보·이벤트·열화상·설비 위치 그림 불러오기 (silent: 상황이 바뀌어 다시 부를 때는 뼈대 없이) */
 async function load({ silent = false } = {}) {
   const { processId, equipmentId } = route.params
   if (!silent) loading.value = true
@@ -137,7 +138,8 @@ function onSelectEquipment(eq) {
 </script>
 
 <template>
-  <p v-if="loading" class="state">불러오는 중</p>
+  <!-- 처음 들어올 때·주소가 바뀔 때만 뼈대 (조용히 다시 받을 때는 그대로) -->
+  <PageSkeleton v-if="loading" shape="dashboard" layout="equipment" />
   <p v-else-if="errorMessage" class="state error">{{ errorMessage }}</p>
 
   <div v-else class="equipment-page">

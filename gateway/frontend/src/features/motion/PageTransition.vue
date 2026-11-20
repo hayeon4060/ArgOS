@@ -3,11 +3,16 @@
   - 효과 이름은 pageTransition.js 가 라우터에서 정한 값 (zoom-in / zoom-out / page)
   - 효과 모양(시간·크기)은 assets/styles/motion.css, 시간 값은 tokens.css
   - 카드가 차례로 올라오며 나타나는 효과는 BaseCard 가 스스로 함 (데이터를 늦게 받아도 적용되게)
+  - 화면 파일을 받느라 이동이 0.2초 넘게 걸리면 가려는 화면의 뼈대를 대신 보여 줌 (routeSkeleton.js)
+    · 이전 화면 → 뼈대는 원래 효과 그대로, 뼈대 → 새 화면은 효과 없이 바로 (:css="false")
+    · 상단 바 · 알림 · 채팅 창은 이 칸 밖이라 가려지지 않음
   - 사용: <PageTransition /> (안에서 RouterView 를 그림) → 새 화면도 자동으로 적용
 -->
 <script setup>
 import { ref, watch } from 'vue'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import { transitionState } from './pageTransition'
+import { SKELETON_SWAP, routeSkeleton } from './routeSkeleton'
 import { toLayoutPx } from '@/utils/screenScale'
 
 const box = ref(null)
@@ -32,9 +37,13 @@ watch(
 <template>
   <div ref="box" class="page-transition" :style="originStyle">
     <RouterView v-slot="{ Component, route }">
-      <Transition :name="transitionState.name" mode="out-in" appear>
+      <Transition :name="transitionState.name" :css="transitionState.name !== SKELETON_SWAP" mode="out-in" appear>
+        <!-- 화면 파일을 받는 중: 가려는 화면의 뼈대 (이미 0.2초를 기다렸으므로 바로 보임) -->
+        <div v-if="routeSkeleton.visible" key="route-skeleton" class="page">
+          <PageSkeleton :shape="routeSkeleton.shape" :layout="routeSkeleton.layout" instant />
+        </div>
         <!-- 같은 화면 안에서 주소만 바뀌어도(예: 다른 공장) 다시 그리도록 전체 주소를 key 로 -->
-        <div :key="route.fullPath" class="page">
+        <div v-else :key="route.fullPath" class="page">
           <component :is="Component" />
         </div>
       </Transition>

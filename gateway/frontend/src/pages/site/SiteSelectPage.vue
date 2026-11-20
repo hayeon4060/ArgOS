@@ -12,6 +12,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getActiveFires } from '@/api/emergency'
 import { createSite, getSites } from '@/api/sites'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import NameInputModal from '@/components/NameInputModal.vue'
 import SiteListCard from '@/features/site/SiteListCard.vue'
@@ -43,7 +44,7 @@ const errorMessage = ref('')
 const fire = ref(null)
 let serverOffset = 0
 
-/** 사업장 목록 불러오기 (silent: 상황이 바뀌어 다시 부를 때는 '불러오는 중'을 띄우지 않음) */
+/** 사업장 목록 불러오기 (silent: 상황이 바뀌어 다시 부를 때는 뼈대를 띄우지 않음) */
 async function load({ silent = false } = {}) {
   if (!silent) loading.value = true
   try {
@@ -132,7 +133,8 @@ function enterFactory(factory) {
 
 <template>
   <div class="site-select">
-    <p v-if="loading" class="state">불러오는 중</p>
+    <!-- 처음 들어올 때·주소가 바뀔 때만 뼈대 (조용히 다시 받을 때는 그대로) -->
+    <PageSkeleton v-if="loading" class="skeleton" shape="dashboard" layout="site-select" />
     <p v-else-if="errorMessage" class="state error">{{ errorMessage }}</p>
 
     <template v-else>
@@ -193,6 +195,11 @@ function enterFactory(factory) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 뼈대 · 안내 문구는 두 열을 모두 차지 (뼈대는 안에서 실제 화면과 같은 두 열로 나뉨) */
+.skeleton {
+  grid-column: 1 / -1;
 }
 
 .state {

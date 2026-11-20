@@ -14,6 +14,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { ROLE } from '@/types/codes'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import FormModal from '@/features/inspection/FormModal.vue'
 import HistoryCard from '@/features/inspection/HistoryCard.vue'
 import OcrRegisterModal from '@/features/inspection/OcrRegisterModal.vue'
@@ -38,7 +39,10 @@ const { today, month, days, monthItems, historyItems, loading } = sch
 
 watch(month, sch.loadMonth)
 watch(days, sch.loadHistory)
-onMounted(sch.reload)
+
+/** 처음 불러오기(달력 · 이력)가 끝났는지 — 끝나기 전에는 화면 대신 뼈대 (실패해도 끝난 것으로) */
+const ready = ref(false)
+onMounted(() => sch.reload().finally(() => (ready.value = true)))
 
 /* ───────── 스케줄 추가 창 ───────── */
 const addOpen = ref(false)
@@ -89,7 +93,10 @@ function openOcr(file) {
 </script>
 
 <template>
-  <div class="inspection-page">
+  <!-- 처음 들어올 때만 뼈대 (달 · 기간을 바꿀 때는 각 카드가 스스로 표시) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="inspection" />
+
+  <div v-else class="inspection-page">
     <TemplateBar />
 
     <div class="lay">
