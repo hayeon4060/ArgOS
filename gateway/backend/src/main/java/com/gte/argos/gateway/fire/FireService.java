@@ -339,6 +339,54 @@ public class FireService {
         return out;
     }
 
+    /**
+     * 값이 정상으로 돌아와 화재 경보가 자동 종료되면 화재도 자동 해제한다 (비밀번호 없이, 2026-11-20).
+     * 방송을 멈추고 작업자에게 해제 푸시, 조치 기록 · 이용 로그(사용자 없음), SSE fire.cleared. 해제했으면 fire id
+     */
+    public Long autoClear(long alarmId) {
+        List<Fire> active = jdbc.query("SELECT * FROM fire_incident WHERE alarm_id = :a AND status <> 'CLEARED'",
+                new MapSqlParameterSource("a", alarmId), (rs, i) -> fire(rs));
+        if (active.isEmpty()) {
+            return null;
+        }
+        Fire f = active.get(0);
+        OffsetDateTime now = time.now();
+        jdbc.update("""
+                UPDATE fire_incident SET status = 'CLEARED', cleared_at = :now,
+                       broadcast_ended_at = COALESCE(broadcast_ended_at, :now)
+                WHERE fire_id = :id
+                """, new MapSqlParameterSource("now", now).addValue("id", f.id()));
+        broadcast.stop(f.id());
+        pushWorkers(f.processId(), "FIRE_CLEARED", f.id());
+        checklists.addAction(alarmId, "MANUAL_NOTE", "화재 자동 해제", "OK", "값이 정상으로 돌아와 화재 경보 자동 해제",
+                null, now);
+        activity.logAs(null, "FIRE_CLEAR", f.plantId(), f.processId(), "fire_incident", f.id(),
+                "화재 경보 자동 해제 (값이 정상으로 돌아옴)");
+        hub.publish("fire.cleared", Map.of("fireId", f.id(), "clearedBy", "자동 해제", "clearedAt", now),
+                s -> s.scope().isHq() || s.scope().canSite(f.plantId(), masterCache.get()));
+        log.info("화재 {} 자동 해제 (경보 {} 값 회복)", f.id(), alarmId);
+        return f.id();
+    }
+
+    /**
+     * 진행 중 화재인데 그 경보가 이미 닫힌 건을 자동 해제한다. 수집 서버를 다시 켤 때 정리한 경보 알림은
+     * 피드에서 건너뛸 수 있어서, 중앙 서버가 수집 서버 재시작을 알아챌 때 한 번 훑는다. 해제한 수
+     */
+    public int sweepClosedAlarms() {
+        int n = 0;
+        for (Long alarmId : jdbc.queryForList("SELECT alarm_id FROM fire_incident WHERE status <> 'CLEARED'",
+                new MapSqlParameterSource(), Long.class)) {
+            try {
+                if ("CLOSED".equals(central.alarm(alarmId).status()) && autoClear(alarmId) != null) {
+                    n++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("화재 정리 중 경보 {} 확인 실패: {}", alarmId, e.getMessage());
+            }
+        }
+        return n;
+    }
+
     /** POST /fires/{fireId}/approve-unlock: 본사 관리자가 잠금을 풀어 준다 */
     public Map<String, Object> approveUnlock(long fireId) {
         UserScope scope = currentUser.require(UserScope.HQ_ADMIN);

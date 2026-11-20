@@ -26,6 +26,8 @@ public class FeedingListener implements JudgementListener {
     private final Map<Long, Long> unitByAlarmKey = new HashMap<>();
     private final Map<Long, Integer> gasStageByAlarmKey = new HashMap<>();
     private final List<GasAlarm> gasAlarms = new ArrayList<>();
+    /** 이번 판정에서 값이 돌아와 자동으로 닫힌 경보 id */
+    private final List<Long> closedAlarms = new ArrayList<>();
 
     public FeedingListener(JdbcJudgementStore store, LiveFeed feed, ZoneId zone) {
         this.store = store;
@@ -131,6 +133,10 @@ public class FeedingListener implements JudgementListener {
     @Override
     public void onAlarmCleared(long alarmKey, Instant at, boolean closed) {
         store.onAlarmCleared(alarmKey, at, closed);
+        if (closed && store.alarmId(alarmKey) != null) {
+            closedAlarms.add(store.alarmId(alarmKey));
+            gasStageByAlarmKey.remove(alarmKey);
+        }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("alarmId", store.alarmId(alarmKey));
         data.put("unitId", unitByAlarmKey.get(alarmKey));
@@ -160,6 +166,13 @@ public class FeedingListener implements JudgementListener {
     /** 사람이 경보를 닫음: 그 단위 알림의 센서 값 저장을 멈춘다 */
     public void alarmClosed(long unitId) {
         store.forgetUnit(unitId);
+    }
+
+    /** 이번 판정에서 자동으로 닫힌 경보. 꺼내면 비워진다 */
+    public List<Long> drainClosedAlarms() {
+        List<Long> out = List.copyOf(closedAlarms);
+        closedAlarms.clear();
+        return out;
     }
 
     /** 이번 ingest 에서 새로 생기거나 단계가 올라간 가스 알림 (배기팬 자동 제어용). 꺼내면 비워진다 */

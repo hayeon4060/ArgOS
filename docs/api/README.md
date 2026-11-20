@@ -15,6 +15,7 @@
 | `scope-add.md` | (2026-11-20 요청) 사업장 · 공장 · 공정 추가 화면 연결 (`POST /sites · /factories · /processes`), 요청: `code` 비우면 서버가 만들기, 위경도 없는 사업장 |
 | `equipment-add.md` | (2026-11-20 요청) 새 공정에 설비 추가: 지금 있는 설비 15종에서 골라 빈 배치판에 놓고 `PUT /processes/{id}/layout` 의 `equipment.create` 로 저장 (새 API · ERD 없음), 확인: `equipment_type` null 허용 |
 | `paint-equipment-edit.md` | (2026-11-20 요청) 공장 관리 설비 추가 · 삭제를 도장 공정에도, 설비는 기존 배치도 그림 그대로: `PUT /processes/{id}/layout` 의 `equipment.delete` · `create[].shape` 사용 (새 API 없음), `equipment.shape` 에 넣는 그림 이름 표, 확인 4건 |
+| `fan-speed-control.md` | (2026-11-20 요청) 가스 주의 때 배기팬 속도 직접 조절 20 ~ 60 Hz: 이미 있는 `POST /equipment/{id}/fan` 의 `{ hz }` 사용 (새 API 없음), 요청: 알림 `fanAuto.manualHz`, 명령에 `alarmId`, 경보 승격 · 승인 대기 · 복귀 규칙 확인 |
 | `alarm-sensor-scope.md` | (2026-11-20) 경보 창 '센서 데이터'에 공정 센서가 전부 나오던 문제: `GET /alarms/{id}/response` 의 `sensors` 를 관제 단위 센서만으로 (프론트는 `detail` 로 먼저 걸러 둠) |
 
 ## 이 문서의 성격

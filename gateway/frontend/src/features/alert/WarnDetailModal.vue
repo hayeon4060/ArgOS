@@ -133,8 +133,8 @@ async function send() {
         <section class="left">
           <div class="m-sect"><AppIcon name="info" :size="15" />발생 원인</div>
           <WarnCause :detail="detail" class="gap" />
-          <!-- 가스 주의: 배기팬 자동 제어 결과 -->
-          <FanAutoNotice v-if="detail.fanAuto" :fan="detail.fanAuto" tone="warn" class="gap-s" />
+          <!-- 가스 주의: 배기팬 자동 제어 결과 + 속도 직접 조절 20 ~ 60 Hz -->
+          <FanAutoNotice v-if="detail.fanAuto" :fan="detail.fanAuto" tone="warn" adjustable class="gap-s" />
 
           <div class="m-sect top"><AppIcon name="gear" :size="15" />예상 원인</div>
           <div class="causes">

@@ -75,3 +75,11 @@ export const FAN_AUTO_PERCENT = Object.freeze({ WARN: 75, ALARM: 100 })
 export const FAN_MAX_RPM = 1800
 /** 배기팬 평소 회전수 (30 Hz × 30) — 알림이 끝나면 이 값으로 돌아옴 */
 export const FAN_NORMAL_RPM = 900
+
+/**
+ * 배기팬 속도 직접 조절 범위 (2026-11-20 재원님 요청: 가스 주의일 때 20 ~ 60 Hz 만)
+ * - 서버도 같은 범위만 받음 (EquipmentActionService.fanCommand: 20 ~ 60 Hz 밖이면 400 HZ_OUT_OF_RANGE)
+ * - 회전수 = Hz × 30 → 600 ~ 1,800 rpm
+ */
+export const FAN_HZ = Object.freeze({ MIN: 20, MAX: 60 })
+export const RPM_PER_HZ = 30

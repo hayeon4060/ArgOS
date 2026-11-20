@@ -75,8 +75,8 @@ async function onDone() {
         </div>
       </div>
 
-      <!-- 가스 주의: 배기팬 자동 제어 결과 (자동이면 75%로 올림, 수동이면 승인 대기 · 승인 · 거절 버튼) -->
-      <FanAutoNotice v-if="alarm.fanAuto" :fan="alarm.fanAuto" tone="warn" class="fan" />
+      <!-- 가스 주의: 배기팬 자동 제어 결과 (자동이면 75%로 올림, 수동이면 승인 대기 · 승인 · 거절 버튼) + 속도 직접 조절 20 ~ 60 Hz -->
+      <FanAutoNotice v-if="alarm.fanAuto" :fan="alarm.fanAuto" tone="warn" adjustable class="fan" />
 
       <div class="hold-wrap">
         <HoldButton :size="148" color="#F97316" label="길게 눌러 확인" @progress="heldMs = $event" @done="onDone" />
