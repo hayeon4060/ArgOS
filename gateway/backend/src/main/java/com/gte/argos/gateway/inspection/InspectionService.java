@@ -48,6 +48,7 @@ public class InspectionService {
     private final ObjectMapper mapper;
     private final SimTime time;
     private final OcrEngine ocr;
+    private final InspectionScheduleService schedules;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ocr");
         t.setDaemon(true);
@@ -56,6 +57,7 @@ public class InspectionService {
 
     public InspectionService(NamedParameterJdbcTemplate jdbc, CurrentUser currentUser, MasterCache masterCache,
                              FileStore files, ActivityLogger activity, ObjectMapper mapper, SimTime time,
+                             InspectionScheduleService schedules,
                              @Value("${argos.ocr.clova.url:}") String clovaUrl,
                              @Value("${argos.ocr.clova.secret:}") String clovaSecret) {
         this.jdbc = jdbc;
@@ -65,6 +67,7 @@ public class InspectionService {
         this.activity = activity;
         this.mapper = mapper;
         this.time = time;
+        this.schedules = schedules;
         this.ocr = clovaUrl.isBlank() || clovaSecret.isBlank()
                 ? new SampleOcrEngine(LocalDate.now().toString()) : new ClovaOcrEngine(clovaUrl, clovaSecret);
         log.info("서류 인식기: {}", ocr.name());
@@ -297,7 +300,7 @@ public class InspectionService {
     }
 
     public Map<String, Object> ocrResult(long id) {
-        admin();
+        UserScope scope = admin();
         Map<String, Object> r = row(id);
         String status = String.valueOf(r.get("status"));
         if ("FAILED".equals(status)) {
@@ -314,6 +317,9 @@ public class InspectionService {
         out.put("fields", fields);
         out.put("needCheckCount", need);
         out.put("engine", ocr.name());
+        // 이 스캔본에 맞는 점검 건 추천 (점검 관리 개편 3-7). 이미 이어졌으면 그 건, 없으면 null
+        out.put("scheduleId", "REVIEW".equals(status) || "DONE".equals(status) ? schedules.recommend(r, fields, scope)
+                : r.get("schedule_id"));
         return out;
     }
 
@@ -329,6 +335,16 @@ public class InspectionService {
 
     /** PUT /inspections/{id}: REVIEW(임시 저장) | DONE(검수 완료) */
     public Map<String, Object> save(long id, String status, List<Map<String, Object>> changes) {
+        return save(id, status, changes, false, null);
+    }
+
+    /**
+     * @param link       scheduleId 를 보냈는지 (3-7). 보냈으면 검수 완료 때 그 건(숫자) 또는 새 건(null)에 잇는다
+     * @param scheduleId 이을 점검 건
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> save(long id, String status, List<Map<String, Object>> changes, boolean link,
+                                    Long scheduleId) {
         UserScope scope = admin();
         Map<String, Object> r = row(id);
         if (!"REVIEW".equals(status) && !"DONE".equals(status)) {
@@ -356,12 +372,12 @@ public class InspectionService {
                 WHERE ocr_id = :id
                 """, new MapSqlParameterSource("fields", write(fields)).addValue("status", status)
                 .addValue("by", scope.userId()).addValue("now", now).addValue("id", id));
-        Long scheduleId = r.get("schedule_id") == null ? null : ((Number) r.get("schedule_id")).longValue();
+        Long linked = r.get("schedule_id") == null ? null : ((Number) r.get("schedule_id")).longValue();
         String reviewer = null;
         if ("DONE".equals(status)) {
-            if (scheduleId != null) {
-                jdbc.update("UPDATE inspection_schedule SET status = 'DONE', done_at = :now, done_by = :by WHERE schedule_id = :id",
-                        new MapSqlParameterSource("now", now).addValue("by", scope.userId()).addValue("id", scheduleId));
+            if (link || linked != null) {
+                // 점검 건을 완료 · 수기로, 결과는 인식 값에 '불량'이 있으면 NG (연결 안 함이면 새 건)
+                linked = schedules.linkScan(id, r, fields, link ? scheduleId : linked, scope);
             }
             reviewer = jdbc.queryForObject("SELECT name FROM app_user WHERE user_id = :id",
                     new MapSqlParameterSource("id", scope.userId()), String.class);
@@ -374,7 +390,7 @@ public class InspectionService {
         out.put("status", status);
         out.put("reviewedBy", reviewer);
         out.put("reviewedAt", "DONE".equals(status) ? now : null);
-        out.put("scheduleId", scheduleId);
+        out.put("scheduleId", linked);
         return out;
     }
 
