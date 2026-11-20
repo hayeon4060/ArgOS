@@ -176,8 +176,8 @@ public class LiveJudgementService {
     }
 
     /**
-     * 시연 리셋: 시계를 11/16 09:00 으로 되돌리고, 그 이후 생긴 판정 결과를 지운 뒤 엔진을 새로 만든다.
-     * 7일치(09:00 이전)는 그대로 둔다.
+     * 실시간 리셋: 7일치 더미가 끝나는 시각(simStart, 11/16 09:00) 이후 생긴 판정 결과를 지운 뒤 엔진을 새로 만든다.
+     * 7일치(09:00 이전)는 그대로 둔다. 시계는 실제 서버 시각이라 되돌리지 않는다.
      */
     @Transactional
     public synchronized void reset() {
@@ -194,7 +194,7 @@ public class LiveJudgementService {
         state.clear();
         clock.restart();
         feed.append("RESET", clock.nowOffset(), Map.of());
-        log.info("시연 리셋: 시계 {} 부터 다시 시작", clock.nowOffset());
+        log.info("실시간 리셋: {} 이후 판정 결과를 지우고 {} 부터 다시 시작", clock.simStart(), clock.nowOffset());
     }
 
     /** 센서·기준값을 바꾼 뒤 엔진에 반영한다. 진행 중 판정·경보는 그대로 이어진다 */

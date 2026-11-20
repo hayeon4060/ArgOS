@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * GET  /api/v1/internal/feed?after=&limit=         실시간 변화 (연계 서버가 1초마다 가져가 SSE 로 전달)
  * </pre>
  *
- * 시각 파라미터는 ISO 8601 (2026-11-16T09:00:00+09:00). 비우면 시연 시계 기준 오늘 0시 ~ 지금.
+ * 시각 파라미터는 ISO 8601 (2026-11-16T09:00:00+09:00). 비우면 서버 시계 기준 오늘 0시 ~ 지금.
  */
 @RestController
 @RequestMapping("/api/v1/internal")
@@ -166,7 +166,7 @@ public class InternalController {
         return body == null ? null : body.userId();
     }
 
-    /** 비우면 시연 시계 기준 오늘 0시 ~ 지금(+1초) */
+    /** 비우면 서버 시계 기준 오늘 0시 ~ 지금(+1초) */
     private Range range(OffsetDateTime from, OffsetDateTime to) {
         Instant t = to != null ? to.toInstant() : clock.now().plusSeconds(1);
         Instant f = from != null ? from.toInstant()

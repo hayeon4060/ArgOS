@@ -16,8 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <pre>
  * - 1분 추이(sensor_trend)를 하루 단위로 묶는다: 평균(샘플 수 가중), 최소, 최대, 샘플 수, 통신 끊김 수
  * - 1분 추이는 7일 보관 뒤 지워지지만 일 집계는 남는다. 그래서 지우기 전에 먼저 집계한다 (RetentionService)
- * - 날짜는 시연 시계의 시간대(Asia/Seoul) 기준
- * - 10분마다 어제·오늘(시연 시계)을 다시 집계한다. 같은 날을 여러 번 집계해도 결과는 같다 (덮어쓰기)
+ * - 날짜는 서버 시계의 시간대(Asia/Seoul) 기준
+ * - 10분마다 어제·오늘(서버 시계)을 다시 집계한다. 같은 날을 여러 번 집계해도 결과는 같다 (덮어쓰기)
  * </pre>
  */
 @Service

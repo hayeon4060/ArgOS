@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 시연 시계 확인. 연계 서버·프론트가 "지금"을 맞출 때 쓴다 */
+/** 서버 시계 확인 (now = 실제 서버 시각, simStart = 7일치 더미가 끝나는 시각). 연계 서버·프론트가 "지금"을 맞출 때 쓴다 */
 @RestController
 @RequestMapping("/api/v1/system")
 public class ClockController {

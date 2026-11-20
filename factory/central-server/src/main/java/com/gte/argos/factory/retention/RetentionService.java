@@ -16,13 +16,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * 센서 값 보관 기간 관리.
  *
  * <pre>
- * - 1시간마다 (시작 1분 뒤 처음) 시연 시계 기준 (오늘 0시 - N일, 기본 31일)보다 오래된 값을 지운다
+ * - 1시간마다 (시작 1분 뒤 처음) 서버 시계 기준 (오늘 0시 - N일, 기본 31일)보다 오래된 값을 지운다
  *   · sensor_trend         : 그래프용 1분 추이 (정상값 포함 전부)
  *   · sensor_event_sample  : 경보 구간 원본 샘플
  *   · alarm_sensor_sample  : 알림 동안 관제 단위 센서 5초 값
  * - 지우지 않는 것: alarm, sensor_event (통계·이력·월간 보고서), file_asset (경보 시작 이미지), sensor_daily (일 집계)
  * - 지우기 전에 지울 날짜의 일 집계(sensor_daily)를 먼저 만든다
- * - 시연 시계 기준인 이유: 실제 시각으로 지우면 7일치 시연 데이터(11/09~)의 앞쪽이 지워진다
+ * - (2026-11-20 부터 실제 서버 시각 기준) 사전 적재 30일치 1분 추이도 31일이 지나면 앞쪽부터 지워진다. 일 집계(sensor_daily)는 남는다
  * </pre>
  */
 @Service

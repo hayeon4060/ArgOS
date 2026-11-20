@@ -31,7 +31,7 @@ public final class Seasons {
         return ALL.equals(season) || "SPRING_FALL".equals(season) || "SUMMER".equals(season) || "WINTER".equals(season);
     }
 
-    /** 시연 시계 기준 지금 계절 */
+    /** 서버 시계 기준 지금 계절 */
     public static String current(DemoClock clock) {
         return of(clock.nowOffset().toLocalDate());
     }
