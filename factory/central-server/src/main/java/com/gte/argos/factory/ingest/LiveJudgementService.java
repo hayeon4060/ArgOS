@@ -59,6 +59,10 @@ public class LiveJudgementService {
     private FeedingListener listener;
     private Map<String, Long> sensorIdByTag = Map.of();
 
+    /** 엣지(Kafka)가 단계를 판정하는지. 다시 켤 때 열린 이벤트를 밖 이벤트로 이어 받을지 정한다 */
+    @org.springframework.beans.factory.annotation.Value("${argos.kafka.enabled:false}")
+    private boolean kafkaEnabled;
+
     public LiveJudgementService(JdbcTemplate jdbc, SensorDefinitionLoader sensorLoader, DemoClock clock,
                                 LiveState state, LiveFeed feed, SensorDailyService daily, FanAutoService fanAuto,
                                 ApplicationEventPublisher events) {
@@ -229,8 +233,94 @@ public class LiveJudgementService {
             sensorIdByTag = ids;
             listener = new FeedingListener(new JdbcJudgementStore(jdbc, clock.zone(), 1), feed, clock.zone());
             engine = new JudgementEngine(sensors, listener, JudgementEngine.Options.live());
+            restoreOpen();
         }
         return engine;
+    }
+
+    /**
+     * 서버를 다시 켤 때 DB 에 열린 채 남은 이벤트 · 경보를 엔진에 다시 넣는다.
+     * 전에는 엔진이 이걸 잊어서, 이어 오는 단계(VMS · 엣지)로 같은 상황의 경보가 다시 켤 때마다 새로 생겼다 (2026-11-20).
+     * <pre>
+     * - 센서마다 가장 최근의 열린 이벤트만 이어 받는다. 그 앞의 겹친 열린 이벤트는 최근 이벤트 시작 시각으로 닫는다
+     *   (예전 재시작으로 생긴 중복. 닫아야 그 경보를 사람이 종료할 수 있다)
+     * - 관제 단위마다 가장 최근의 열린 경보를 이어 받고, 그 경보에 묶인 열린 이벤트를 다시 묶는다
+     * - VMS(rule IR) · 엣지(Kafka 켜짐) 이벤트는 밖 판정 이벤트로, 그 밖은 서버 판정 상태로
+     * </pre>
+     */
+    private void restoreOpen() {
+        Map<Long, String> tagById = new HashMap<>();
+        sensorIdByTag.forEach((tag, id) -> tagById.put(id, tag));
+        List<JudgementEngine.RestoredEvent> events = new ArrayList<>();
+        Map<Long, Long> keyByEventId = new HashMap<>();
+        Map<Long, Object> keptStart = new HashMap<>(); // 센서 → 이어 받은 이벤트의 시작 시각 (DB 값 그대로)
+        int closed = 0;
+        for (Map<String, Object> r : jdbc.queryForList("""
+                SELECT event_id, sensor_id, stage, rule, peak_value, edge_key, started_at FROM sensor_event
+                WHERE ended_at IS NULL ORDER BY sensor_id, started_at DESC, event_id DESC
+                """)) {
+            long sensorId = ((Number) r.get("sensor_id")).longValue();
+            long eventId = ((Number) r.get("event_id")).longValue();
+            String tag = tagById.get(sensorId);
+            if (tag == null) {
+                continue;
+            }
+            if (keptStart.containsKey(sensorId)) {
+                jdbc.update("UPDATE sensor_event SET ended_at = GREATEST(?, started_at) WHERE event_id = ?",
+                        keptStart.get(sensorId), eventId);
+                closed++;
+                continue;
+            }
+            keptStart.put(sensorId, r.get("started_at"));
+            String rule = (String) r.get("rule");
+            long key = engine.nextEventKey();
+            events.add(new JudgementEngine.RestoredEvent(key, tag, stage(((Number) r.get("stage")).intValue()), rule,
+                    r.get("peak_value") == null ? 0 : ((Number) r.get("peak_value")).doubleValue(),
+                    (String) r.get("edge_key"), "IR".equals(rule) || kafkaEnabled));
+            listener.restoreEvent(key, eventId, sensorId);
+            keyByEventId.put(eventId, key);
+        }
+        List<JudgementEngine.RestoredAlarm> alarms = new ArrayList<>();
+        java.util.Set<Long> units = new java.util.HashSet<>();
+        for (Map<String, Object> r : jdbc.queryForList("""
+                SELECT alarm_id, unit_id, stage, hazard FROM alarm WHERE status <> 'CLOSED'
+                ORDER BY unit_id, raised_at DESC, alarm_id DESC
+                """)) {
+            long unitId = ((Number) r.get("unit_id")).longValue();
+            if (!units.add(unitId)) {
+                continue; // 그 단위의 더 최근 경보를 이미 이어 받음
+            }
+            long alarmId = ((Number) r.get("alarm_id")).longValue();
+            // 이 경보에 묶인 열린 이벤트 + 같은 단위 센서의 열린 이벤트 (예전 경보에 묶였던 것도 이 경보에 다시 묶는다)
+            List<Long> linked = new ArrayList<>();
+            for (Long eventId : jdbc.queryForList("""
+                    SELECT event_id FROM alarm_event WHERE alarm_id = ?
+                    UNION
+                    SELECT e.event_id FROM sensor_event e
+                    JOIN control_unit_sensor cus ON cus.sensor_id = e.sensor_id AND cus.unit_id = ?
+                    WHERE e.ended_at IS NULL
+                    """, Long.class, alarmId, unitId)) {
+                Long key = keyByEventId.get(eventId);
+                if (key != null) {
+                    linked.add(key);
+                    jdbc.update("INSERT INTO alarm_event (alarm_id, event_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                            alarmId, eventId);
+                }
+            }
+            long key = engine.nextAlarmKey();
+            Stage stage = stage(((Number) r.get("stage")).intValue());
+            com.gte.argos.factory.judge.Hazard hazard = com.gte.argos.factory.judge.Hazard.valueOf((String) r.get("hazard"));
+            alarms.add(new JudgementEngine.RestoredAlarm(key, unitId, stage, hazard, linked));
+            listener.restoreAlarm(key, alarmId, unitId, stage, hazard);
+        }
+        engine.restore(events, alarms);
+        if (!events.isEmpty() || !alarms.isEmpty() || closed > 0) {
+            log.info("열린 이벤트 {}건 · 경보 {}건을 이어 받음 (겹친 열린 이벤트 {}건 닫음)", events.size(), alarms.size(), closed);
+        }
+    }
+
+    private static Stage stage(int code) {
+        return code >= 3 ? Stage.ALARM : code == 2 ? Stage.WARN : Stage.NORMAL;
     }
 
     private OffsetDateTime odt(java.time.Instant i) {

@@ -272,3 +272,12 @@ docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine
 
 정상 30Hz (900rpm) · 주의 45Hz · 경보 60Hz (`EquipmentCommandService.HZ_NORMAL`, `FanAutoService.HZ_WARN · HZ_ALARM`).
 경보 종료 복귀와 시연 리셋이 30Hz 로 돌아간다. 위에 '평상시 40Hz' 라고 적힌 곳은 이 값으로 읽는다. DB 는 `V6__fan_normal_30hz.sql`.
+
+## 다시 켤 때 열린 경보 이어 받기 (2026-11-20)
+
+수집 서버를 다시 켜면 DB 에 열린 이벤트 · 경보를 판정 엔진에 다시 넣는다 (`LiveJudgementService.restoreOpen`).
+전에는 엔진이 이걸 잊어서, 이어 오는 VMS · 엣지 단계로 같은 상황의 경보가 다시 켤 때마다 새로 생겼다.
+- 센서마다 가장 최근 열린 이벤트만 이어 받고, 그 앞에 겹친 열린 이벤트는 최근 이벤트 시작 시각으로 닫는다
+- 관제 단위마다 가장 최근 열린 경보를 이어 받고, 그 단위 센서의 열린 이벤트를 이 경보에 묶는다 (`alarm_event`)
+- 엣지 구간 키는 DB 에 `-2` 꼬리가 붙어 있어도 같은 구간으로 본다
+- 로그: `열린 이벤트 n건 · 경보 n건을 이어 받음 (겹친 열린 이벤트 n건 닫음)`

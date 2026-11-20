@@ -88,6 +88,31 @@ final class AlarmCorrelator {
         }
     }
 
+    /**
+     * 서버를 다시 켤 때 DB 에 열린 경보를 이어 받는다. events: 이 경보에 묶인 진행 중 이벤트
+     * (센서, 엔진 번호, 단계, 하한 여부)
+     */
+    void restore(long alarmKey, long unitId, Stage stage, Hazard hazard,
+                 java.util.List<RestoredRef> events) {
+        OpenAlarm alarm = new OpenAlarm(alarmKey, unitId);
+        alarm.stage = stage;
+        alarm.hazard = hazard;
+        for (RestoredRef r : events) {
+            Set<Hazard> allowed = Set.of();
+            for (SensorDef.UnitMembership u : r.sensor().units()) {
+                if (u.unitId() == unitId) {
+                    allowed = u.hazards();
+                }
+            }
+            alarm.active.put(r.eventKey(), new EventRef(r.eventKey(), r.sensor().type(), r.lowSide(), allowed, r.stage()));
+            alarm.linked.add(r.eventKey());
+        }
+        openByUnit.put(unitId, alarm);
+    }
+
+    record RestoredRef(SensorDef sensor, long eventKey, Stage stage, boolean lowSide) {
+    }
+
     /** 사람이 경보를 닫았을 때 (실시간). 이후 그 단위의 새 이벤트는 새 경보가 된다 */
     void closeAlarm(long unitId) {
         openByUnit.remove(unitId);

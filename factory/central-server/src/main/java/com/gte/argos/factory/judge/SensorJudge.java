@@ -159,6 +159,17 @@ final class SensorJudge {
         return result;
     }
 
+    /** 서버를 다시 켤 때 DB 에 열린 채 남은 이벤트를 이어 받는다 (연속 카운트는 0 부터) */
+    void restoreOpen(long eventKey, Stage stage, boolean lowSide, String rule, double peak) {
+        openEventKey = eventKey;
+        openStage = stage;
+        openLowSide = lowSide;
+        openRule = rule;
+        openPeak = peak;
+        normalRun = 0;
+        normalRunStart = null;
+    }
+
     /** 이벤트를 끝내는 데 필요한 정상 연속 수 */
     private int recoverSamples(ThresholdRule rule) {
         return rule.releaseSamples() != null ? rule.releaseSamples() : recoverSamples;

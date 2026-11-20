@@ -182,12 +182,12 @@ public final class JudgementEngine {
         }
         SensorDef def = judge.def();
         ExternalEvent open = externalByTag.get(s.tag());
-        if (open != null && !java.util.Objects.equals(open.edgeKey, s.edgeKey()) && s.phase() != EdgeStage.Phase.END) {
+        if (open != null && !sameEdge(open.edgeKey, s.edgeKey()) && s.phase() != EdgeStage.Phase.END) {
             closeExternal(def, open, s.ts(), null); // 앞 구간의 END 가 빠짐
             open = null;
         }
         if (s.phase() == EdgeStage.Phase.END || s.stage() == Stage.NORMAL) {
-            if (open != null && java.util.Objects.equals(open.edgeKey, s.edgeKey())) {
+            if (open != null && sameEdge(open.edgeKey, s.edgeKey())) {
                 if (s.plcOk() != null) {
                     listener.onEdgeEvent(open.key, null, s.plcOk());
                 }
@@ -250,6 +250,68 @@ public final class JudgementEngine {
             this.lowSide = lowSide;
             this.edgeKey = edgeKey;
         }
+    }
+
+    /**
+     * 서버를 다시 켤 때 DB 에 열린 채 남은 이벤트 · 경보를 이어 받는다 (다시 켤 때마다 경보가 새로 생기던 문제, 2026-11-20).
+     * 밖(VMS · 엣지)에서 판정한 이벤트는 밖 이벤트로, 서버가 판정하던 이벤트는 센서 판정 상태로 넣는다.
+     * 경보는 그 단위의 경보로 다시 묶어, 이어 오는 단계 메시지가 새 경보가 아니라 이 경보에 붙게 한다.
+     */
+    public void restore(List<RestoredEvent> events, List<RestoredAlarm> alarms) {
+        Map<Long, RestoredEvent> byKey = new HashMap<>();
+        for (RestoredEvent e : events) {
+            SensorJudge judge = judgesByTag.get(e.tag());
+            if (judge == null) {
+                continue;
+            }
+            byKey.put(e.eventKey(), e);
+            boolean low = "LO".equals(e.rule());
+            if (e.external()) {
+                externalByTag.put(e.tag(), new ExternalEvent(e.eventKey(), e.stage(), e.peak(), low, e.edgeKey()));
+            } else {
+                judge.restoreOpen(e.eventKey(), e.stage(), low, e.rule(), e.peak());
+            }
+        }
+        for (RestoredAlarm a : alarms) {
+            List<AlarmCorrelator.RestoredRef> refs = new java.util.ArrayList<>();
+            for (Long k : a.eventKeys()) {
+                RestoredEvent e = byKey.get(k);
+                if (e != null) {
+                    refs.add(new AlarmCorrelator.RestoredRef(judgesByTag.get(e.tag()).def(), k, e.stage(),
+                            "LO".equals(e.rule())));
+                }
+            }
+            correlator.restore(a.alarmKey(), a.unitId(), a.stage(), a.hazard(), refs);
+        }
+    }
+
+    /** 이어 받을 이벤트에 붙일 엔진 번호 */
+    public long nextEventKey() {
+        return eventKeys.getAndIncrement();
+    }
+
+    /** 이어 받을 경보에 붙일 엔진 번호 */
+    public long nextAlarmKey() {
+        return alarmKeys.getAndIncrement();
+    }
+
+    /**
+     * @param external 밖(VMS · 엣지) 판정 이벤트인지
+     * @param edgeKey  엣지 구간 키 (DB 값, 겹쳐서 붙은 -2 같은 꼬리 포함 가능)
+     */
+    public record RestoredEvent(long eventKey, String tag, Stage stage, String rule, double peak, String edgeKey,
+                                boolean external) {
+    }
+
+    public record RestoredAlarm(long alarmKey, long unitId, Stage stage, Hazard hazard, List<Long> eventKeys) {
+    }
+
+    /** 같은 엣지 구간인지. DB 키는 겹칠 때 '-2' 같은 꼬리가 붙어 있을 수 있다 */
+    static boolean sameEdge(String stored, String incoming) {
+        if (stored == null || incoming == null) {
+            return java.util.Objects.equals(stored, incoming);
+        }
+        return stored.equals(incoming) || stored.matches(java.util.regex.Pattern.quote(incoming) + "-\\d+");
     }
 
     /** 모으던 1분 추이를 모두 내보낸다 (데이터 끝, 서버 종료 때). 진행 중 이벤트는 그대로 둔다 */
