@@ -82,6 +82,32 @@ $env:ARGOS_REDIS_ENABLED="true"
 | `plant5` | 공장 관리자 (PLANT_ADMIN), 5공장 | 웹 |
 | `worker12` | 작업자 (WORKER), 공정 12 | 앱 로그인만 |
 
+(2026-11-20 추가) 로그인 화면 종류: `admin`·`plant5` 는 `client: "WEB"` 만, `worker12` 는 `client: "APP"` 만 된다
+(다른 쪽으로 로그인하면 403 `CLIENT_NOT_ALLOWED`).
+
+30일치 데이터(친구 전달본)에 들어 있는 아래 계정은 **로그인할 수 없다** (비밀번호 해시가 자리표시 `CHANGE_ME`).
+이력·조치 기록에 이름을 보여 주는 용도.
+
+| 아이디 | 이름 | 권한 |
+| --- | --- | --- |
+| `sysadmin` | 시스템관리자 | HQ_ADMIN |
+| `manager01` | 안전관리자 | PLANT_ADMIN |
+| `worker_day` · `worker_eve` · `worker_night` | 주간 · 야간 · 심야 작업자 | WORKER |
+
+### 통합 시험 접속 정보 (2026-11-20, 팀 Wi-Fi `smartfactory_5G`)
+| 역할 | IP | 포트 |
+| --- | --- | --- |
+| DAS (Node-RED · Kafka · MQTT) | 192.168.0.14 | Kafka 9092, MQTT 1883 |
+| 봇 · VMS | 192.168.0.16 | VMS 9000 (영상 `/stream/IR-301`) |
+| 데이터 수집 서버 · 중앙 서버 · Redis · DB | 192.168.0.31 | 8081 · 8080 · 6379 · 5432 |
+
+- 수집 서버: `ARGOS_KAFKA_ENABLED=true`, `ARGOS_KAFKA_BOOTSTRAP=192.168.0.14:9092`, `ARGOS_REDIS_ENABLED=true`
+- 중앙 서버: `ARGOS_REDIS_ENABLED=true` (수집 서버와 같은 PC 라 `CENTRAL_SERVER_BASE_URL` · `REDIS_HOST` 는 기본값)
+- VMS: `vms_server.py --main-url http://192.168.0.31:8081/api/v1/vms/ir`
+- 웹(다른 PC): `vite.config.js` proxy 를 `http://192.168.0.31:8080` 으로 (로컬에서만 바꾸고 커밋하지 않음)
+- IR-301 `sensor.stream_url` = `http://192.168.0.16:9000/stream/IR-301` (DB 에서 바꿈)
+- 받는 PC 는 방화벽 인바운드를 연다: 192.168.0.31 은 TCP 8080·8081, 192.168.0.16 은 TCP 9000
+
 ### 끄기 · 다시 켜기
 - 끄기: 해당 터미널에서 `Ctrl + C`
 - 서버 코드를 바꿨으면: `Ctrl + C` → `↑` 로 마지막 mvn 명령 다시 실행
