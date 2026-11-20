@@ -248,6 +248,18 @@ class JudgementEngineTest {
     }
 
     @Test
+    void 엣지_END_가_안_와도_정상_값이_20번_이어지면_이벤트를_닫는다() {
+        engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
+        edge("TE-305", "K1", EdgeStage.Phase.START, Stage.ALARM, "HI", 170.0, null, null);
+        for (int i = 0; i < 19; i++) {
+            edgeValue("TE-305", 100);
+        }
+        assertThat(engine.currentStage("TE-305")).isEqualTo(Stage.ALARM);
+        edgeValue("TE-305", 100);
+        assertThat(engine.currentStage("TE-305")).isEqualTo(Stage.NORMAL);
+    }
+
+    @Test
     void 엣지_값은_판정하지_않고_추이와_현재값만() {
         engine = new JudgementEngine(List.of(te, it, at), rec, JudgementEngine.Options.live());
         for (int i = 0; i < 40; i++) {
