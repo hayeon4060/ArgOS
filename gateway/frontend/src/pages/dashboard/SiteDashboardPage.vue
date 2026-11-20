@@ -122,6 +122,13 @@ function onFactorySelect(factory) {
   grid-template-columns: minmax(0, 1fr) 628px;
   gap: 16px;
   align-items: stretch;
+  /*
+   * 화면 높이를 채움: 본문 높이(화면 − 상단 바 − 본문 위아래 여백 40px)만큼 최소 높이를 주고,
+   * 남는 높이는 위 줄(지도 카드 · 오른쪽 알림 목록)이 가져감. 아래 줄 카드는 내용 높이 그대로
+   * (전에는 내용 높이만큼만 그려서 큰 화면에서 아래가 비었음)
+   */
+  min-height: calc(var(--screen-h) - var(--topbar-height) - 40px);
+  grid-template-rows: 1fr auto;
 }
 
 .wide {
@@ -131,6 +138,9 @@ function onFactorySelect(factory) {
 @media (max-width: 1400px) {
   .site-dashboard {
     grid-template-columns: minmax(0, 1fr);
+    /* 한 열로 쌓일 때는 내용 높이대로 */
+    min-height: 0;
+    grid-template-rows: none;
   }
 }
 

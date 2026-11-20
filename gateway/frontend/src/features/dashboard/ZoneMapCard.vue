@@ -73,14 +73,16 @@ onMounted(async () => {
       </span>
     </template>
 
-    <div class="map-area">
-      <UlsanMap ref="map" :factories="factories" @hover="onHover" @select="onSelect" />
-      <ZonePopover
-        v-if="selected && selectedFactory"
-        :factory="selectedFactory"
-        :anchor="selected.anchor"
-        :enterable="selectedFactory.id === enterableFactoryId"
-      />
+    <div class="map-frame">
+      <div class="map-area">
+        <UlsanMap ref="map" :factories="factories" @hover="onHover" @select="onSelect" />
+        <ZonePopover
+          v-if="selected && selectedFactory"
+          :factory="selectedFactory"
+          :anchor="selected.anchor"
+          :enterable="selectedFactory.id === enterableFactoryId"
+        />
+      </div>
       <div class="hint">
         <AppIcon name="zoomin" :size="15" />공장에 마우스를 올리면 공정 목록, 누르면 공장 화면으로 이동합니다
       </div>
@@ -101,6 +103,24 @@ onMounted(async () => {
   border: 2.5px solid;
   border-radius: 3px;
   background: #fff;
+}
+
+/*
+ * 카드가 화면 높이에 맞춰 늘어날 때 (페이지가 남는 높이를 이 카드에 나눠 줌)
+ * - 지도는 비율 그대로 두고 남는 높이의 가운데에 둠 (.map-frame)
+ * - 안내 문구(.hint)는 지도 아래가 아니라 카드 왼쪽 아래 구석에 붙음
+ */
+.base-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* 지도 그림 비율(1545 : 715) 그대로 */
