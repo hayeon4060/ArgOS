@@ -66,7 +66,7 @@ public class EquipmentCommandController {
 
     /**
      * @param command FAN_HZ | FAN_STOP | SHUTDOWN | RESTART
-     * @param value   FAN_HZ 일 때 목표 주파수 (20 ~ 60 Hz, 평상시 40)
+     * @param value   FAN_HZ 일 때 목표 주파수 (20 ~ 60 Hz, 평상시 30)
      * @param alarmId 경보 대응 중 명령이면 그 경보
      * @param userId  누른 사람 (연계 DB app_user.user_id)
      */

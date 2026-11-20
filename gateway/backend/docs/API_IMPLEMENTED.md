@@ -462,3 +462,9 @@ DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `sou
 | `GET /doc-forms/{formType}/template` | 팀 양식 원본(`docs/ArgOS_서류양식.pdf`, 서버에는 `resources/forms/argos-doc-forms.pdf`)에서 그 양식 쪽(`ARG-F0n`)만 잘라 준다. 원본에 없는 양식만 서버가 그림 |
 | `GET /processes/{id}/status` | `units[{id, name, equipmentId, level, equipmentIds}]` 와 설비 줄의 `unitLevel`(속한 관제 단위 중 가장 높은 단계) 추가 (backend-feedback-1120 5장 3번) |
 | 수집 서버 `V5__co_immediate.sql` | CO(AT) 현재 기준값의 `immediate_value` 가 비어 있으면 200 ppm (DAS 즉시 3단계 판정) |
+
+## 2026-11-20 배기팬 기준 주파수 변경
+
+정상 **30Hz** (900rpm) · 주의 45Hz (1,350rpm) · 경보 60Hz (1,800rpm). 위 문서에서 '평상시 40Hz · 1,200rpm' 이라고 적힌 곳은 이 값으로 읽는다.
+- 경보 종료 때 복귀(RECOVERY), `POST /equipment/{id}/fan {power: ON}`, 시연 리셋의 배기팬 회전수가 30Hz(900rpm)
+- 수집 서버 `V6__fan_normal_30hz.sql`: 1200rpm 으로 돌던 배기팬을 900rpm 으로

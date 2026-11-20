@@ -54,9 +54,9 @@ public class EquipmentActionService {
     /** 배기팬 회전수 범위 (화면 슬라이더) */
     static final int RPM_MIN = 600;
     static final int RPM_MAX = 1800;
-    /** 회전수 = 주파수 × 30 (중앙 서버와 같음. 40Hz = 1200rpm 평상시) */
+    /** 회전수 = 주파수 × 30 (중앙 서버와 같음. 평상시 30Hz = 900rpm, 주의 45Hz, 경보 60Hz) */
     static final int RPM_PER_HZ = 30;
-    static final int HZ_NORMAL = 40;
+    static final int HZ_NORMAL = 30;
 
     /**
      * POST /fan-commands/{commandId}/approve · deny — 수동 배기팬 승인 대기 명령을 공장 담당자가 승인 · 거절.
