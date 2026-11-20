@@ -14,6 +14,8 @@ const props = defineProps({
   month: { type: String, default: '' },
   /** summary.calendar [{ date, done, planned, delayed }] */
   calendar: { type: Array, default: () => [] },
+  /** 그날 목록을 받을 공장 (공장 담당자는 자기 공장, 없으면 담당 범위 전체) */
+  factoryId: { type: Number, default: null },
 })
 
 const today = ymd(new Date())
@@ -39,13 +41,21 @@ const cells = computed(() => {
 })
 
 /* ───────── 그날 점검 목록 ───────── */
-const pop = ref(null) // { date, items, left, top }
+const pop = ref(null) // { date, items, loading, error, left, top }
 async function openDay(cell, e) {
   if (!cell.dots?.length) return
   const r = e.currentTarget
-  pop.value = { date: cell.date, items: [], left: Math.min(r.offsetLeft, 100), top: r.offsetTop + r.offsetHeight + 4 }
-  const items = await getDaySchedule(cell.date)
-  if (pop.value?.date === cell.date) pop.value.items = items
+  pop.value = { date: cell.date, items: [], loading: true, error: '', left: Math.min(r.offsetLeft, 100), top: r.offsetTop + r.offsetHeight + 4 }
+  let items = []
+  let error = ''
+  try {
+    items = await getDaySchedule(cell.date, props.factoryId ?? undefined)
+  } catch (err) {
+    error = err.message
+  }
+  // 그사이 다른 날을 눌렀으면 늦게 온 응답은 버림
+  if (pop.value?.date !== cell.date) return
+  Object.assign(pop.value, { items, loading: false, error })
 }
 </script>
 
@@ -84,10 +94,13 @@ async function openDay(cell, e) {
           <b class="ph">{{ Number(pop.date.slice(5, 7)) }}월 {{ Number(pop.date.slice(8)) }}일 점검 {{ pop.items.length || '' }}{{ pop.items.length ? '건' : '' }}</b>
           <div v-for="it in pop.items" :key="it.scheduleId" class="pi">
             <i :style="{ background: SCHEDULE_STATE[it.status].color }" />
-            <span class="pt">{{ it.title }}<small>{{ it.processName }}</small></span>
+            <!-- 시각 · 공정 · 담당자 (서버가 비워 준 칸은 빼고 보여 줌) -->
+            <span class="pt">{{ it.title }}<small>{{ [it.time, it.processName, it.assignee].filter(Boolean).join(' · ') }}</small></span>
             <span class="m-chip" :class="SCHEDULE_STATE[it.status].chip">{{ SCHEDULE_STATE[it.status].label }}</span>
           </div>
-          <p v-if="!pop.items.length" class="wait">불러오는 중</p>
+          <p v-if="pop.loading" class="wait">불러오는 중</p>
+          <p v-else-if="pop.error" class="wait">{{ pop.error }}</p>
+          <p v-else-if="!pop.items.length" class="wait">점검 일정이 없습니다.</p>
         </div>
       </template>
     </div>

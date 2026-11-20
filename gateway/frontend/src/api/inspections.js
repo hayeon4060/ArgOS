@@ -1,5 +1,5 @@
 /**
- * 점검 관리(수기 서류 OCR) API (설계 자료 API 명세서 E1 — 백엔드에 아직 컨트롤러 없음)
+ * 점검 관리(수기 서류 OCR) API (설계 자료 API 명세서 E1, 백엔드 InspectionController)
  * - GET  /inspections/summary?month=&factoryId= : 이번 달 이행률, 서류별 건수, 달력 점
  * - GET  /doc-forms                             : 서류 양식(F01~F05) 칸 목록
  * - POST /inspections (multipart)               : 서류 올리기 → 202 { id, status: RECOGNIZING }
@@ -8,6 +8,7 @@
  * - PUT  /inspections/{id}                      : 임시 저장(REVIEW) · 검수 완료(DONE)
  * - POST /inspections/{id}/ocr                  : 다시 인식
  * - GET  /inspections?from=&to=&formType=&status= : 등록 목록
+ * - GET  /inspections/schedule?date=&factoryId=   : 그날 점검 목록 (달력 날짜를 눌렀을 때)
  *
  * 글자 인식(네이버 CLOVA OCR 템플릿)은 백엔드가 부르고 키도 백엔드에만 있음 → 프론트에는 OCR 키·주소를 두지 않음
  */
@@ -91,7 +92,14 @@ export function getInspections(params = {}) {
   return http.get('/inspections', { params: clean(params) })
 }
 
-/** 그날 점검 목록 (명세서에 없음 — 예시 데이터만, backend-notes 13장 추가 요청) */
-export function getDaySchedule(date) {
-  return mockOk(mock.daySchedule(date))
+/**
+ * 그날 점검 목록 (명세서에 없음 — backend-notes 13장 요청으로 백엔드가 추가)
+ * @param {string} date 'YYYY-MM-DD'
+ * @param {number} [factoryId] 공장 담당자는 자기 공장 (없으면 담당 범위 전체)
+ * @returns {Promise<Array<{ scheduleId, date, time, title, formType, formName, processId, processName,
+ *   equipmentId, equipmentName, assignee, status: 'DONE'|'PLANNED'|'DELAYED', doneAt, doneBy }>>}
+ */
+export function getDaySchedule(date, factoryId) {
+  if (USE_MOCK) return mockOk(mock.daySchedule(date))
+  return http.get('/inspections/schedule', { params: clean({ date, factoryId }) })
 }

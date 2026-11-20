@@ -16,10 +16,11 @@
     · selected: 고른 설비 파란 그림자, inactive: 사용 안 함 설비 흐리게, thin: 테두리를 더 얇게
 -->
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import PaintHoverChip from './PaintHoverChip.vue'
 import { buildOverlays, clearHover } from './paintHover'
 import { HALO_GROUPS, PAINT_EQUIPMENT, keyOfSvgId } from './paintLayout'
+import { mergeByKey } from './processEquipment'
 import paintSvg from '@/assets/images/paint-map.svg?raw'
 import { LEVEL } from '@/types/codes'
 
@@ -65,7 +66,9 @@ const COLOR = {
 }
 const TAG_LEVEL = { [LEVEL.NORMAL]: 'normal', [LEVEL.WARN]: 'warn', [LEVEL.ALARM]: 'danger', [LEVEL.FIRE]: 'danger' }
 
-const byKey = (key) => props.equipment.find((e) => e.key === key)
+// 그림 이름별 설비 (실제 서버는 건조로 · 배기팬 · 버너실이 따로 설비 → 대표 설비 하나로 묶음, processEquipment.js)
+const merged = computed(() => mergeByKey(props.equipment))
+const byKey = (key) => merged.value.find((e) => e.key === key)
 
 /**
  * 상태 테두리 만들기 (처음 한 번)
@@ -130,7 +133,7 @@ function applyLevels() {
     halo.classList.toggle('glow', !calm) // 빛번짐은 주의·경보 테두리에만
     halo.classList.toggle('fast', level === LEVEL.ALARM || level === LEVEL.FIRE) // 경보·화재는 더 빠르게 깜빡임
   })
-  for (const eq of props.equipment) {
+  for (const eq of merged.value) {
     // 그림 안 설비 이름표 (공장 관리에서 이름을 바꾸면 그 이름으로) — 번호(숫자)가 아닌 글자
     const label = [...(svg.querySelector(`#eq-${eq.key}`)?.querySelectorAll('text') ?? [])].find((t) => !/^\d+$/.test(t.textContent))
     if (label && eq.name && label.textContent !== eq.name) label.textContent = eq.name
@@ -290,7 +293,7 @@ function hoverOf(target) {
     return { key: eqEl.getAttribute('data-eq') }
   }
   const tag = target.closest('[id^="tag-"]')?.id.slice(4)
-  const eq = tag && props.equipment.find((e) => e.sensors.some((s) => s.tag === tag))
+  const eq = tag && merged.value.find((e) => e.sensors.some((s) => s.tag === tag))
   return eq ? { key: eq.key } : null
 }
 

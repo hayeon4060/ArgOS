@@ -28,7 +28,7 @@ import EquipmentListCard from '@/features/factory/EquipmentListCard.vue'
 import LayoutMapCard from '@/features/factory/LayoutMapCard.vue'
 import ThresholdModal from '@/features/threshold/ThresholdModal.vue'
 import { bodyOf, changesOf, currentOf, placeOf } from '@/features/factory/layoutDraft'
-import { buildProcessEquipment } from '@/features/process/processEquipment'
+import { buildProcessEquipment, mergeByKey } from '@/features/process/processEquipment'
 
 // 처음 고르는 범위 (설계안 기본값 울산공장 › 5공장 › 도장 공정 — 지금 배치도가 있는 공정). 없으면 첫 공장·공정
 const DEFAULT_FACTORY = '5공장'
@@ -134,10 +134,12 @@ const changes = computed(() => changesOf(saved.value, draft, defaults.value))
 
 const selected = computed(() => shown.value.find((e) => e.id === selectedId.value) ?? null)
 const listRows = computed(() => shown.value.map((e) => ({ ...e, changed: changes.value.some((c) => c.id === e.id) })))
-const mapEquipment = computed(() => shown.value.map(({ key, name, level, sensors }) => ({ key, name, level, sensors })))
+const mapEquipment = computed(() => shown.value.map(({ key, name, level, sensors, seq }) => ({ key, name, level, sensors, seq })))
+// 그림 하나에 설비가 여러 대(실제 서버: 건조로 + 배기팬 + 버너실)면 대표 설비 값만 그림 위치 · 사용 여부에 씀
+const shownMain = computed(() => mergeByKey(shown.value))
 // 배치도에 그릴 위치: 저장된(또는 고친) pos 가 있는 설비만 (없으면 그림 그대로)
-const mapPositions = computed(() => Object.fromEntries(shown.value.filter((e) => e.pos).map((e) => [e.key, e.pos])))
-const mapInactive = computed(() => shown.value.filter((e) => !e.active).map((e) => e.key))
+const mapPositions = computed(() => Object.fromEntries(shownMain.value.filter((e) => e.pos).map((e) => [e.key, e.pos])))
+const mapInactive = computed(() => shownMain.value.filter((e) => !e.active).map((e) => e.key))
 
 /* ───────── 고치기 ───────── */
 /** 설비 하나의 값 하나 고치기 (저장값과 같아지면 지움) */
@@ -151,7 +153,7 @@ function setField(id, field, value) {
   else delete draft[id]
 }
 
-const idOf = (key) => saved.value.find((e) => e.key === key)?.id
+const idOf = (key) => mergeByKey(saved.value).find((e) => e.key === key)?.id // 그림을 끌면 대표 설비를 옮김
 const onMapSelect = (key) => (selectedId.value = idOf(key) ?? selectedId.value)
 const onMove = (key, pos) => setField(idOf(key), 'pos', pos)
 const onUse = (on) => selected.value && setField(selected.value.id, 'active', on)

@@ -219,7 +219,7 @@ function shake() {
               <b>{{ response.reason }}</b>
               <small>{{ response.reasonDetail }}</small>
             </div>
-            <!-- 가스 경보: 배기팬 자동 제어 결과 (자동이면 100%로 올림, 수동이면 안내만) — 셧다운으로 설비를 세운 뒤에는 숨김 -->
+            <!-- 가스 경보: 배기팬 자동 제어 결과 (자동이면 100%로 올림, 수동이면 승인 대기 · 승인 · 거절 버튼) — 셧다운으로 설비를 세운 뒤에는 숨김 -->
             <FanAutoNotice v-if="response.fanAuto && !stopped" :fan="response.fanAuto" tone="alarm" class="gap" />
           </section>
           <section>

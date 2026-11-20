@@ -3,8 +3,10 @@
  * - GET /equipment/{equipmentId}         : 설비 정보 · 센서 · 기준값 · 진행 중 체크리스트
  * - GET /equipment/{equipmentId}/events  : 오늘 이벤트 이력 (알람 · 조치 · 기준값 조정)
  * - GET /thermal/{cameraId}/latest       : 열화상 최신 장면 (최고·최저 온도)
+ * - GET /thermal/images/{fileId}         : VMS 열화상 사진 한 장 (로그인 필요 → blob 으로 받음)
  * - GET /sensors/series                  : 센서 추이 (전날 겹쳐 보기 compare=yesterday)
  * - PATCH /equipment/{equipmentId}/settings : 설비 설정 바로 저장 (사용 상태 · 배기팬 자동/수동, 2026-11-19 추가)
+ * - POST /fan-commands/{commandId}/approve · deny : 수동 배기팬 승인 · 거절 (가스 알림의 fanAuto.status = AWAITING, 2026-11-20 추가)
  */
 import http from './http'
 import { USE_MOCK, mockFail, mockOk } from './mock'
@@ -12,7 +14,7 @@ import { serverNow } from './clock'
 import { THERMAL_BY_STATE, TOP_OVEN_ID, mockEquipment, mockEquipmentEvents, thermalOf } from './mock/equipmentData'
 import { buildSeries } from './mock/equipmentSeries'
 import { saveSettings } from './mock/layoutData'
-import { fanAutoMode } from './mock/fanAuto'
+import { decideFanCommand, fanAutoMode } from './mock/fanAuto'
 import { emitLive } from './live'
 import { scenario } from './mock/scenario'
 import { LEVEL } from '@/types/codes'
@@ -44,6 +46,23 @@ export async function getThermalLatest(cameraId, equipmentId) {
   // 실제 열화상 그림(VMS)이 아직 없어서 서버는 imageUrl 없이 level 만 줌 → 단계에 맞는 예시 그림 사용
   if (!data.imageUrl) data.imageUrl = (THERMAL_BY_STATE[data.level] ?? THERMAL_BY_STATE[LEVEL.NORMAL]).image
   return data
+}
+
+/**
+ * 열화상 사진을 화면 <img> 에 넣을 주소로 바꿈
+ * - 서버가 주는 thermal.imageUrl 은 '/api/v1/thermal/images/{fileId}' (ThermalService.imageUrl)
+ *   → 로그인 토큰이 필요해서 <img src> 로 바로 못 띄움. axios(토큰 헤더)로 받아 브라우저 안 주소(blob:)로 만듦
+ * - 그 밖의 주소(예시 그림 · 빈 값)는 받을 필요 없이 그대로 씀 (mock 모드는 늘 이쪽)
+ * - 다 쓰면 revoke() 로 blob 주소를 풀어 줌 (getInspectionFile 과 같은 방식)
+ * @param {string|null} imageUrl
+ * @returns {Promise<{ url: string|null, revoke: () => void }>}
+ */
+export async function loadThermalImage(imageUrl) {
+  const path = imageUrl?.match(/\/thermal\/images\/\d+$/)?.[0] // '/thermal/images/12' (앞의 /api/v1 은 http 기본 주소가 붙임)
+  if (!path) return { url: imageUrl ?? null, revoke: () => {} }
+  const blob = await http.get(path, { responseType: 'blob' })
+  const url = URL.createObjectURL(blob)
+  return { url, revoke: () => URL.revokeObjectURL(url) }
 }
 
 /** 범위 → 요청 기간·간격 ('1h' = 최근 1시간 1분 간격, '6h' = 최근 6시간, 'today' = 오늘 0시부터) */
@@ -86,4 +105,20 @@ export async function updateEquipmentSettings(equipmentId, body) {
     return data
   }
   return http.patch(`/equipment/${equipmentId}/settings`, body)
+}
+
+/**
+ * 수동 배기팬 승인 · 거절 (가스 알림 창의 '승인' · '거절' 버튼)
+ * - 공장 담당자만 (본사 관리자 403). 이미 승인 · 거절 · 취소된 명령이면 409 COMMAND_NOT_AWAITING
+ * - 실제 서버는 처리 뒤 SSE command.result · alarm.updated 를 보냄 → 알림 목록 · 창이 새 fanAuto 로 바뀜
+ * @param {number} commandId 알림의 fanAuto.commandId
+ * @param {boolean} approve true 승인 / false 거절
+ * @returns {Promise<{ commandId, equipmentId, status: 'SENT'|'DENIED', hz, rpm }>}
+ */
+export function decideFan(commandId, approve) {
+  if (USE_MOCK) {
+    const r = decideFanCommand(commandId, approve)
+    return r.error ? mockFail(r.error) : mockOk(r.data)
+  }
+  return http.post(`/fan-commands/${commandId}/${approve ? 'approve' : 'deny'}`)
 }

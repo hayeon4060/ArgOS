@@ -39,7 +39,7 @@ const FAN_TEXT = `가스(CO) 주의 ${FAN_AUTO_PERCENT.WARN}% · 경보 ${FAN_AU
     <div v-if="fanAuto !== null" class="item">
       <div class="txt">
         <span>배기팬 자동 제어 <b :class="{ ok: fanAuto }">{{ fanAuto ? '자동' : '수동' }}</b></span>
-        <small>{{ fanAuto ? FAN_TEXT : '가스 알림이 와도 배기팬은 그대로 두고, 알림 창에 안내만 합니다.' }}</small>
+        <small>{{ fanAuto ? FAN_TEXT : '가스 알림이 오면 알림 창에서 공장 담당자가 승인해야 배기팬을 올립니다.' }}</small>
       </div>
       <button type="button" class="tg" :class="{ on: fanAuto }" role="switch" :aria-checked="fanAuto" aria-label="배기팬 자동 제어" :disabled="busy === 'fanAuto'" @click="emit('toggle', 'fanAuto', !fanAuto)" />
     </div>

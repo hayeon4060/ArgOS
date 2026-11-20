@@ -75,7 +75,7 @@ async function onDone() {
         </div>
       </div>
 
-      <!-- 가스 주의: 배기팬 자동 제어 결과 (자동이면 75%로 올림, 수동이면 안내만) -->
+      <!-- 가스 주의: 배기팬 자동 제어 결과 (자동이면 75%로 올림, 수동이면 승인 대기 · 승인 · 거절 버튼) -->
       <FanAutoNotice v-if="alarm.fanAuto" :fan="alarm.fanAuto" tone="warn" class="fan" />
 
       <div class="hold-wrap">

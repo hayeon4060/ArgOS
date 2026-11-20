@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
     <div class="left">
       <MonthSummaryCard :summary="summary" />
       <FormStatusCard :forms="summary?.byForm ?? []" @open="openList" />
-      <ScheduleCard :month="summary?.month ?? ''" :calendar="summary?.calendar ?? []" />
+      <ScheduleCard :month="summary?.month ?? ''" :calendar="summary?.calendar ?? []" :factory-id="auth.user?.scope?.factoryIds?.[0] ?? null" />
     </div>
 
     <!-- 오른쪽: 수기 서류 등록 -->
