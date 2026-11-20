@@ -739,3 +739,9 @@
 - 배기팬 수동 승인: `fanAuto.status = AWAITING` 이고 `commandId` 가 있으면 알림 창에 '승인' · '거절' 버튼 (공장 담당자만) → `POST /fan-commands/{commandId}/approve · deny`.
 - 실제 설비 코드: 배치도 그림 짝 맞춤을 `PT-TANK` · `ED-OVEN` · `TC-OVEN` … 기준으로 바꿈. 배기팬 · 버너실 · 펌프 · 열화상 카메라는 같은 그림에 묶음.
 - 자세한 내용: 저장소 **`docs/api/backend-feedback-1120.md`**.
+
+## 25. 사업장 · 공장 · 공정 추가 (2026-11-20, 재원님 요청)
+
+- 사업장 선택 '사업장 추가' → 이름만 입력('창원' → '창원공장') → `POST /sites` → 그 사업장 공장 관리로 이동. 공장이 없는 사업장은 상단 메뉴에 '관리'만.
+- 공장 관리 공장 · 공정 드롭다운 맨 아래 '공장 추가' · '공정 추가' → `POST /factories` · `POST /processes`. 새 공정은 설비 없는 빈 배치도.
+- `code` 는 프론트가 자동으로 만들어 보냄 (서버가 비워도 만들어 주면 지움). 자세한 내용: 저장소 **`docs/api/scope-add.md`**.

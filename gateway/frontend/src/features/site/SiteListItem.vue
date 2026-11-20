@@ -3,6 +3,7 @@
   - 머리줄: 펼침 표시, 이름·상태·코드, 주소·위경도, 센서 단계 개수, '이동' 버튼
   - 펼치면: 공장 표 (FactoryRow 여러 줄)
   - 이벤트: toggle(펼치기/접기), enter(사업장으로 이동), enter-factory(공장으로 이동)
+  - 2026-11-20: 공장 관리에서 막 만든 사업장은 주소 · 위경도가 없음(null) → '위치 미등록', 공장이 없으면 안내 한 줄
 -->
 <script setup>
 import FactoryRow from './FactoryRow.vue'
@@ -45,8 +46,8 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
       </div>
       <div class="loc">
         <AppIcon name="pin" :size="15" />
-        <span>{{ site.address }}</span>
-        <span class="mono">{{ site.lat.toFixed(4) }}°N, {{ site.lng.toFixed(4) }}°E</span>
+        <span>{{ site.address ?? '주소 미등록' }}</span>
+        <span v-if="site.lat != null && site.lng != null" class="mono">{{ site.lat.toFixed(4) }}°N, {{ site.lng.toFixed(4) }}°E</span>
       </div>
       <StageCounts :counts="site.sensorLevels" size="lg" />
       <button type="button" class="btn" :class="{ 'btn-primary': current }" @click.stop="emit('enter', site.id)">
@@ -69,6 +70,7 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
         </div>
         <p v-if="tree?.loading" class="state">불러오는 중</p>
         <p v-else-if="tree?.error" class="state error">{{ tree.error }}</p>
+        <p v-if="tree?.factories && !tree.factories.length" class="state">아직 공장이 없습니다. '이동'을 누르면 공장 관리에서 공장을 추가할 수 있습니다.</p>
         <FactoryRow
           v-for="factory in tree?.factories ?? []"
           :key="factory.id"

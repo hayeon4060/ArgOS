@@ -2,6 +2,7 @@
   설비 목록 (화면설계안 vLayout() #lc)
   - 설비마다 이름 · 종류 · 센서 수, 사용 안 함이면 흐리게, 바뀐 설비는 파란 점 '변경'
   - 누르면 select(설비 id) → 배치도·오른쪽 정보가 그 설비로
+  - 설비가 없으면(막 추가한 공정) '아직 설비가 없습니다'
 -->
 <script setup>
 import { typeLabel } from './layoutDraft'
@@ -21,6 +22,7 @@ defineEmits(['select'])
 <template>
   <BaseCard title="설비 목록" :sub="sub">
     <div class="list">
+      <p v-if="!rows.length" class="empty"><AppIcon name="layers" :size="22" />아직 설비가 없습니다</p>
       <button
         v-for="r in rows"
         :key="r.id"
@@ -43,6 +45,22 @@ defineEmits(['select'])
 <style scoped>
 .list {
   padding: 6px 0;
+}
+
+.empty {
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-text-sub);
+}
+
+.empty .app-icon {
+  color: var(--color-text-weak);
 }
 
 .er {

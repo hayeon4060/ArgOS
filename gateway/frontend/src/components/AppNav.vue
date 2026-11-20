@@ -4,11 +4,13 @@
   - 선택 표시: 지금 화면의 meta.nav 와 같은 탭에 파란 글자 + 아래 밑줄
   - '관리' 펼침은 바깥을 누르거나 Esc 를 누르면 닫힘 (utils/useOutsideClose.js), 열고 닫힐 때 menu-drop 움직임 (motion.css)
   - 메뉴 목록은 router/menus.js 한 곳에서 관리
+  - 아직 설정하지 않은 사업장(공장 0개, features/site/siteSetup.js)은 탭을 숨기고 '관리'만 (2026-11-20 재원님 요청)
 -->
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from './AppIcon.vue'
+import { checkSite, isEmptySite } from '@/features/site/siteSetup'
 import { NAV_ADMIN, NAV_TABS } from '@/router/menus'
 import { useOutsideClose } from '@/utils/useOutsideClose'
 
@@ -17,6 +19,10 @@ const route = useRoute()
 // 지금 사업장 ID (/sites/:siteId/...) — 메뉴 주소에 그대로 붙임
 const siteId = computed(() => route.params.siteId)
 const currentNav = computed(() => route.meta.nav)
+
+// 새로 추가해 아직 공장이 없는 사업장: 대시보드 · 통계 · 점검 탭은 볼 것이 없어서 숨김
+watch(siteId, checkSite, { immediate: true })
+const emptySite = computed(() => isEmptySite(siteId.value))
 
 // '관리' 펼침 열림 여부 (다른 화면으로 가면 닫음)
 const adminOpen = ref(false)
@@ -28,7 +34,7 @@ useOutsideClose(adminRoot, adminOpen)
 <template>
   <nav class="app-nav">
     <RouterLink
-      v-for="tab in NAV_TABS"
+      v-for="tab in emptySite ? [] : NAV_TABS"
       :key="tab.nav"
       :to="{ name: tab.name, params: { siteId } }"
       class="tab"

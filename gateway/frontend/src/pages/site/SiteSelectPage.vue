@@ -4,19 +4,24 @@
   - 배치: 왼쪽 위 지도(SiteMapCard) / 왼쪽 아래 센서 단계(SiteSensorCard) / 오른쪽 목록(SiteListCard)
   - 이 파일은 데이터 불러오기와 화면 이동만 담당, 모양은 features/site 의 각 카드가 담당
   - 이번 범위는 울산공장 5공장만 진입 가능, 나머지는 '준비 중' 안내
+  - 2026-11-20 재원님 요청: 사업장 목록 '사업장 추가' → 이름 입력('창원' → '창원공장') → POST /sites → 그 사업장 공장 관리로 바로 이동
+    · 공장이 하나도 없는 사업장은 '이동'을 누르면 공장 관리로 (볼 대시보드가 없어서)
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getActiveFires } from '@/api/emergency'
-import { getSites } from '@/api/sites'
+import { createSite, getSites } from '@/api/sites'
 import AppNotice from '@/components/AppNotice.vue'
+import NameInputModal from '@/components/NameInputModal.vue'
 import SiteListCard from '@/features/site/SiteListCard.vue'
 import SiteMapCard from '@/features/site/SiteMapCard.vue'
 import SiteSensorCard from '@/features/site/SiteSensorCard.vue'
 import FireBanner from '@/features/site/FireBanner.vue'
 import FirePanel from '@/features/site/FirePanel.vue'
+import { setFactoryCount } from '@/features/site/siteSetup'
 import { useAlertStore } from '@/stores/alert'
+import { toast } from '@/utils/toast'
 import { useLiveReload } from '@/utils/useLiveReload'
 import { useNotice } from '@/utils/useNotice'
 
@@ -86,12 +91,37 @@ const { message: noticeMessage, show: showNotice } = useNotice()
  * - 지금은 울산공장만 들어갈 수 있음
  */
 function enterSite(siteId) {
+  const site = sites.value.find((s) => s.id === siteId)
+  // 공장이 없는 사업장(막 추가한 곳): 공장 관리에서 공장부터 추가
+  if (site?.factoryCount === 0) {
+    router.push({ name: 'factory', params: { siteId } })
+    return
+  }
   if (siteId !== AVAILABLE_SITE_ID) {
-    const site = sites.value.find((s) => s.id === siteId)
     showNotice(`${site?.name ?? '이 사업장'} 화면은 준비 중입니다. 지금은 울산공장만 볼 수 있습니다.`)
     return
   }
   router.push({ name: 'site-dashboard', params: { siteId } })
+}
+
+/* ───────── 사업장 추가 (2026-11-20) ───────── */
+const adding = ref(false)
+const addBusy = ref(false)
+
+/** 이름 입력 창 '추가' → 만든 사업장의 공장 관리로 (공장 0개 → 상단 메뉴는 '관리'만) */
+async function addSite(name) {
+  addBusy.value = true
+  try {
+    const made = await createSite({ name })
+    setFactoryCount(made.id, 0)
+    adding.value = false
+    toast(`${name}을(를) 추가했습니다. 공장을 추가해 주세요.`)
+    router.push({ name: 'factory', params: { siteId: made.id } })
+  } catch (error) {
+    toast(error.message, { type: 'err' }) // 409 CODE_TAKEN: 같은 이름
+  } finally {
+    addBusy.value = false
+  }
 }
 
 /** 공장 줄을 눌렀을 때 → 공장 대시보드 (FactoryRow 가 진입 가능한 공장만 이벤트를 보냄) */
@@ -119,10 +149,24 @@ function enterFactory(factory) {
         :link-factory-id="AVAILABLE_FACTORY_ID"
         @enter="enterSite"
         @enter-factory="enterFactory"
+        @add="adding = true"
       />
     </template>
 
     <AppNotice :message="noticeMessage" />
+
+    <!-- 사업장 추가: 이름 끝에 '공장'을 붙임 (예: 창원 → 창원공장, 기존 울산공장 · 아산공장과 같은 꼴) -->
+    <NameInputModal
+      :open="adding"
+      title="사업장 추가"
+      label="사업장 이름"
+      placeholder="예: 창원"
+      suffix="공장"
+      :taken="sites.map((s) => s.name)"
+      :busy="addBusy"
+      @submit="addSite"
+      @cancel="adding = false"
+    />
   </div>
 </template>
 

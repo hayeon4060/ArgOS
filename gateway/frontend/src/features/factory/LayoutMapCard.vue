@@ -5,6 +5,8 @@
   - 위치는 배치도 화면 좌표 { x, y } (DB pos_x · pos_y) — move(설비 이름, { x, y })
   - 오른쪽 위: 고른 설비 사용 ON/OFF, 격자에 맞추기 스위치
   - 아래 왼쪽 안내: '설비를 끌어서 옮기면 연결된 센서도 함께 이동합니다'
+  - 설비가 0대(막 추가한 공정)면 도장 공정 그림 대신 격자 바닥만 + '아직 설비가 없습니다' (2026-11-20)
+    (PaintMap 은 도장 공정 그림이라 설비가 없어도 도장 설비가 그려짐)
 -->
 <script setup>
 import { onMounted, ref } from 'vue'
@@ -50,7 +52,16 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
       </span>
     </template>
 
-    <div class="map">
+    <!-- 설비 없는 공정: 빈 격자 바닥 -->
+    <div v-if="!equipment.length" class="map blank">
+      <div class="blank-msg">
+        <AppIcon name="layers" :size="28" />
+        <b>아직 설비가 없습니다</b>
+        <span>설비를 추가하면 이 배치도 위에 놓입니다.</span>
+      </div>
+    </div>
+
+    <div v-else class="map">
       <PaintMap
         ref="map"
         :equipment="equipment"
@@ -75,6 +86,40 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
   height: calc(100% - 48px);
   min-height: 560px;
   background: #f8fafc;
+}
+
+.map.blank {
+  display: grid;
+  place-items: center;
+  /* 격자 바닥 (1칸 32px) */
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+    linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.blank-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  font-size: 13px;
+  color: var(--color-text-sub);
+  text-align: center;
+}
+
+.blank-msg .app-icon {
+  color: var(--color-text-weak);
+}
+
+.blank-msg b {
+  font-size: 15px;
+  color: var(--color-text);
 }
 
 .hint {
