@@ -150,7 +150,7 @@ public class VmsService {
         }
     }
 
-    /** 'YYYY-MM-DD HH:MM:SS'(한국 시각) 또는 ISO(+09:00). 비우면 지금(시연 시계) */
+    /** 'YYYY-MM-DD HH:MM:SS'(한국 시각) 또는 ISO(+09:00). 비우면 지금(서버 시계) */
     static Instant parseTs(String ts, DemoClock clock) {
         if (ts == null) {
             return clock.now();

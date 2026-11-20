@@ -59,7 +59,7 @@ public class DevController {
 
     /**
      * 예: [{ "tag": "AT-301", "value": 18.5 }, { "tag": "IT-303", "value": 21.0, "ts": "2026-11-16T09:01:00+09:00" }]
-     * ts 를 비우면 시연 시계의 지금으로 넣는다.
+     * ts 를 비우면 서버 시각의 지금으로 넣는다.
      */
     @PostMapping("/readings")
     public ApiResponse<IngestResponse> readings(@RequestBody @NotEmpty List<@Valid ReadingRequest> body) {

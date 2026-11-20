@@ -65,7 +65,7 @@ public final class InternalDto {
     // ---------------------------------------------------------------
 
     /**
-     * @param at        시연 시계의 지금
+     * @param at        서버 시계의 지금
      * @param sensors   센서별 지금 값·단계
      * @param equipment 설비별 단계·운전 상태
      * @param levels    범위별 단계 (plants / factories / processes / units → id → stage)
