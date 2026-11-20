@@ -70,7 +70,14 @@ function move(n) {
 const pct = (n, total) => `${total ? (n / total) * 100 : 0}%`
 const md = (d) => d.slice(5)
 
+/**
+ * 인쇄: body 에 print-insp 를 잠깐 붙여, 아래 @media print 규칙이 이 보고서를 인쇄할 때만 걸리게 함
+ * (규칙을 항상 걸어 두면 이 화면을 한 번 연 뒤 다른 화면에서 인쇄해도 빈 종이가 나옴)
+ */
 function print() {
+  document.body.classList.add('print-insp')
+  const done = () => document.body.classList.remove('print-insp')
+  window.addEventListener('afterprint', done, { once: true })
   window.print()
 }
 </script>
@@ -79,8 +86,8 @@ function print() {
   <Teleport to="body">
     <Transition name="modal" :duration="{ enter: 300, leave: 200 }">
       <BaseModal v-if="open" :width="900" label="월별 점검 보고서" @close="emit('close')">
-        <div class="wrap">
-          <div class="m-head">
+        <div class="wrap rep-wrap">
+          <div class="m-head rep-noprint">
             <h2>월별 점검 보고서</h2>
             <span class="mnav">
               <button type="button" class="ibtn" aria-label="이전 달" @click="move(-1)"><AppIcon name="cl" :size="15" /></button>
@@ -90,7 +97,7 @@ function print() {
             <button type="button" class="m-close" aria-label="닫기" @click="emit('close')"><AppIcon name="x" /></button>
           </div>
 
-          <div class="paperwrap">
+          <div class="paperwrap rep-paperwrap">
             <div class="paper insp-report">
               <div v-if="rep.future" class="empty">아직 시작하지 않은 달입니다.</div>
               <template v-else>
@@ -173,7 +180,7 @@ function print() {
             </div>
           </div>
 
-          <div class="mf">
+          <div class="mf rep-noprint">
             <span class="hint">{{ loading ? '불러오는 중…' : note }}</span>
             <span class="gap" />
             <button type="button" class="btn btn-primary" :disabled="rep.future" @click="print"><AppIcon name="file" :size="15" />인쇄</button>
@@ -416,23 +423,52 @@ h4 i {
 </style>
 
 <style>
-/* 인쇄: 보고서 종이만 남기고 나머지(화면 · 창 틀)는 숨김 (scoped 가 아니어야 body 에 걸림) */
+/*
+ * 인쇄: '인쇄' 버튼을 누른 동안(body.print-insp)만, 보고서 종이 한 장만 남김
+ * - 화면(#app) · 어두운 배경 · 창 머리/아래 버튼은 숨기고, 창 틀(고정 위치 · 높이 제한 · 스크롤)을 풀어 종이가 잘리지 않게
+ * - 창은 body 바로 아래(Teleport)에 있어 > 로 고름. scoped 가 아니어야 body 에 걸림
+ */
 @media print {
-  body * {
-    visibility: hidden;
+  body.print-insp {
+    background: #fff;
   }
 
-  .insp-report,
-  .insp-report * {
-    visibility: visible;
+  body.print-insp > *:not(.modal-root) {
+    display: none !important;
   }
 
-  .insp-report {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    border: none !important;
+  body.print-insp .modal-root {
+    position: static;
+    display: block;
+    padding: 0;
+  }
+
+  body.print-insp .modal-root > .dim,
+  body.print-insp .rep-noprint {
+    display: none !important;
+  }
+
+  body.print-insp .modal-root > [role='dialog'] {
+    width: auto !important;
+    max-height: none;
+    overflow: visible;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  body.print-insp .rep-wrap {
+    max-height: none;
+  }
+
+  body.print-insp .rep-paperwrap {
+    overflow: visible;
+    padding: 0;
+    background: none;
+  }
+
+  body.print-insp .insp-report {
+    border: none;
   }
 }
 </style>
