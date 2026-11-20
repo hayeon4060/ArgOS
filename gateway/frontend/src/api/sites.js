@@ -4,6 +4,7 @@
  */
 import http from './http'
 import { USE_MOCK, mockFail, mockOk } from './mock'
+import { addSite } from './mock/addedScope'
 import { mockSiteTrees, mockSites } from './mock/data'
 
 /** 사업장 목록: 지도·도넛·목록 머리줄 (GET /sites) */
@@ -36,4 +37,27 @@ export async function getSiteName(siteId) {
   }
   const overview = await http.get(`/sites/${id}/overview`)
   return overview.site.name
+}
+
+/**
+ * 코드 자동 만들기 (사업장 · 공장 · 공정 추가)
+ * - 백엔드는 code 를 꼭 받지만(DB varchar(10), 같은 상위 안에서 겹치면 409) 화면에서는 이름만 입력받음
+ * - 머리글자 + 지금 시각(36진수) 끝 6자리 → 예: F1K3Z9Q (7자)
+ * - TODO(백엔드: code 를 비워 보내면 서버가 만들어 주면 이 함수는 지움 (docs/api/scope-add.md)
+ * @param {'S'|'F'|'P'} head 사업장 S, 공장 F, 공정 P
+ */
+export const autoCode = (head) => head + Date.now().toString(36).toUpperCase().slice(-6)
+
+/**
+ * 사업장 추가 (POST /sites, 본사 관리자만) — 공장 관리 '사업장 추가'
+ * - 지금은 이름만 보냄 (주소 · 위도 · 경도는 비움 → 사업장 선택 지도에 핀이 안 찍힘)
+ * @returns {Promise<{ id, name }>}
+ */
+export function createSite({ name }) {
+  const body = { name, code: autoCode('S') }
+  if (USE_MOCK) {
+    const r = addSite(body, mockSites().map((s) => s.name))
+    return r.error ? mockFail(r.error) : mockOk(r.data)
+  }
+  return http.post('/sites', body)
 }
