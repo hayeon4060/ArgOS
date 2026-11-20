@@ -9,7 +9,9 @@
  * - 변경 줄: 위치 이동(좌표 + 함께 옮겨지는 센서), 이름 변경, 정보 변경(종류 · 사용 상태)
  * - 저장 본문: PUT /processes/{id}/layout 의 equipment.update
  * - 2026-11-20: 새 설비(저장 전, created) — 변경 줄 '○○ 추가', 저장 본문 equipment.create
- *   새 설비 한 줄: { id: 'n1'(tempId), tempId, isNew: true, key, name, type, active, pos, sensors: [], managers: [] }
+ *   새 설비 한 줄: { id: 'n1'(tempId), tempId, isNew: true, key, shape, name, type, active, pos, sensors: [], managers: [] }
+ *   · shape: 어떤 그림으로 그릴지 (paintLayout.js 의 그림 이름 'top-oven' · 'fan' …) → DB equipment.shape
+ * - 2026-11-20: 설비 삭제(저장 전, deleted: 설비 id 들) — 변경 줄 '○○ 삭제', 저장 본문 equipment.delete
  */
 
 /**
@@ -53,7 +55,7 @@ export const placeOf = (pos, key, defaults) => pos ?? defaults[key] ?? null
  * @param {object} defaults 설비 이름(key) → 그려진 자리 { x, y }
  * @returns {Array<{ id, key, type, title, detail }>}
  */
-export function changesOf(equipment, draft, defaults = {}, created = []) {
+export function changesOf(equipment, draft, defaults = {}, created = [], deleted = []) {
   const out = created.map((c) => ({
     id: c.id,
     key: c.key,
@@ -62,6 +64,12 @@ export function changesOf(equipment, draft, defaults = {}, created = []) {
     detail: `${typeLabel(c.type)} · X ${fmt(c.pos.x)} · Y ${fmt(c.pos.y)}`,
   }))
   for (const eq of equipment) {
+    // 지울 설비는 '삭제' 한 줄만 (옮기거나 고친 것은 의미가 없어짐)
+    if (deleted.includes(eq.id)) {
+      const n = (eq.sensors ?? []).length
+      out.push({ id: eq.id, key: eq.key, type: 'del', title: `${eq.name} 삭제`, detail: n ? `센서 ${n}개가 있어 '사용 안 함'으로 바뀝니다` : '배치도에서 지웁니다' })
+      continue
+    }
     const now = currentOf(eq, draft)
     const was = currentOf(eq, {})
     if (!same(now.pos, was.pos)) {
@@ -84,9 +92,9 @@ export function changesOf(equipment, draft, defaults = {}, created = []) {
  * 저장 본문 (바뀐 설비만) — PUT /processes/{id}/layout
  * - update 한 줄: { id, pos: { x, y, z }, name, type, active } (pos 는 정해진 경우만)
  */
-export function bodyOf(version, equipment, draft, created = []) {
+export function bodyOf(version, equipment, draft, created = [], deleted = []) {
   const update = equipment
-    .filter((eq) => draft[eq.id] && !same(currentOf(eq, draft), currentOf(eq, {})))
+    .filter((eq) => !deleted.includes(eq.id) && draft[eq.id] && !same(currentOf(eq, draft), currentOf(eq, {})))
     .map((eq) => {
       const now = currentOf(eq, draft)
       // 화면 반응형 값이라 보통 객체로 복사 (예시 데이터가 structuredClone 으로 복사함)
@@ -97,11 +105,13 @@ export function bodyOf(version, equipment, draft, created = []) {
       return row
     })
   // 새 설비: tempId 는 응답 created.equipment 에서 실제 id 로 바뀜. code 는 비워 보내면 서버가 'EQ-{공정 id}-{n}' 로 만듦
-  const create = created.map((c) => ({ tempId: c.tempId, name: c.name, type: c.type, pos: { x: c.pos.x, y: c.pos.y, z: null } }))
-  return { version, equipment: { create, update, delete: [] }, sensors: { create: [], update: [], delete: [] } }
+  // shape: 그림 이름 — 다시 불러왔을 때 같은 그림으로 그리려고 DB equipment.shape 에 둠
+  const create = created.map((c) => ({ tempId: c.tempId, name: c.name, type: c.type, shape: c.shape, pos: { x: c.pos.x, y: c.pos.y, z: null } }))
+  // 삭제: 서버는 센서가 붙은 설비는 지우지 않고 사용 안 함으로 바꿈 (중앙 서버 MasterAdminService.removeEquipment)
+  return { version, equipment: { create, update, delete: [...deleted] }, sensors: { create: [], update: [], delete: [] } }
 }
 
-/** 새 설비(저장 전) 한 줄 만들기 */
-export function newEquipment(tempId, { name, type }, pos) {
-  return { id: tempId, tempId, isNew: true, key: tempId, name, type, active: true, pos, sensors: [], managers: [] }
+/** 새 설비(저장 전) 한 줄 만들기 — key 는 저장 전 임시 이름('x' + 임시 id, paintLayout.js drawingOf 와 같은 꼴) */
+export function newEquipment(tempId, { name, type, shape }, pos) {
+  return { id: tempId, tempId, isNew: true, key: `x${tempId}`, shape, name, type, active: true, pos, sensors: [], managers: [] }
 }

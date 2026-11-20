@@ -3,8 +3,9 @@
   - 설비마다 이름 · 종류 · 센서 수, 사용 안 함이면 흐리게, 바뀐 설비는 파란 점 '변경'
   - 누르면 select(설비 id) → 배치도·오른쪽 정보가 그 설비로
   - 설비가 없으면(막 추가한 공정) '아직 설비가 없습니다'
-  - canAdd 면 목록 맨 아래 '+ 설비 추가' (add) — 도장 공정 그림이 없는 공정만 (2026-11-20)
+  - 목록 맨 아래 '+ 설비 추가' (add) (2026-11-20)
   - 새 설비(저장 전)는 '새 설비' 표시 + 빼기 단추(remove)
+  - 지울 설비(저장 전, deleting)는 줄을 긋고 '삭제 예정' — 지우기 · 되살리기는 설비 정보 카드에서
 -->
 <script setup>
 import { typeLabel } from './layoutDraft'
@@ -16,7 +17,6 @@ defineProps({
   rows: { type: Array, default: () => [] },
   selectedId: { type: Number, default: null },
   sub: { type: String, default: '' },
-  canAdd: { type: Boolean, default: false },
 })
 
 defineEmits(['select', 'add', 'remove'])
@@ -31,7 +31,7 @@ defineEmits(['select', 'add', 'remove'])
         :key="r.id"
         type="button"
         class="er"
-        :class="{ on: r.id === selectedId, off: !r.active }"
+        :class="{ on: r.id === selectedId, off: !r.active, del: r.deleting }"
         @click="$emit('select', r.id)"
       >
         <span class="tx">
@@ -44,10 +44,11 @@ defineEmits(['select', 'add', 'remove'])
             <AppIcon name="x" :size="14" />
           </span>
         </template>
+        <span v-else-if="r.deleting" class="chg gone"><i />삭제 예정</span>
         <span v-else-if="r.changed" class="chg"><i />변경</span>
         <AppIcon v-else name="cr" :size="14" class="go" />
       </button>
-      <button v-if="canAdd" type="button" class="add" @click="$emit('add')"><AppIcon name="plus" :size="16" />설비 추가</button>
+      <button type="button" class="add" @click="$emit('add')"><AppIcon name="plus" :size="16" />설비 추가</button>
     </div>
   </BaseCard>
 </template>
@@ -93,6 +94,20 @@ defineEmits(['select', 'add', 'remove'])
 
 .add:hover {
   background: #dbeafe;
+}
+
+/* 지울 설비: 이름에 줄, 빨간 '삭제 예정' */
+.er.del b {
+  text-decoration: line-through;
+  color: var(--color-text-weak);
+}
+
+.chg.gone {
+  color: var(--color-level-alarm-text);
+}
+
+.chg.gone i {
+  background: var(--color-level-alarm);
 }
 
 /* 새 설비 빼기 */

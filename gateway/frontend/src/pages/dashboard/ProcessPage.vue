@@ -127,6 +127,7 @@ function onSelectNear(row) {
         :equipment="equipment"
         :positions="placement.positions"
         :inactive="placement.inactive"
+        :hidden="placement.hidden"
         @select-equipment="onSelectEquipment"
       />
     </div>

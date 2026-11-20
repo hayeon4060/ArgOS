@@ -10,6 +10,8 @@
   - 이 설비의 변경 내용 (저장 전)
   - 고른 설비가 없으면 '선택한 설비가 없습니다'
   - 새 설비(저장 전, eq.isNew)는 기준값 관리 단추 대신 '저장하면 기준값을 정할 수 있습니다' (서버 id 가 없어서)
+  - '설비 삭제' 단추 → remove 이벤트 (2026-11-20). 지울 설비(eq.deleting)는 '삭제 예정' 안내 + '삭제 취소'
+    새 설비는 '설비 빼기' (저장 전이라 바로 빠짐)
   - 바꾼 값은 change(필드, 값) 로 화면에 알림 → 화면이 저장 전 변경에 모음
 -->
 <script setup>
@@ -28,10 +30,10 @@ const props = defineProps({
   changes: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['change', 'thresholds'])
+const emit = defineEmits(['change', 'thresholds', 'remove'])
 
 const typeLabel = (t) => SENSOR_TYPES.find((x) => x.type === t)?.label ?? t
-const TYPE_BADGE = { move: '위치 변경됨', name: '이름 변경됨', meta: '정보 변경됨', add: '새 설비' }
+const TYPE_BADGE = { move: '위치 변경됨', name: '이름 변경됨', meta: '정보 변경됨', add: '새 설비', del: '삭제 예정' }
 /** 옮긴 설비면 위치 칸을 파랗게 */
 const moved = computed(() => props.changes.some((c) => c.type === 'move'))
 
@@ -120,11 +122,21 @@ const typeOptions = computed(() => {
     </div>
 
     <!-- 기준값 관리 창 열기 (센서별 주의·경보 기준, 계절, 변경 이력, 사용 상태 · 배기팬 자동 제어) -->
-    <p v-if="eq?.isNew" class="act weak">저장하면 이 설비의 기준값을 정할 수 있습니다.</p>
+    <!-- 새 설비(저장 전): 기준값은 저장한 뒤에 -->
+    <div v-if="eq?.isNew" class="act">
+      <p class="weak">저장하면 이 설비의 기준값을 정할 수 있습니다.</p>
+      <button type="button" class="btn rm-btn" @click="emit('remove')"><AppIcon name="x" :size="16" />설비 빼기</button>
+    </div>
+    <!-- 지울 설비(저장 전) -->
+    <div v-else-if="eq?.deleting" class="act">
+      <p class="weak">저장하면 이 설비를 지웁니다. 센서가 붙은 설비는 지우지 않고 '사용 안 함'으로 바뀝니다.</p>
+      <button type="button" class="btn rm-btn" @click="emit('remove')"><AppIcon name="undo" :size="16" />삭제 취소</button>
+    </div>
     <div v-else-if="eq" class="act">
       <button type="button" class="btn btn-primary th-btn" @click="emit('thresholds')">
         <AppIcon name="slider" :size="17" />설비 기준값 관리
       </button>
+      <button type="button" class="btn rm-btn danger" @click="emit('remove')"><AppIcon name="x" :size="16" />설비 삭제</button>
     </div>
 
     <footer class="bt">
@@ -397,6 +409,24 @@ const typeOptions = computed(() => {
   width: 100%;
   height: 44px;
   font-size: 14.5px;
+}
+
+/* 설비 삭제 · 빼기 · 삭제 취소: 기준값 관리 아래 낮은 단추 (삭제는 빨간 글씨) */
+.rm-btn {
+  width: 100%;
+  height: 36px;
+  margin-top: 8px;
+  font-size: 13.5px;
+}
+
+.rm-btn.danger {
+  border-color: transparent;
+  background: none;
+  color: var(--color-level-alarm-text);
+}
+
+.rm-btn.danger:hover {
+  background: var(--color-level-alarm-soft);
 }
 
 .bt {

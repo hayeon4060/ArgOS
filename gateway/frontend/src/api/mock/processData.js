@@ -6,6 +6,7 @@
  *   예) 주의: CT-17 22.4 A 주의 / 정상: 18.1 A → 공장·사업장 화면 숫자도 같이 바뀜
  * - 센서 19개 = 전류 9 + 온도 6 + CO 4 (CO-14 는 예비 센서라 그림에 위치 없음)
  */
+import { addedLayout } from './addedScope'
 import { LAYOUT, editsOf } from './layoutData'
 import { FAN_RATED_RPM, autoRpmOf, fanAutoMode } from './fanAuto'
 import { isGasWarn, scenario, topOvenValue } from './scenario'
@@ -147,6 +148,9 @@ export function mockProcess(processId) {
   const sensors = sensorsNow()
   const levelOfEq = (id) => equipmentLevel(id, sensors)
   const fans = fansNow(levelOfEq(31))
+  // 공장 관리 설비 추가 · 삭제 (2026-11-20): 지운 원래 설비는 빼고, 추가한 설비(그림 이름 shape · 위치 pos)를 뒤에 붙임
+  const seed = EQUIPMENT.filter((e) => !LAYOUT.removed.includes(e.id))
+  const extra = structuredClone(addedLayout(12).equipment)
   return {
     // GET /processes/{processId}/layout
     layout: {
@@ -156,22 +160,28 @@ export function mockProcess(processId) {
       floorplan: null,
       // 백엔드 DashboardService.processLayout 과 같은 모양: type(equipment_type) · pos{x,y,z}(pos_x · pos_y · pos_z) · active(is_active)
       // 위치는 DB 시드처럼 처음엔 비어 있음(그림에 그려진 자리). 공장 관리에서 저장한 값을 덮어씀 (layoutData.js)
-      equipment: EQUIPMENT.map(({ manager, ...e }) => ({
-        ...e,
-        pos: { x: null, y: null, z: null },
-        active: true,
-        managers: [{ id: 0, name: manager, primary: true }],
-        // 배기팬 자동(true)/수동(false), 배기팬이 없는 설비는 null (2026-11-19 추가, DB equipment.fan_auto)
-        fanAuto: fanAutoMode(e.id),
-        ...editsOf(e.id),
-      })),
+      equipment: [
+        ...seed.map(({ manager, ...e }) => ({
+          ...e,
+          pos: { x: null, y: null, z: null },
+          active: true,
+          managers: [{ id: 0, name: manager, primary: true }],
+          // 배기팬 자동(true)/수동(false), 배기팬이 없는 설비는 null (2026-11-19 추가, DB equipment.fan_auto)
+          fanAuto: fanAutoMode(e.id),
+          ...editsOf(e.id),
+        })),
+        ...extra,
+      ],
       sensors: sensors.map(({ id, tag, type, unit, equipmentId }) => ({ id, tag, type, unit, equipmentId, active: true })),
     },
     // GET /processes/{processId}/status
     status: {
       processId: 12,
       level: scenario.state === FIRE ? FIRE : maxLevel(sensors.map((s) => s.level)),
-      equipment: EQUIPMENT.map((e) => ({ id: e.id, level: levelOfEq(e.id), runState: runStateOf(e.id), fan: fans[e.id] ?? null })),
+      equipment: [
+        ...seed.map((e) => ({ id: e.id, level: levelOfEq(e.id), runState: runStateOf(e.id), fan: fans[e.id] ?? null })),
+        ...extra.map((e) => ({ id: e.id, level: LEVEL.NORMAL, runState: 'RUNNING', fan: null })), // 추가한 설비는 센서가 없어 늘 정상
+      ],
       sensors: sensors.map(({ id, tag, value, level, warn, alarm }) => ({ id, tag, value, level, warn, alarm })),
     },
     // GET /inspections/today?processId=12

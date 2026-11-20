@@ -15,10 +15,13 @@
     · 공장 드롭다운 맨 아래 '공장 추가'(본사 관리자만), 공정 드롭다운 맨 아래 '공정 추가' → 이름 입력 창 → POST /factories · /processes
     · 공정을 추가하면 바로 그 공정을 조회 → 설비 없는 빈 배치도 (LayoutMapCard 가 설비 0대면 격자 바닥만)
     · 공장 · 공정이 없으면 '아직 공장이 없습니다' · '아직 공정이 없습니다' 안내 + 추가 단추 (사업장 선택에서 막 만든 사업장)
-  - 2026-11-20 추가 (재원님 요청): 새 공정에 설비 놓기
-    · 도장 공정 그림이 없는 공정(blank)은 빈 배치판 + 설비 목록 맨 아래 '설비 추가'
-    · '설비 추가' 창에서 지금 있는 설비(equipmentCatalog.js)를 골라 빈 자리에 놓음 → 저장 전까지 created 에 '새 설비'로
-    · '저장'을 누르면 PUT /processes/{id}/layout 의 equipment.create 로 한꺼번에 (옮기기 · 이름 바꾸기도 같이)
+  - 2026-11-20 추가 (재원님 요청): 설비 추가 · 삭제 — 도장 공정도, 새로 만든 공정도 같은 배치도 그림에서
+    · 설비 목록 맨 아래 '설비 추가' → 창에서 지금 있는 설비(equipmentCatalog.js)를 고름
+      → 도장 공정 그림의 그 설비 그림을 복사해서 놓음 (그림에 그려진 자리, 이미 설비가 있으면 옆으로) — 저장 전까지 created 에 '새 설비'로
+    · 설비 정보의 '설비 삭제' → 저장 전까지 deleted 에 '삭제 예정'으로 (배치도에서는 바로 사라짐, '삭제 취소' 가능)
+    · '저장'을 누르면 PUT /processes/{id}/layout 의 equipment.create · update · delete 로 한꺼번에
+      (서버는 센서가 붙은 설비는 지우지 않고 '사용 안 함'으로 바꿈 → 저장 뒤 안내)
+    · 새로 만든 공정은 등록된 설비가 없어서 설비 그림이 모두 숨겨진 빈 바닥으로 보임 (paintLayout.js hiddenDrawings)
 -->
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
@@ -42,7 +45,7 @@ import { setFactoryCount } from '@/features/site/siteSetup'
 import ThresholdModal from '@/features/threshold/ThresholdModal.vue'
 import { uniqueName } from '@/features/factory/equipmentCatalog'
 import { bodyOf, changesOf, currentOf, newEquipment, placeOf } from '@/features/factory/layoutDraft'
-import { PAINT_EQUIPMENT } from '@/features/process/paintLayout'
+import { PART_SHAPES, hiddenDrawings } from '@/features/process/paintLayout'
 import { buildProcessEquipment, mergeByKey } from '@/features/process/processEquipment'
 
 // 처음 고르는 범위 (설계안 기본값 울산공장 › 5공장 › 도장 공정 — 지금 배치도가 있는 공정). 없으면 첫 공장·공정
@@ -92,6 +95,7 @@ const status = ref(null)
 const loading = ref(true)
 const missing = ref(false) // 배치도가 없는 공정
 const created = ref([]) // 새 설비(저장 전) — layoutDraft.js newEquipment 모양
+const deleted = ref([]) // 지울 설비 id (저장 전)
 const draft = reactive({}) // { 설비 id: { pos, name, type, active } } 저장 전 변경 (값 이름은 DB · layout 응답과 같음)
 const defaults = ref({}) // 설비 이름(key) → 그림에 그려진 자리 { x, y } (위치 값이 없을 때)
 const selectedId = ref(null)
@@ -99,6 +103,7 @@ const selectedId = ref(null)
 function clearDraft() {
   for (const id of Object.keys(draft)) delete draft[id]
   created.value = []
+  deleted.value = []
 }
 
 async function load() {
@@ -202,43 +207,36 @@ async function submitAdd(name) {
 }
 
 /* ───────── 화면용 설비 (저장값 + 지금 값 + 고친 값) ───────── */
-// 저장된 설비 + 그림 이름(key) · 센서 (변경 목록 계산용)
+// 저장된 설비 + 배치도 안 이름(key) · 그림 이름(shape) · 센서 (변경 목록 계산용)
 const saved = computed(() => {
   const built = buildProcessEquipment(layout.value, status.value)
   return (layout.value?.equipment ?? []).map((e) => {
     const b = built.find((x) => x.id === e.id)
-    return { ...e, key: b.key, level: b.level, sensors: b.sensors }
+    return { ...e, key: b.key, shape: b.shape, level: b.level, sensors: b.sensors }
   })
 })
-// 지금 화면에 보이는 값 (고친 값 반영) + 새 설비(저장 전)는 맨 뒤에
-const shown = computed(() => [...saved.value.map((e) => ({ ...e, ...currentOf(e, draft) })), ...created.value])
-const changes = computed(() => changesOf(saved.value, draft, defaults.value, created.value))
-
-/**
- * 도장 공정 그림이 없는 공정인지 (그림 안 설비가 하나도 없음) → 빈 배치판 · '설비 추가'
- * (새로 추가한 공정, 설비를 놓은 뒤에도 서버 code 가 'EQ-…' 라 그림과 짝이 없음)
- */
-const blank = computed(() => !saved.value.some((e) => PAINT_EQUIPMENT[e.key]))
-
-/** 빈 배치판 자리 i 번째 (왼쪽 위부터 6칸씩, 판 좌표 · 격자 40에 맞춤) */
-const slotPos = (i) => ({ x: 120 + (i % 6) * 160, y: 80 + Math.floor(i / 6) * 120 })
-/** 빈 배치판용 설비: 위치 값이 없는 설비는 차례로 빈 자리에 */
-const boardEquipment = computed(() => shown.value.map((e, i) => ({ ...e, pos: e.pos ?? slotPos(i) })))
+// 지금 화면에 보이는 값 (고친 값 반영, 지울 설비는 deleting 표시) + 새 설비(저장 전)는 맨 뒤에
+const shown = computed(() => [
+  ...saved.value.map((e) => ({ ...e, ...currentOf(e, draft), deleting: deleted.value.includes(e.id) })),
+  ...created.value,
+])
+const changes = computed(() => changesOf(saved.value, draft, defaults.value, created.value, deleted.value))
 
 const selected = computed(() => shown.value.find((e) => e.id === selectedId.value) ?? null)
-// 고른 설비의 지금 위치 (빈 배치판은 자동 자리 포함, 도장 공정은 그림에 그려진 자리 포함)
-const selectedPlace = computed(() => {
-  if (!selected.value) return null
-  if (blank.value) return boardEquipment.value.find((e) => e.id === selected.value.id)?.pos ?? null
-  return placeOf(selected.value.pos, selected.value.key, defaults.value)
-})
+// 고른 설비의 지금 위치 (위치 값이 없으면 그림에 그려진 자리)
+const selectedPlace = computed(() => (selected.value ? placeOf(selected.value.pos, selected.value.key, defaults.value) : null))
 const listRows = computed(() => shown.value.map((e) => ({ ...e, changed: changes.value.some((c) => c.id === e.id) })))
-const mapEquipment = computed(() => shown.value.map(({ key, name, level, sensors, seq }) => ({ key, name, level, sensors, seq })))
+
+// 배치도에 그릴 설비: 지울 설비는 바로 뺌
+const onMap = computed(() => shown.value.filter((e) => !e.deleting))
+const mapEquipment = computed(() => onMap.value.map(({ key, shape, name, level, sensors, seq }) => ({ key, shape, name, level, sensors, seq })))
 // 그림 하나에 설비가 여러 대(실제 서버: 건조로 + 배기팬 + 버너실)면 대표 설비 값만 그림 위치 · 사용 여부에 씀
-const shownMain = computed(() => mergeByKey(shown.value))
+const shownMain = computed(() => mergeByKey(onMap.value))
 // 배치도에 그릴 위치: 저장된(또는 고친) pos 가 있는 설비만 (없으면 그림 그대로)
 const mapPositions = computed(() => Object.fromEntries(shownMain.value.filter((e) => e.pos).map((e) => [e.key, e.pos])))
 const mapInactive = computed(() => shownMain.value.filter((e) => !e.active).map((e) => e.key))
+// 숨길 설비 그림: 등록되지 않은 설비 (지운 설비, 새로 만든 공정은 전부)
+const mapHidden = computed(() => hiddenDrawings(onMap.value))
 
 /* ───────── 고치기 ───────── */
 /** 설비 하나의 값 하나 고치기 (저장값과 같아지면 지움, 새 설비는 그 줄을 바로 고침) */
@@ -257,10 +255,9 @@ function setField(id, field, value) {
   else delete draft[id]
 }
 
-const idOf = (key) => mergeByKey(saved.value).find((e) => e.key === key)?.id // 그림을 끌면 대표 설비를 옮김
-// 도장 공정 그림은 그림 이름(key), 빈 배치판은 설비 id 로 옴
-const onMapSelect = (ref) => (selectedId.value = blank.value ? ref : (idOf(ref) ?? selectedId.value))
-const onMove = (ref, pos) => setField(blank.value ? ref : idOf(ref), 'pos', pos)
+const idOf = (key) => shownMain.value.find((e) => e.key === key)?.id // 그림을 끌면 대표 설비를 옮김
+const onMapSelect = (key) => (selectedId.value = idOf(key) ?? selectedId.value)
+const onMove = (key, pos) => setField(idOf(key), 'pos', pos)
 const onUse = (on) => selected.value && setField(selected.value.id, 'active', on)
 const onPanel = (field, value) => setField(selectedId.value, field, value)
 
@@ -279,33 +276,49 @@ function onSettings({ active }) {
   if (draft[row.id] && 'active' in draft[row.id]) setField(row.id, 'active', draft[row.id].active) // 같아졌으면 변경 줄에서 빠짐
 }
 
-/* ───────── 설비 추가 (빈 배치판, 2026-11-20) ───────── */
+/* ───────── 설비 추가 · 삭제 (2026-11-20) ───────── */
 const pickerOpen = ref(false)
 let tempSeq = 0 // 새 설비 임시 id n1, n2 …
+// 자리가 겹칠 때 옆으로 비키는 거리: 그림 격자 두 칸 (PaintMap GU × 2)
+const STEP = { x: 124.9, y: 39.1 }
+// 부품 그림(배기팬 · 버너실 · 펌프 · 열화상 카메라)은 그림에서 건조로 위 · 옆에 붙어 있음 → 겹쳐 보이지 않게 앞쪽 바닥으로 (격자 GV × 4)
+const PART_FRONT = { x: -73.6, y: 97 }
 
-/** 설비 추가 창에서 고른 설비들 → 새 설비로 빈 자리에 놓기 (같은 이름이면 뒤에 번호) */
+/**
+ * 설비 추가 창에서 고른 설비들 → 새 설비로 놓기
+ * - 자리: 도장 공정 그림에서 그 설비가 그려진 자리(defaults). 거기에 이미 설비가 있으면 옆으로 비켜 놓음
+ * - 같은 이름이 있으면 뒤에 번호 (상도 건조로 2)
+ */
 function onPick(items) {
   pickerOpen.value = false
   const taken = shown.value.map((e) => e.name)
-  const used = boardEquipment.value.map((e) => `${e.pos.x},${e.pos.y}`)
-  let slot = 0
+  const spots = onMap.value.map((e) => placeOf(e.pos, e.key, defaults.value)).filter(Boolean)
+  const busy = (p) => spots.some((s) => Math.abs(s.x - p.x) < 30 && Math.abs(s.y - p.y) < 30)
   for (const item of items) {
-    while (used.includes(`${slotPos(slot).x},${slotPos(slot).y}`)) slot += 1
-    const pos = slotPos(slot)
-    used.push(`${pos.x},${pos.y}`)
+    let pos = { ...(defaults.value[item.shape] ?? { x: 300, y: 500 }) }
+    if (PART_SHAPES[item.shape]) pos = { x: Math.round(pos.x + PART_FRONT.x), y: Math.round(pos.y + PART_FRONT.y) }
+    while (busy(pos)) pos = { x: Math.round((pos.x + STEP.x) * 10) / 10, y: Math.round((pos.y + STEP.y) * 10) / 10 }
+    spots.push(pos)
     const name = uniqueName(item.name, taken)
     taken.push(name)
     tempSeq += 1
-    created.value.push(newEquipment(`n${tempSeq}`, { name, type: item.type }, pos))
+    created.value.push(newEquipment(`n${tempSeq}`, { ...item, name }, pos))
   }
   selectedId.value = created.value.at(-1)?.id ?? selectedId.value
   toast(`설비 ${items.length}대를 놓았습니다. 끌어서 자리를 잡고 '저장'을 누르세요.`)
 }
 
-/** 새 설비(저장 전) 빼기 */
-function removeNew(id) {
-  created.value = created.value.filter((c) => c.id !== id)
-  if (selectedId.value === id) selectedId.value = shown.value[0]?.id ?? null
+/**
+ * 설비 삭제 · 삭제 취소 (설비 정보의 단추, 설비 목록의 ×)
+ * - 새 설비(저장 전)는 바로 뺌, 저장된 설비는 '삭제 예정'으로 두었다가 저장할 때 지움
+ */
+function toggleRemove(id) {
+  if (created.value.some((c) => c.id === id)) {
+    created.value = created.value.filter((c) => c.id !== id)
+    if (selectedId.value === id) selectedId.value = onMap.value[0]?.id ?? null
+    return
+  }
+  deleted.value = deleted.value.includes(id) ? deleted.value.filter((x) => x !== id) : [...deleted.value, id]
 }
 
 /** 되돌리기: 저장 전 변경을 모두 버림 */
@@ -321,13 +334,16 @@ async function save() {
   if (!n || saving.value) return
   saving.value = true
   try {
-    const res = await saveProcessLayout(scope.processId, bodyOf(layout.value.version, saved.value, draft, created.value))
+    const removing = [...deleted.value]
+    const res = await saveProcessLayout(scope.processId, bodyOf(layout.value.version, saved.value, draft, created.value, removing))
     // 고른 설비가 새 설비였으면 응답의 실제 id 로 (created.equipment: { tempId: id })
     const keep = res?.created?.equipment?.[selectedId.value] ?? selectedId.value
     await load()
     if (shown.value.some((e) => e.id === keep)) selectedId.value = keep
-    // 빈 배치판 공정은 대시보드 3D 배치도 그림이 아직 없어서 '반영' 안내를 빼고
-    toast(blank.value ? `변경 ${n}건을 저장했습니다.` : `변경 ${n}건을 저장했습니다. 대시보드 배치도에 바로 반영됩니다.`)
+    toast(`변경 ${n}건을 저장했습니다. 대시보드 배치도에 바로 반영됩니다.`)
+    // 서버는 센서가 붙은 설비는 지우지 않고 '사용 안 함'으로 바꿈 → 남아 있으면 알려 줌
+    const kept = removing.filter((id) => saved.value.some((e) => e.id === id)).length
+    if (kept) toast(`센서가 있는 설비 ${kept}대는 지우지 않고 '사용 안 함'으로 바꿨습니다.`, { type: 'info', ms: 6000 })
   } catch (error) {
     // 409: 다른 사람이 먼저 저장함 → 바꾼 값은 그대로 두고 안내 (다시 불러오면 사라짐)
     toast(error.message, { type: 'err', ms: error.status === 409 ? 8000 : 3400 })
@@ -461,10 +477,9 @@ watch(
         :rows="listRows"
         :selected-id="selectedId"
         :sub="`${layout.name} · ${listRows.length}대`"
-        :can-add="blank"
         @select="selectedId = $event"
         @add="pickerOpen = true"
-        @remove="removeNew"
+        @remove="toggleRemove"
       />
       <LayoutMapCard
         :equipment="mapEquipment"
@@ -472,10 +487,8 @@ watch(
         :inactive="mapInactive"
         :selected-key="selected?.key ?? ''"
         :selected="selected"
+        :hidden="mapHidden"
         :sub="layout.name"
-        :blank="blank"
-        :board-equipment="boardEquipment"
-        :selected-id="selectedId"
         @select="onMapSelect"
         @add="pickerOpen = true"
         @move="onMove"
@@ -487,6 +500,7 @@ watch(
         :place="selectedPlace"
         :changes="changes.filter((c) => c.id === selectedId)"
         @change="onPanel"
+        @remove="toggleRemove(selectedId)"
         @thresholds="thresholdOpen = true"
       />
     </div>

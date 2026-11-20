@@ -14,6 +14,7 @@
 | `inspection-redesign-api.md` | (2026-11-20 요청) 점검 관리 개편 A안: 점검 건 목록 `GET /inspections/schedule` 에 `month` · `from&to` 와 구분 · 결과 칸, 스케줄 추가, 전자 서류 양식 보기 · 저장, 빈 양식 PDF, 스캔본 ↔ 점검 건 연결(`PUT /inspections/{id}` 의 `scheduleId`). 점검 관리는 F02 만 (변전소 F03 제외) |
 | `scope-add.md` | (2026-11-20 요청) 사업장 · 공장 · 공정 추가 화면 연결 (`POST /sites · /factories · /processes`), 요청: `code` 비우면 서버가 만들기, 위경도 없는 사업장 |
 | `equipment-add.md` | (2026-11-20 요청) 새 공정에 설비 추가: 지금 있는 설비 15종에서 골라 빈 배치판에 놓고 `PUT /processes/{id}/layout` 의 `equipment.create` 로 저장 (새 API · ERD 없음), 확인: `equipment_type` null 허용 |
+| `paint-equipment-edit.md` | (2026-11-20 요청) 공장 관리 설비 추가 · 삭제를 도장 공정에도, 설비는 기존 배치도 그림 그대로: `PUT /processes/{id}/layout` 의 `equipment.delete` · `create[].shape` 사용 (새 API 없음), `equipment.shape` 에 넣는 그림 이름 표, 확인 4건 |
 
 ## 이 문서의 성격
 

@@ -3,7 +3,7 @@
   - 목록: equipmentCatalog.js (도장 공정 설비 · 보조 설비)
   - 여러 개를 골라 한 번에 추가, '모두 선택' 가능
   - 추가 단추 → pick([{ name, type }]) — 실제로 놓고 저장하는 일은 화면(FactoryPage)이 함
-  - 추가한 설비는 저장 전까지 '새 설비'로 남고, 배치도의 빈 칸에 차례로 놓임 (끌어서 옮기면 됨)
+  - 추가한 설비는 저장 전까지 '새 설비'로 남고, 도장 공정 그림의 그 설비 그림 그대로 배치도에 놓임 (끌어서 옮기면 됨)
 -->
 <script setup>
 import { computed, ref, watch } from 'vue'
@@ -56,7 +56,7 @@ function submit() {
             <h2>설비 추가</h2>
             <span v-if="path" class="sub">{{ path }}</span>
           </div>
-          <p class="desc">지금 있는 설비 중에서 고르세요. 배치도의 빈 자리에 놓이며, 끌어서 옮길 수 있습니다.</p>
+          <p class="desc">지금 있는 설비 중에서 고르세요. 그 설비 그림 그대로 배치도에 놓이며, 끌어서 옮길 수 있습니다.</p>
 
           <div class="bar">
             <AppCheckbox :model-value="allOn" @update:model-value="toggleAll">모두 선택</AppCheckbox>

@@ -5,20 +5,17 @@
   - 위치는 배치도 화면 좌표 { x, y } (DB pos_x · pos_y) — move(설비 이름, { x, y })
   - 오른쪽 위: 고른 설비 사용 ON/OFF, 격자에 맞추기 스위치
   - 아래 왼쪽 안내: '설비를 끌어서 옮기면 연결된 센서도 함께 이동합니다'
-  - blank(도장 공정 그림이 없는 공정, 예: 공장 관리에서 새로 추가한 공정)면 PaintMap 대신 빈 배치판(BlankLayoutMap) (2026-11-20)
-    · PaintMap 은 도장 공정 고정 그림이라 다른 공정 설비를 그릴 수 없음
-    · 빈 배치판에서는 설비 id 로 고르고 옮김: select(id) · move(id, { x, y })
-    · 설비가 0대면 가운데에 '아직 설비가 없습니다' + '설비 추가' 단추(add)
+  - 2026-11-20: 설비 추가 · 삭제 — 추가한 설비도 같은 그림(PaintMap 이 그림을 복사)으로, 등록되지 않은 설비 그림은 hidden 으로 숨김
+    · 설비가 0대(새로 만든 공정)면 빈 바닥 위에 '아직 설비가 없습니다' + '설비 추가' 단추(add)
 -->
 <script setup>
 import { onMounted, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
-import BlankLayoutMap from './BlankLayoutMap.vue'
 import PaintMap from '@/features/process/PaintMap.vue'
 
 defineProps({
-  /** PaintMap 용 설비 [{ key, name, level, sensors }] */
+  /** PaintMap 용 설비 [{ key, shape, name, level, sensors }] */
   equipment: { type: Array, required: true },
   /** { 설비 이름: { x, y } } 배치도 화면 좌표 (DB pos_x · pos_y) */
   positions: { type: Object, default: () => ({}) },
@@ -27,11 +24,8 @@ defineProps({
   /** 고른 설비 { name, active } (없으면 null) */
   selected: { type: Object, default: null },
   sub: { type: String, default: '' },
-  /** 도장 공정 그림이 없는 공정 → 빈 배치판 */
-  blank: { type: Boolean, default: false },
-  /** 빈 배치판용 설비 [{ id, name, type, pos, active, isNew }] */
-  boardEquipment: { type: Array, default: () => [] },
-  selectedId: { type: [Number, String], default: null },
+  /** 숨길 설비 그림 이름들 (등록되지 않은 설비) */
+  hidden: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['select', 'move', 'moved', 'use', 'defaults', 'add'])
@@ -60,30 +54,13 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
       </span>
     </template>
 
-    <!-- 도장 공정 그림이 없는 공정: 빈 배치판 -->
-    <div v-if="blank" class="map">
-      <BlankLayoutMap
-        :equipment="boardEquipment"
-        :selected-id="selectedId"
-        :snap="snap"
-        @select="emit('select', $event)"
-        @drag="(id, pos) => emit('move', id, pos)"
-      />
-      <div v-if="!boardEquipment.length" class="blank-msg">
-        <AppIcon name="layers" :size="28" />
-        <b>아직 설비가 없습니다</b>
-        <span>지금 있는 설비 목록에서 골라 이 배치도에 놓을 수 있습니다.</span>
-        <button type="button" class="btn btn-primary" @click="emit('add')"><AppIcon name="plus" :size="16" />설비 추가</button>
-      </div>
-      <p v-else class="hint"><AppIcon name="info" :size="15" />설비를 끌어서 옮긴 뒤 '저장'을 누르세요</p>
-    </div>
-
-    <div v-else class="map">
+    <div class="map">
       <PaintMap
         ref="map"
         :equipment="equipment"
         :positions="positions"
         :inactive="inactive"
+        :hidden="hidden"
         :selected="selectedKey"
         :snap="snap"
         editable
@@ -92,6 +69,13 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
         @drag="(key, pos) => emit('move', key, pos)"
         @dragend="emit('moved', $event)"
       />
+      <!-- 설비가 하나도 없는 공정 (새로 만든 공정): 빈 바닥 위 안내 -->
+      <div v-if="!equipment.length" class="blank-msg">
+        <AppIcon name="layers" :size="28" />
+        <b>아직 설비가 없습니다</b>
+        <span>지금 있는 설비 그림을 골라 이 배치도에 놓을 수 있습니다.</span>
+        <button type="button" class="btn btn-primary" @click="emit('add')"><AppIcon name="plus" :size="16" />설비 추가</button>
+      </div>
       <p class="hint"><AppIcon name="info" :size="15" />설비를 끌어서 옮기면 연결된 센서도 함께 이동합니다</p>
     </div>
   </BaseCard>
@@ -110,6 +94,7 @@ onMounted(() => emit('defaults', map.value?.defaultPositions() ?? {}))
   position: absolute;
   left: 50%;
   top: 50%;
+  z-index: 3;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;

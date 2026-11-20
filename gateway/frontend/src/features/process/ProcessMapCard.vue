@@ -21,6 +21,8 @@ defineProps({
   positions: { type: Object, default: () => ({}) },
   /** 사용 안 함 설비 (흐리게) */
   inactive: { type: Array, default: () => [] },
+  /** 숨길 설비 그림 (등록되지 않은 설비 — 공장 관리에서 지운 설비, processEquipment.js layoutPlacement) */
+  hidden: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['select-equipment'])
@@ -35,7 +37,7 @@ const emit = defineEmits(['select-equipment'])
     </template>
 
     <div class="map-area">
-      <PaintMap :equipment="equipment" :positions="positions" :inactive="inactive" @select="emit('select-equipment', $event)" />
+      <PaintMap :equipment="equipment" :positions="positions" :inactive="inactive" :hidden="hidden" @select="emit('select-equipment', $event)" />
     </div>
 
     <EquipmentStrip :equipment="equipment" @select="emit('select-equipment', $event)" />

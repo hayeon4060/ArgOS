@@ -71,6 +71,7 @@ export const extraProcessesOf = (factoryId) =>
 
 /* ───────── 추가한 공정의 배치 (GET · PUT /processes/{id}/layout) ─────────
  * - { 공정 id: { version, equipment: [GET layout 의 설비 한 줄] } } — 처음엔 설비 없음
+ *   (도장 공정 12 에 추가한 설비도 LAYOUTS[12].equipment 에 둠 — 판 번호는 layoutData.js LAYOUT.version)
  * - 새 설비 code 는 서버처럼 'EQ-{공정 id}-{n}' (MasterAdminService.code)
  */
 const LAYOUTS = {}
@@ -81,22 +82,35 @@ export function addedLayout(processId) {
 }
 
 /**
- * PUT /processes/{id}/layout — 추가한 공정 (도장 공정 12 는 layoutData.js)
- * - create: 새 설비 (tempId → 실제 id 를 응답 created.equipment 로), update: 이름 · 종류 · 사용 · 위치
+ * 공장 관리에서 추가한 설비에 배치 저장 본문 적용 (추가한 공정, 도장 공정 12 에 추가한 설비 모두 여기)
+ * - create: 새 설비 (tempId → 실제 id). shape = 그림 이름 (features/process/paintLayout.js), code 는 서버처럼 'EQ-{공정 id}-{n}'
+ * - update: 이름 · 종류 · 사용 · 위치 / delete: 센서가 없으므로 바로 지움 (서버 MasterAdminService.removeEquipment 와 같음)
+ * - 이 목록에 없는 id 는 건드리지 않음 (도장 공정의 원래 설비는 layoutData.js 가 처리)
+ * @returns {{ createdIds: { [tempId]: id }, count: number }}
  */
-export function saveAddedLayout(processId, body) {
-  const lay = addedLayout(processId)
-  if (body.version !== lay.version) {
-    return { error: { code: 'LAYOUT_CONFLICT', message: '다른 사람이 먼저 저장했습니다. 다시 불러와 주세요.', status: 409 } }
+export function applyAdded(lay, processId, body) {
+  const eqBody = body.equipment ?? {}
+  const mine = (id) => lay.equipment.some((e) => e.id === id)
+  let count = 0
+  for (const u of (eqBody.update ?? []).filter((x) => mine(x.id))) {
+    const eq = lay.equipment.find((e) => e.id === u.id)
+    for (const f of ['name', 'type', 'active']) if (u[f] !== undefined) eq[f] = u[f]
+    if (u.pos) eq.pos = { x: u.pos.x, y: u.pos.y, z: null }
+    count += 1
   }
+  const gone = (eqBody.delete ?? []).filter(mine)
+  lay.equipment = lay.equipment.filter((e) => !gone.includes(e.id))
+  count += gone.length
   const createdIds = {}
-  for (const c of body.equipment?.create ?? []) {
+  for (const c of eqBody.create ?? []) {
     const id = nextId++
+    lay.seq = (lay.seq ?? 0) + 1 // 지워도 code 가 겹치지 않게 따로 셈
     lay.equipment.push({
       id,
-      code: `EQ-${processId}-${lay.equipment.length + 1}`,
+      code: `EQ-${processId}-${lay.seq}`,
       name: c.name,
       type: c.type ?? null,
+      shape: c.shape ?? null,
       seq: null,
       pos: { x: c.pos?.x ?? null, y: c.pos?.y ?? null, z: null },
       active: true,
@@ -104,17 +118,20 @@ export function saveAddedLayout(processId, body) {
       fanAuto: c.type === 'FAN' ? true : null,
     })
     createdIds[c.tempId] = id
+    count += 1
   }
-  const updates = body.equipment?.update ?? []
-  for (const u of updates) {
-    const eq = lay.equipment.find((e) => e.id === u.id)
-    if (!eq) continue
-    for (const f of ['name', 'type', 'active']) if (u[f] !== undefined) eq[f] = u[f]
-    if (u.pos) eq.pos = { x: u.pos.x, y: u.pos.y, z: null }
+  return { createdIds, count }
+}
+
+/** PUT /processes/{id}/layout — 공장 관리에서 추가한 공정 (도장 공정 12 는 layoutData.js) */
+export function saveAddedLayout(processId, body) {
+  const lay = addedLayout(processId)
+  if (body.version !== lay.version) {
+    return { error: { code: 'LAYOUT_CONFLICT', message: '다른 사람이 먼저 저장했습니다. 다시 불러와 주세요.', status: 409 } }
   }
+  const { createdIds, count } = applyAdded(lay, processId, body)
   lay.version += 1
-  const changedCount = Object.keys(createdIds).length + updates.length
-  return { data: { version: lay.version, created: { equipment: createdIds, sensors: {} }, changedCount } }
+  return { data: { version: lay.version, created: { equipment: createdIds, sensors: {} }, changedCount: count } }
 }
 
 /** 추가한 공정 이름 (없으면 null) — 빈 배치도를 만들 때 씀 */

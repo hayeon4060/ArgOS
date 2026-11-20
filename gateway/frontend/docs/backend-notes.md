@@ -751,3 +751,11 @@
 - 도장 공정 그림이 없는 공정(새로 추가한 공정)은 빈 배치판 + 설비 목록 '설비 추가' → 지금 있는 설비 15종에서 골라 놓기.
 - 저장은 이미 있는 `PUT /processes/{id}/layout` 의 `equipment.create` (code 는 비워서 서버가 만듦). 새 API · ERD 변경 없음.
 - 확인 요청: 부스 · 실링 등 `equipment_type` 이 null 인 설비 저장 가능 여부. 자세한 내용: 저장소 **`docs/api/equipment-add.md`**.
+
+## 27. 공장 관리 설비 추가 · 삭제, 설비 그림 그대로 (2026-11-20, 재원님 요청)
+
+- 도장 공정에서도 '설비 추가' · '설비 삭제'. 추가한 설비는 도장 공정 그림의 그 설비 그림을 복사해서 놓음 (새 공정도 같은 배치도 바닥).
+- 새 API 없음: `PUT /processes/{id}/layout` 의 `equipment.delete`, `create[].shape`(그림 이름 → DB `equipment.shape`).
+- 삭제는 서버 규칙 그대로: 센서가 붙은 설비는 지우지 않고 사용 안 함.
+- 확인 요청 4건(`shape` 응답, 삭제 결과, 시드에 없는 그림 설비, `equipment_type` null): 저장소 **`docs/api/paint-equipment-edit.md`**.
+

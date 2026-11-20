@@ -17,12 +17,17 @@
   - 공장 관리(editable): 설비를 끌어서 옮김 → drag(설비 이름, { x, y }) / 끝나면 dragend
     · 격자에 맞추기(snap)를 켜면 격자 한 칸씩 (격자 방향은 설계안 공장 관리 GU · GV, 그림 좌표)
     · selected: 고른 설비 파란 그림자, inactive: 사용 안 함 설비 흐리게, thin: 테두리를 더 얇게
+  - 2026-11-20 설비 추가 · 삭제 (재원님 요청: 설비 그림은 기존 것 그대로)
+    · 추가한 설비(equipment 의 key 가 그림에 없고 shape 가 그림 이름)는 그 그림을 복사해서 positions 자리에 놓음 (syncClones)
+      건물 · 배기팬 · 버너실 · 그림자 · 덕트를 통째로 복사하고, 상태 테두리 · 끌기 · 마우스 올림도 원래 설비와 똑같이 동작
+    · hidden: 숨길 설비 그림 (등록되지 않은 설비 — 지운 설비, 새로 만든 공정은 전부) → 센서 이름표 · 그림자도 같이 숨김
+    · drawn: 지금 그림에 있는 설비 { 설비 이름: { ids } } — 원래 설비 + 복사본. 아래 함수들은 모두 이 목록으로 그림 요소를 찾음
 -->
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import PaintHoverChip from './PaintHoverChip.vue'
 import { buildOverlays, clearHover } from './paintHover'
-import { HALO_GROUPS, PAINT_EQUIPMENT, keyOfSvgId } from './paintLayout'
+import { HALO_GROUPS, PAINT_EQUIPMENT, PART_SHAPES, shapeOf } from './paintLayout'
 import { mergeByKey } from './processEquipment'
 import paintSvg from '@/assets/images/paint-map.svg?raw'
 import { LEVEL } from '@/types/codes'
@@ -46,6 +51,8 @@ const props = defineProps({
   inactive: { type: Array, default: () => [] },
   /** 테두리를 더 얇게 (공장 관리) */
   thin: { type: Boolean, default: false },
+  /** 숨길 설비 그림 이름들 (등록되지 않은 설비, paintLayout.js hiddenDrawings) */
+  hidden: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['select', 'drag', 'dragend'])
@@ -76,47 +83,112 @@ const merged = computed(() => mergeByKey(props.equipment))
 const byKey = (key) => merged.value.find((e) => e.key === key)
 
 /**
- * 상태 테두리 만들기 (처음 한 번)
+ * 지금 그림에 있는 설비 { 설비 이름(key): { ids: 그림 요소 id 들, clone: 복사본 여부 } }
+ * - 처음엔 그림에 원래 있는 설비, 공장 관리에서 추가한 설비는 syncClones 가 그림을 복사해 더함
+ */
+const drawn = Object.fromEntries(Object.entries(PAINT_EQUIPMENT).map(([key, { ids }]) => [key, { ids }]))
+/** 그림 요소 id → 설비 이름 */
+const keyOfId = (id) => Object.keys(drawn).find((key) => drawn[key].ids.includes(id)) ?? null
+
+/**
+ * 상태 테두리 한 묶음 만들기 (ids: 같은 테두리로 묶을 그림 요소들)
  * - 설비 모양을 복사해서 원래 그림 뒤에 두껍게 깔면 둘레만 테두리처럼 보임 (설계안 paintMap 과 같은 방식)
  * - 복사본은 면을 칠하지 않고 선만 그림 → 색은 나중에 applyLevels 에서 바꿈
  */
-function buildHalos(svg) {
-  for (const ids of HALO_GROUPS) {
-    const first = svg.querySelector(`#${ids[0]}`)
-    if (!first) continue
-    const halo = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    halo.setAttribute('class', 'halo')
-    halo.setAttribute('data-halo', ids[0])
-    for (const id of ids) {
-      const el = svg.querySelector(`#${id}`)
-      if (!el || (id !== ids[0] && first.contains(el))) continue
-      const copy = el.cloneNode(true)
-      copy.removeAttribute('id')
-      copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'))
-      copy.querySelectorAll('text, title').forEach((n) => n.remove())
-      copy.querySelectorAll('polygon, path, rect, circle, ellipse, line, polyline').forEach((n) => {
-        const width = parseFloat(n.getAttribute('stroke-width') || 1)
-        ;['fill', 'stroke', 'filter', 'opacity', 'stroke-dasharray', 'marker-end'].forEach((a) => n.removeAttribute(a))
-        n.setAttribute('fill', 'none') // 면 채우기 금지
-        n.setAttribute('stroke-linejoin', 'round')
-        n.setAttribute('stroke-linecap', 'round')
-        n.style.strokeWidth = `calc(${width}px + var(--halo-width))`
-      })
-      halo.appendChild(copy)
-    }
-    first.parentNode.insertBefore(halo, first)
+function buildHalo(svg, ids) {
+  const first = svg.querySelector(`#${ids[0]}`)
+  if (!first) return null
+  const halo = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  halo.setAttribute('class', 'halo')
+  halo.setAttribute('data-halo', ids[0])
+  for (const id of ids) {
+    const el = svg.querySelector(`#${id}`)
+    if (!el || (id !== ids[0] && first.contains(el))) continue
+    const copy = el.cloneNode(true)
+    copy.removeAttribute('id')
+    copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'))
+    copy.querySelectorAll('text, title').forEach((n) => n.remove())
+    copy.querySelectorAll('polygon, path, rect, circle, ellipse, line, polyline').forEach((n) => {
+      const width = parseFloat(n.getAttribute('stroke-width') || 1)
+      ;['fill', 'stroke', 'filter', 'opacity', 'stroke-dasharray', 'marker-end'].forEach((a) => n.removeAttribute(a))
+      n.setAttribute('fill', 'none') // 면 채우기 금지
+      n.setAttribute('stroke-linejoin', 'round')
+      n.setAttribute('stroke-linecap', 'round')
+      n.style.strokeWidth = `calc(${width}px + var(--halo-width))`
+    })
+    halo.appendChild(copy)
   }
+  first.parentNode.insertBefore(halo, first)
+  return halo
 }
 
-/** 설비를 누를 수 있게 표시 (data-eq) */
-function markEquipment(svg) {
-  for (const [key, { ids }] of Object.entries(PAINT_EQUIPMENT)) {
-    ids.forEach((id) => {
-      const el = svg.querySelector(`#${id}`)
-      if (!el) return
-      el.classList.add('eqh')
-      el.setAttribute('data-eq', key)
-    })
+/** 설비 하나를 누를 수 있게 표시 (data-eq) */
+function markEquipment(svg, key) {
+  drawn[key].ids.forEach((id) => {
+    const el = svg.querySelector(`#${id}`)
+    if (!el) return
+    el.classList.add('eqh')
+    el.setAttribute('data-eq', key)
+  })
+}
+
+/* ───────── 추가한 설비: 그림 복사본 ───────── */
+/**
+ * 그림 하나(shape)를 복사해 설비 key 로 놓음
+ * - 설비 요소(건물 · 배기팬 · 버너실 …)와 덕트는 그림 순서 그대로 센서 이름표 앞에, 그림자는 바닥(원래 그림자 옆)에 둠
+ * - 복사본은 원래 자리에 그려지고, applyOffsets 가 positions 자리로 옮김 (centers 는 원본과 같음)
+ * - 복사한 요소에는 모두 data-clone="key" → 지울 때 한 번에 찾음
+ */
+function addClone(svg, key, shape) {
+  const src = shapeOf(shape)
+  const anchor = svg.querySelector('.tag')
+  const parts = src.ids.map((id) => svg.querySelector(`#${id}`)).filter(Boolean)
+  // 설비 바깥 그림(그림자 · 덕트 · 급기선): 그림 파일의 data-for 표시 (부품만 따로 놓는 그림에는 없음)
+  const extras = PAINT_EQUIPMENT[shape] ? [...svg.querySelectorAll(`[data-for="${shape}"]`)] : []
+  const inOrder = [...parts, ...extras].sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+  for (const el of inOrder) {
+    const copy = el.cloneNode(true)
+    copy.removeAttribute('style') // 원본이 옮겨졌거나 숨겨져 있어도 복사본은 처음 모양으로
+    copy.classList.remove('sel', 'hov')
+    copy.setAttribute('data-clone', key)
+    if (el.id) {
+      copy.id = `${el.id}__${key}`
+      // 공정 순서 번호(파란 동그라미)는 원래 설비 것이라 뺌
+      const no = [...copy.querySelectorAll('text')].find((n) => /^\d+$/.test(n.textContent.trim()))
+      if (no && no.parentNode !== copy) no.parentNode.remove()
+    } else {
+      copy.setAttribute('data-for', key)
+    }
+    if (el.getAttribute('filter')) el.after(copy)
+    else anchor.before(copy)
+  }
+  drawn[key] = { ids: parts.map((el) => `${el.id}__${key}`), clone: true }
+  // 상태 테두리 → 누를 수 있게 표시 → 마우스 올림 덮개 (원래 설비를 처음 그릴 때와 같은 순서 · 같은 묶음)
+  for (const group of HALO_GROUPS) {
+    const ids = group.filter((id) => src.ids.includes(id)).map((id) => `${id}__${key}`)
+    if (ids.length) buildHalo(svg, ids)?.setAttribute('data-clone', key)
+  }
+  markEquipment(svg, key)
+  buildOverlays(svg, { [key]: drawn[key] })
+  centers[key] = centers[shape]
+}
+
+function removeClone(svg, key) {
+  svg.querySelectorAll(`[data-clone="${key}"], .over[data-eq="${key}"]`).forEach((n) => n.remove())
+  delete drawn[key]
+  delete centers[key]
+}
+
+/** 설비 목록에 맞춰 복사본을 만들고 지움 (그림에 원래 없는 설비 중 아는 그림 shape 를 가진 것) */
+function syncClones() {
+  const svg = box.value?.querySelector('svg')
+  if (!svg) return
+  const want = merged.value.filter((e) => !PAINT_EQUIPMENT[e.key] && shapeOf(e.shape))
+  for (const key of Object.keys(drawn)) {
+    if (drawn[key].clone && !want.some((e) => e.key === key)) removeClone(svg, key)
+  }
+  for (const e of want) {
+    if (!drawn[e.key]) addClone(svg, e.key, e.shape)
   }
 }
 
@@ -132,7 +204,7 @@ function applyLevels() {
   if (!svg) return
   svg.querySelectorAll('.halo').forEach((halo) => {
     const svgId = halo.getAttribute('data-halo')
-    const eq = byKey(keyOfSvgId(svgId))
+    const eq = byKey(keyOfId(svgId))
     // 버너실은 설비 전체가 아니라 CO 센서 단계로 색을 정함 (전류만 주의면 버너는 정상)
     const level = svgId.startsWith('burner-')
       ? (eq?.sensors.find((s) => s.type === 'CO')?.level ?? LEVEL.NORMAL)
@@ -149,7 +221,8 @@ function applyLevels() {
   })
   for (const eq of merged.value) {
     // 그림 안 설비 이름표 (공장 관리에서 이름을 바꾸면 그 이름으로) — 번호(숫자)가 아닌 글자
-    const label = [...(svg.querySelector(`#eq-${eq.key}`)?.querySelectorAll('text') ?? [])].find((t) => !/^\d+$/.test(t.textContent))
+    const main = drawn[eq.key]?.ids[0] // 건물 (복사본이면 'eq-top-oven__x52' 같은 id)
+    const label = [...((main && svg.querySelector(`#${main}`))?.querySelectorAll('text') ?? [])].find((t) => !/^\d+$/.test(t.textContent))
     if (label && eq.name && label.textContent !== eq.name) label.textContent = eq.name
     for (const s of eq.sensors) {
       const tag = svg.querySelector(`#tag-${s.tag}`)
@@ -167,7 +240,7 @@ function zoomToFocus(svg) {
   if (!props.focus) return
   const eq = byKey(props.focus)
   const selectors = [
-    ...(PAINT_EQUIPMENT[props.focus]?.ids ?? []).map((id) => `#${id}`),
+    ...(drawn[props.focus]?.ids ?? []).map((id) => `#${id}`),
     ...(eq?.sensors ?? []).map((s) => `#tag-${s.tag}`),
   ]
   let box2 = null
@@ -191,15 +264,19 @@ function zoomToFocus(svg) {
 }
 
 /* ───────── 위치 · 고름 · 사용 안 함 ───────── */
-/** 그림에 그려진 설비 가운데 점 { 설비 이름: [x, y] } (처음 그릴 때 한 번 잼 — 위치 값이 없을 때의 자리) */
+/**
+ * 그림에 그려진 설비 가운데 점 { 설비 이름: [x, y] } (처음 그릴 때 한 번 잼 — 위치 값이 없을 때의 자리)
+ * - 따로 놓는 부품 그림(PART_SHAPES: fan · burner …)도 같이 잼 → 복사본을 놓을 때 기준점
+ */
 const centers = {}
 function measureCenters(svg) {
-  for (const key of Object.keys(PAINT_EQUIPMENT)) {
+  const shapes = { ...PAINT_EQUIPMENT, ...PART_SHAPES }
+  for (const key of Object.keys(shapes)) {
     let x0 = Infinity
     let y0 = Infinity
     let x1 = -Infinity
     let y1 = -Infinity
-    for (const id of PAINT_EQUIPMENT[key].ids) {
+    for (const id of shapes[key].ids) {
       const el = svg.querySelector(`#${id}`)
       if (!el) continue
       const b = el.getBBox() // CSS 이동과 상관없이 그려진 자리
@@ -218,14 +295,15 @@ function shiftOf(key) {
   return p && c && p.x != null && p.y != null ? [p.x - c[0], p.y - c[1]] : [0, 0]
 }
 const round1 = (v) => Math.round(v * 10) / 10
-/** 설비 하나에 속한 그림 요소 (건물·팬·버너 + 초록 면 덮개 + 상태 테두리 + 센서 이름표) */
+/** 설비 하나에 속한 그림 요소 (건물·팬·버너 + 초록 면 덮개 + 상태 테두리 + 그림자 · 덕트 + 센서 이름표) */
 function partsOf(svg, key) {
-  const ids = PAINT_EQUIPMENT[key]?.ids ?? []
+  const ids = drawn[key]?.ids ?? []
   const els = ids.map((id) => svg.querySelector(`#${id}`)).filter(Boolean)
   const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)))
   const overs = [...svg.querySelectorAll(`.over[data-eq="${key}"]`)]
-  const halos = [...svg.querySelectorAll('.halo')].filter((h) => keyOfSvgId(h.getAttribute('data-halo')) === key)
-  return [...top, ...overs, ...halos, ...tagsOf(svg, key)]
+  const halos = [...svg.querySelectorAll('.halo')].filter((h) => keyOfId(h.getAttribute('data-halo')) === key)
+  const extras = [...svg.querySelectorAll(`[data-for="${key}"]`)] // 그림자 · 덕트 · 급기선
+  return [...top, ...overs, ...halos, ...extras, ...tagsOf(svg, key)]
 }
 /** 설비에 붙은 센서 이름표 */
 const tagsOf = (svg, key) => (byKey(key)?.sensors ?? []).map((s) => svg.querySelector(`#tag-${s.tag}`)).filter(Boolean)
@@ -233,14 +311,19 @@ const tagsOf = (svg, key) => (byKey(key)?.sensors ?? []).map((s) => svg.querySel
 function applyOffsets() {
   const svg = box.value?.querySelector('svg')
   if (!svg) return
-  for (const key of Object.keys(PAINT_EQUIPMENT)) {
+  for (const key of Object.keys(drawn)) {
     const [x, y] = shiftOf(key)
     const off = props.inactive.includes(key)
     for (const el of partsOf(svg, key)) {
       el.style.transform = x || y ? `translate(${x}px, ${y}px)` : ''
-      el.style.opacity = off ? '0.4' : ''
-      el.classList.toggle('sel', props.editable && key === props.selected)
+      // 사용 안 함은 흐리게 (그림자는 그림에 적힌 투명도 0.1 을 그대로 둠)
+      if (!el.getAttribute('filter')) el.style.opacity = off ? '0.4' : ''
+      el.classList.toggle('sel', props.editable && key === props.selected && !el.hasAttribute('data-for'))
     }
+    // 등록되지 않은 설비 그림은 숨김 (그림에 그려진 센서 이름표도 같이)
+    const gone = !drawn[key].clone && props.hidden.includes(key)
+    const fixedTags = (PAINT_EQUIPMENT[key]?.tags ?? []).map((tag) => svg.querySelector(`#tag-${tag}`)).filter(Boolean)
+    for (const el of [...partsOf(svg, key), ...fixedTags]) el.style.display = gone ? 'none' : ''
   }
 }
 
@@ -286,16 +369,26 @@ function onUp() {
 
 onMounted(() => {
   const svg = box.value.querySelector('svg')
-  buildHalos(svg)
-  markEquipment(svg)
+  for (const ids of HALO_GROUPS) buildHalo(svg, ids)
+  for (const key of Object.keys(drawn)) markEquipment(svg, key)
   buildOverlays(svg, PAINT_EQUIPMENT) // 마우스 올림용 초록 면 덮개 (paintHover.js)
-  measureCenters(svg) // 옮기기 전에 그려진 자리를 잼
+  measureCenters(svg) // 옮기기 · 숨기기 전에 그려진 자리를 잼
+  syncClones() // 추가한 설비 그림 복사
   applyLevels()
   applyOffsets()
   zoomToFocus(svg)
 })
-watch(() => props.equipment, () => nextTick(applyLevels), { deep: true })
-watch(() => [props.positions, props.selected, props.inactive], () => nextTick(applyOffsets), { deep: true })
+watch(
+  () => props.equipment,
+  () =>
+    nextTick(() => {
+      syncClones() // 설비가 추가 · 삭제됐으면 복사본부터 맞춤
+      applyLevels()
+      applyOffsets()
+    }),
+  { deep: true },
+)
+watch(() => [props.positions, props.selected, props.inactive, props.hidden], () => nextTick(applyOffsets), { deep: true })
 
 /* ───────── 마우스 올림: 설비 묶음 표시 + 이름 칩 ───────── */
 // { key: 설비 이름 } — 아무것도 아니면 null
@@ -343,7 +436,7 @@ function applyHover() {
 
 /** 칩 자리: 설비 묶음 위쪽 가운데 (마우스를 따라다니지 않아 흔들리지 않음) */
 function placeChip(svg, h) {
-  const els = (PAINT_EQUIPMENT[h.key]?.ids ?? []).map((id) => svg.querySelector(`#${id}`))
+  const els = (drawn[h.key]?.ids ?? []).map((id) => svg.querySelector(`#${id}`))
   const rects = els.filter(Boolean).map((el) => el.getBoundingClientRect())
   if (!rects.length) return
   const r = box.value.getBoundingClientRect()
