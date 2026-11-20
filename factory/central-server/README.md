@@ -226,3 +226,43 @@ com.gte.argos.factory
 - `POST /api/v1/internal/commands/{id}/deny` `{ userId }` → DENIED. 승인 대기가 아니면 409 `COMMAND_NOT_AWAITING`
 - 알림을 종료하면 그 알림의 승인 대기 명령은 CANCELLED
 - 피드 `COMMAND_RESULT` 에 `approvedBy`, 알림 `fanAuto` 에 `commandId`, 상태 `AWAITING`·`DENIED`
+
+## Redis 연동 — 데이터 수집 서버 ↔ 중앙 서버 (2026-11-20 아키텍처, A단계)
+
+`docs/아키텍쳐.png` 기준 이름: **이 서버 = 데이터 수집 서버**, 연계 서버(`gateway/backend`) = **중앙 서버**.
+`ARGOS_REDIS_ENABLED=true` 일 때만 Redis 에 연결한다. 기본값 `false` 면 지금처럼 HTTP 만 쓴다 (두 서버 같은 값으로).
+
+| 방향 | 키 | 종류 | 내용 |
+| --- | --- | --- | --- |
+| 수집 → 중앙 | `argos:feed` | 스트림 (2만 건) | 실시간 변화. 번호 `{bootMs}-{seq}`, 필드 `bootId` `seq` `type` `at` `data`(JSON). `type` 은 `/internal/feed` 와 같음 |
+| 수집 → 중앙 | `argos:feed:meta` | 해시 | `bootId`, `bootMs`, `latest`. 수집 서버가 다시 켜지면 `bootId` 가 바뀌고 중앙은 화면에 `reset` |
+| 수집 → 중앙 | `argos:live` | 해시 | 필드 `sensorId` → `{"ts":"…+09:00","value":…}` 센서별 지금 값 |
+| 수집 → 중앙 | `argos:raw:{sensorId}` | 스트림 (3,600건) | 최근 1시간 1초 값 (`ts`, `value`) |
+| 중앙 → 수집 | `argos:cmd` | 스트림, 소비 그룹 `collector` | 제어 명령 `requestId` `op` `payload`(JSON) `sentAt`(epoch ms) |
+| 수집 → 중앙 | `argos:reply:{requestId}` | 리스트 (60초) | 응답 1건. HTTP 와 같은 `{success, data}` · `{success:false, error{status, code, message, details}}` |
+
+제어 명령 `op`
+
+| op | payload | HTTP 로 하던 것 |
+| --- | --- | --- |
+| `COMMAND` | `equipmentId, command, value?, alarmId?, userId?` | `POST /internal/equipment/{id}/commands` |
+| `APPROVE` | `commandId, userId` | `POST /internal/commands/{id}/approve` |
+| `DENY` | `commandId, userId` | `POST /internal/commands/{id}/deny` |
+
+- 중앙은 응답을 10초 기다리고, 없으면 504 `UPSTREAM_TIMEOUT`. 수집 서버는 보낸 지 15초 지난 요청은 실행하지 않고 504 `REQUEST_EXPIRED`
+- 수집 서버의 4xx 는 같은 상태·코드로 화면까지 간다 (예: 409 `COMMAND_NOT_AWAITING`)
+- Redis 가 잠깐 꺼지면 그동안의 변화는 버리고, 다시 붙으면 중앙이 번호가 빈 것을 보고(gap) 화면에 `reset`
+- 조회(master · status · series · alarms · 통계 등)와 확인·종료·기준값·배치 저장은 아직 HTTP (B·C단계에서 옮김)
+- 판정은 지금처럼 이 서버도 한다 (DAS 판정과 별개로 관제 단위 조합 판정, 1초 → 1분 집계). Kafka 입력은 메시지 예시를 받으면 `LiveJudgementService.ingest()` 에 붙인다
+
+로컬 Redis
+
+```bash
+docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine
+# 확인: docker exec argos-redis redis-cli XLEN argos:feed
+```
+
+| 환경변수 | 기본값 |
+| --- | --- |
+| `ARGOS_REDIS_ENABLED` | `false` |
+| `REDIS_HOST` · `REDIS_PORT` · `REDIS_PASSWORD` | `localhost` · `6379` · (없음) |
