@@ -4,7 +4,7 @@
   - 값은 알림 응답의 fanAuto 그대로 보여 주기만 함 (실제로 팬을 돌리는 건 서버, backend-notes 20장)
     { fanName, mode: 'AUTO'|'MANUAL', percent, rpm, beforeRpm, status, commandId }
     status: APPLIED · SENT · FAILED · SKIPPED · AWAITING(승인 대기) · DENIED(거절)
-  - 자동(AUTO): '배기팬 자동 가동 75%' + '1,200 → 1,350 rpm' (팬 아이콘이 돎)
+  - 자동(AUTO): '배기팬 자동 가동 75%' + '900 → 1,350 rpm' (팬 아이콘이 돎)
     수동(MANUAL): 승인 대기(AWAITING + commandId)면 '승인' · '거절' 버튼 (공장 담당자만, 2026-11-20 백엔드 피드백)
       → POST /fan-commands/{commandId}/approve · deny. 본사 관리자는 '승인 대기' 안내만
       그 밖의 수동(예전 SKIPPED 등)은 안내만 ('수동 모드라 바꾸지 않았습니다')
@@ -60,7 +60,7 @@ const awaiting = computed(() => !isAuto.value && f.value.status === 'AWAITING' &
 const approved = computed(() => !isAuto.value && ['SENT', 'APPLIED'].includes(f.value.status))
 /** 승인 · 거절 버튼은 공장 담당자만 (본사 관리자는 열람만, 서버도 403) */
 const canDecide = computed(() => auth.role === ROLE.PLANT_ADMIN)
-/** 회전수 화살표(1,200 → 1,350)를 보여 줄지: 자동, 승인 대기, 승인한 뒤 */
+/** 회전수 화살표(900 → 1,350)를 보여 줄지: 자동, 승인 대기, 승인한 뒤 */
 const showRpm = computed(() => isAuto.value || awaiting.value || approved.value)
 
 /** 굵은 제목 줄 */

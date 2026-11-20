@@ -106,7 +106,7 @@ export function runStateOf(equipmentId) {
  * 배기팬이 있는 설비 → 팬 상태 (상도 건조로는 주의 이상이면 회전수를 올려 둔 상태, 정지되면 꺼짐)
  * - 가스(CO) 알림 + 배기팬 자동이면 자동 회전수 (주의 75% 1,350 rpm · 경보 100% 1,800 rpm, fanAuto.js)
  *   수동이면 그동안처럼 1,240 rpm (사람이 올려 둔 값)
- * - 평소(알림 없음)는 1,200 rpm (40 Hz) — 알림이 끝나면 서버가 이 값으로 되돌림
+ * - 평소(알림 없음)는 900 rpm (30 Hz) — 알림이 끝나면 서버가 이 값으로 되돌림
  */
 function fansNow(topLevel) {
   const fan = { power: 'ON', rpm: FAN_RATED_RPM, targetRpm: FAN_RATED_RPM }
