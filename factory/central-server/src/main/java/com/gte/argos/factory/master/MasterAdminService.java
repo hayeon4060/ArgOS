@@ -35,7 +35,8 @@ public class MasterAdminService {
 
     public Map<String, Object> createPlant(String name, String code, String address, Double lat, Double lng) {
         require(name, "name");
-        require(code, "code");
+        // code 를 비우면 서버가 만든다 (docs/api/scope-add.md): SITE-1, SITE-2 …
+        code = blank(code) ? nextCode("SELECT COUNT(*) FROM plant WHERE code = ?", "SITE-", null) : code;
         Long id = insert("INSERT INTO plant (name, code, address, lat, lng) VALUES (?, ?, ?, ?, ?) RETURNING plant_id",
                 name, code, address, lat, lng);
         masterChanged("PLANT", id);
@@ -44,7 +45,8 @@ public class MasterAdminService {
 
     public Map<String, Object> createFactory(long plantId, String code, String name) {
         require(name, "name");
-        require(code, "code");
+        // F1, F2 … (사업장 안에서)
+        code = blank(code) ? nextCode("SELECT COUNT(*) FROM factory WHERE code = ? AND plant_id = ?", "F", plantId) : code;
         Long id = insert("""
                 INSERT INTO factory (plant_id, code, name, sort_order)
                 VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM factory WHERE plant_id = ?))
@@ -56,7 +58,8 @@ public class MasterAdminService {
 
     public Map<String, Object> createProcess(long factoryId, String code, String name, String tagPrefix) {
         require(name, "name");
-        require(code, "code");
+        // PR1, PR2 … (공장 안에서)
+        code = blank(code) ? nextCode("SELECT COUNT(*) FROM process WHERE code = ? AND factory_id = ?", "PR", factoryId) : code;
         Long id = insert("INSERT INTO process (factory_id, code, name, tag_prefix) VALUES (?, ?, ?, ?) RETURNING process_id",
                 factoryId, code, name, tagPrefix);
         masterChanged("PROCESS", id);
@@ -157,6 +160,12 @@ public class MasterAdminService {
             if (u.containsKey("name")) {
                 jdbc.update("UPDATE equipment SET name = ? WHERE equipment_id = ?", str(u.get("name")), id);
             }
+            if (u.containsKey("type")) {   // 설비 종류 (frontend-api-audit-1120 9장: 전에는 저장 안 됐음)
+                jdbc.update("UPDATE equipment SET equipment_type = ? WHERE equipment_id = ?", str(u.get("type")), id);
+            }
+            if (u.containsKey("shape")) {
+                jdbc.update("UPDATE equipment SET shape = ? WHERE equipment_id = ?", str(u.get("shape")), id);
+            }
             if (u.containsKey("active")) {
                 jdbc.update("UPDATE equipment SET is_active = ? WHERE equipment_id = ?", Boolean.TRUE.equals(u.get("active")), id);
             }
@@ -169,10 +178,13 @@ public class MasterAdminService {
             }
             changed++;
         }
+        List<Long> kept = new ArrayList<>();
         for (Object d : list(eq.get("delete"))) {
             long id = lng(d);
             checkEquipment(id, processId);
-            removeEquipment(id);
+            if (!removeEquipment(id)) {
+                kept.add(id);
+            }
             changed++;
         }
         Map<String, Object> sn = req.sensors() == null ? Map.of() : req.sensors();
@@ -236,6 +248,8 @@ public class MasterAdminService {
         out.put("version", current + 1);
         out.put("created", created);
         out.put("changedCount", changed);
+        // 지우려 했지만 센서·이력이 있어 '사용 안 함'으로만 바꾼 설비 (docs/api/paint-equipment-edit.md 4장 2번)
+        out.put("kept", kept);
         out.put("managers", managers);
         return out;
     }
@@ -305,19 +319,39 @@ public class MasterAdminService {
 
     // ------------------------------------------------------------------
 
-    private void removeEquipment(long id) {
+    /** 지웠으면 true, 센서·이력이 있어 '사용 안 함'으로만 바꿨으면 false */
+    private boolean removeEquipment(long id) {
         Integer used = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM sensor s WHERE s.equipment_id = ?
                 """, Integer.class, id);
         if (used != null && used > 0) {
             jdbc.update("UPDATE equipment SET is_active = FALSE WHERE equipment_id = ?", id);
             jdbc.update("UPDATE sensor SET is_active = FALSE WHERE equipment_id = ?", id);
-            return;
+            return false;
         }
         try {
             jdbc.update("DELETE FROM equipment WHERE equipment_id = ?", id);
+            return true;
         } catch (DataIntegrityViolationException e) {
             jdbc.update("UPDATE equipment SET is_active = FALSE WHERE equipment_id = ?", id);
+            return false;
+        }
+    }
+
+    private static boolean blank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    /** prefix + 1, 2, … 중 아직 안 쓴 첫 코드. countSql 의 ? 는 (코드, parentId) */
+    private String nextCode(String countSql, String prefix, Long parentId) {
+        for (int n = 1; ; n++) {
+            String candidate = prefix + n;
+            Integer taken = parentId == null
+                    ? jdbc.queryForObject(countSql, Integer.class, candidate)
+                    : jdbc.queryForObject(countSql, Integer.class, candidate, parentId);
+            if (taken == null || taken == 0) {
+                return candidate;
+            }
         }
     }
 
@@ -366,8 +400,8 @@ public class MasterAdminService {
         if (code != null && !code.isBlank()) {
             return code;
         }
-        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM equipment WHERE process_id = ?", Integer.class, processId);
-        return "EQ-" + processId + "-" + ((n == null ? 0 : n) + 1);
+        // 지운 설비가 있어도 겹치지 않게 비어 있는 다음 번호
+        return nextCode("SELECT COUNT(*) FROM equipment WHERE code = ? AND process_id = ?", "EQ-" + processId + "-", processId);
     }
 
     /** 화면 센서 종류 → DB 센서 종류 */

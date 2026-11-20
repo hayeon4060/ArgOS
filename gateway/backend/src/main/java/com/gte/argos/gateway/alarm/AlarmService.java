@@ -43,9 +43,12 @@ public class AlarmService {
     private final SimTime time;
     private final ChecklistRepository checklists;
     private final ThermalService thermal;
+    private final com.gte.argos.gateway.fire.FireIds fireIds;
 
     public AlarmService(CentralClient central, MasterCache masterCache, CurrentUser currentUser, SimTime time,
-                        ChecklistRepository checklists, ThermalService thermal) {
+                        ChecklistRepository checklists, ThermalService thermal,
+                        com.gte.argos.gateway.fire.FireIds fireIds) {
+        this.fireIds = fireIds;
         this.central = central;
         this.masterCache = masterCache;
         this.currentUser = currentUser;
@@ -94,8 +97,9 @@ public class AlarmService {
     }
 
     /**
-     * GET /alarms/hourly?date= : 그날(기본 어제) 주간 07~19시, 야간 19시 ~ 다음 날 07시의 시간별 주의·경보·조치 건수.
-     * 집계 범위 = date 07:00 ~ date+1 07:00 (시연 시계 날짜 기준). 조치는 확인 시각이 범위 안인 것만 센다.
+     * GET /alarms/hourly?date= : 그날(기본 어제) 00~24시의 시간별 주의·경보·조치 건수 (hours, alarmCount, actionCount).
+     * 집계 범위 = date 00:00 ~ date+1 00:00 (시연 시계 날짜 기준, 2026-11-20 하루 한 줄로 변경). 조치는 확인 시각이 범위 안인 것만 센다.
+     * day(07~19시) · night(19~24시 + 00~07시, 같은 날) 는 예전 화면 호환용으로 남긴다.
      */
     public Map<String, Object> hourly(Long siteId, Long factoryId, String date) {
         UserScope scope = currentUser.require(UserScope.HQ_ADMIN, UserScope.PLANT_ADMIN);
@@ -123,6 +127,7 @@ public class AlarmService {
         out.put("date", day.toString());
         out.put("from", range[0]);
         out.put("to", range[1]);
+        out.putAll(shift(byHour, 0, 24));
         out.put("day", shift(byHour, 7, 19));
         out.put("night", shift(byHour, 19, 31));
         return out;
@@ -139,9 +144,9 @@ public class AlarmService {
         return LocalDate.parse(date);
     }
 
-    /** 주간 07시 ~ 다음 날 07시 (야간이 날짜를 넘어감) */
+    /** 그날 00시 ~ 다음 날 00시 */
     static OffsetDateTime[] hourlyRange(LocalDate day) {
-        OffsetDateTime start = day.atTime(7, 0).atZone(SimTime.ZONE).toOffsetDateTime();
+        OffsetDateTime start = day.atStartOfDay(SimTime.ZONE).toOffsetDateTime();
         return new OffsetDateTime[] {start, start.plusDays(1)};
     }
 
@@ -339,7 +344,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
-        out.put("fireId", null);
+        out.put("fireId", fireIds.byAlarm(a.alarmId()));
         // 유형 넣기 (docs/api/alarm-modal-hazard.md): '상도 건조로에서 가스 경보가 발생했습니다'
         out.put("title", a.unitName() + "에서 " + hazardPrefix(a.hazard()) + Codes.stageName(a.stage()) + "가 발생했습니다");
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
@@ -659,9 +664,12 @@ public class AlarmService {
         for (Checklist c : checklists.list(null, null, alarmIds)) {
             byAlarm.putIfAbsent(c.alarmId(), c); // 최근 것 (sent_at DESC)
         }
+        Map<Long, Long> fires = fireIds.byAlarm(alarmIds);
         List<Map<String, Object>> out = new ArrayList<>();
         for (Alarm a : alarms) {
-            out.add(AlarmViews.item(a, m, names, byAlarm.get(a.alarmId())));
+            Map<String, Object> row = AlarmViews.item(a, m, names, byAlarm.get(a.alarmId()));
+            row.put("fireId", fires.get(a.alarmId())); // 화재가 아니면 null
+            out.add(row);
         }
         return out;
     }

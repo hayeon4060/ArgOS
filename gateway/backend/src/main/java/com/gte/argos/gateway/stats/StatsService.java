@@ -298,10 +298,16 @@ public class StatsService {
             currentUser.checkFactory(scope, c.factoryId());
         }
         //   프론트는 이미 30일로 막음. 자세한 건 docs/api/stats-history-30days.md
-        if (c.days() > MAX_DAYS) {
+        // 달 하나 전체(1일 ~ 말일)는 31일이어도 된다: 월간 보고서가 그 달로 요약을 부른다 (2026-10 PDF 400 오류, 2026-11-20)
+        if (c.days() > MAX_DAYS && !wholeMonth(c)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "RANGE_TOO_LARGE", "한 번에 30일까지 조회할 수 있습니다.");
         }
         return scope;
+    }
+
+    /** 기간이 정확히 달 하나 (1일 ~ 그 달 말일) */
+    static boolean wholeMonth(AlarmCriteria c) {
+        return c.from().getDayOfMonth() == 1 && c.to().equals(c.from().withDayOfMonth(c.from().lengthOfMonth()));
     }
 
     /** 기간 안의 경보 전부 (쪽마다 500건씩) → 조건·담당 범위로 거르기. 최근 것이 앞 */

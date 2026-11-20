@@ -412,3 +412,44 @@ actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, 
 - 조회와 그 밖의 저장은 아직 HTTP
 
 Redis 키 규격은 `factory/central-server/README.md` 의 "Redis 연동" 절.
+
+## 2026-11-20 프론트 요청 반영 (`docs/api/` 11-20 문서)
+
+| 요청 | 반영 |
+| --- | --- |
+| `hourly-alarm-one-day.md` | `GET /alarms/hourly` 범위를 **date 00:00 ~ date+1 00:00** 으로. 응답 맨 위에 `alarmCount` · `actionCount` · `hours[]` (00~23시, 알림 있는 시간만). `day` · `night` 는 호환용으로 남김 (같은 날의 07~19시 / 19~24시+00~07시) |
+| `frontend-api-audit-1120.md` 2장 | 알림 `fireId`: `GET /alarms` 줄, `GET /alarms/{id}/response`, SSE `alarm.updated` 에 넣음 (화재 아니면 null). `alarm.created` 직후 화재로 판정되면 `fireId` 를 실은 `alarm.updated` 를 한 번 더 보냄 |
+| 3장 | `GET /checklists` 줄에 `processId` · `equipmentId` (`GET /checklists/{id}` 와 같은 값) |
+| 4장 | `GET /stats/summary` · `/stats/trend` · `/stats/by-process` · `/stats/heatmap` 도 `siteId` 받음 |
+| 5장 | 31일짜리 달 월간 보고서 400 수정: 기간이 **달 하나 전체(1일~말일)** 면 30일 제한을 넘어도 됨 (`/stats/*` 도 같음) |
+| 6장 | `GET /inspections` 줄에 `needCheckCount` · `progress` · `reviewedAt` |
+| 9장 | 배치 저장 `equipment.update[]` 의 `type` · `shape` 저장 |
+| `scope-add.md` 1 | `POST /sites` · `/factories` · `/processes` 에서 `code` 를 비우면 서버가 만듦: 사업장 `SITE-n`, 공장 `Fn`(사업장 안), 공정 `PRn`(공장 안). 설비 `EQ-{공정}-{n}` 도 지운 번호와 겹치지 않게 |
+| `paint-equipment-edit.md` 4-2 | 배치 저장 응답에 `kept: [id…]` (지우려 했지만 센서·이력이 있어 '사용 안 함'으로만 바꾼 설비) |
+
+확인 질문 답:
+- `equipment-add.md` 3-1 · `paint-equipment-edit.md` 4-4: 중앙 DB `equipment.equipment_type` 은 비어도 됨 (null 저장됨). 코드를 정하면 그대로 넣으면 된다.
+- `paint-equipment-edit.md` 4-1: `GET /processes/{id}/layout` 의 `shape` 는 저장한 값 그대로 온다 (마스터 캐시 `Equipment.shape` 포함, 실제 저장 → 조회로 확인).
+- 4-3 (그림만 있는 도장 설비 시드): 서버 시드는 그대로 둔다. 공장 관리에서 추가하면 된다.
+
+## 2026-11-20 점검 관리 개편 A안 (`docs/api/inspection-redesign-api.md`)
+
+DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `source`(PAPER · DIGITAL) · `result`(OK · NG) · `form_values`(JSONB) 추가,
+`equipment_id` 비어도 됨 (스캔본 '연결 안 함'인데 설비번호를 못 찾을 때). 새 테이블 없음.
+
+| API | 내용 |
+| --- | --- |
+| `GET /inspections/schedule` (확장) | `date` · `month=YYYY-MM` · `from&to`(62일까지) 중 하나, `factoryId` · `formType` 선택. 줄에 `equipmentNo` · `assigneeId` · `source` · `result` · `inspectionId` · `scanName` 추가. 날짜 · 시각순 |
+| `GET /inspections/schedule/options?factoryId=` (새로) | `equipments[{id, name, code: EF-nn, formType: F02, processId, processName}]`, `inspectors[{id, name}]` (그 공장 담당 공장 담당자 · 작업자). 공장 담당자는 factoryId 생략 가능 |
+| `POST /inspections/schedule` (새로) | `{date, time, formType(기본 F02), equipmentId, assigneeId, repeat: ONCE·DAILY·WEEKLY·MONTHLY, count(1~31)}` → 201, 만든 건 목록. 제목은 양식 이름 |
+| `GET /inspections/schedule/{id}/form` (새로) | `{scheduleId, formType, source, values, result}`. 수기는 검수 완료 OCR 값, 전자는 저장 값, 예정 · 누락은 `values: null` |
+| `PUT /inspections/schedule/{id}/form` (새로) | `{values, result?}` → 완료 · 전자. `result` 를 비우면 값에 '불량'이 있으면 NG. 이미 완료면 409 `ALREADY_DONE` |
+| `POST /inspections/records` (새로) | `{formType, equipmentId, date, time, values, result?}` → 201, 완료 · 전자 건 |
+| `GET /doc-forms/{formType}/template` (새로) | 빈 양식 PDF (`ARG-F02_환기·배기설비 점검일지.pdf`). 팀 양식 파일이 저장소에 없어 `doc_form.field_schema` 로 그림 |
+| `GET /inspections/{id}/ocr` | `scheduleId` 추가: 이어진 건, 없으면 추천(같은 양식 · 오늘 포함 7일의 예정 · 누락 건, 설비번호 같음 2 + 날짜 같음 1, 같으면 늦은 날짜, 0점이면 null) |
+| `PUT /inspections/{id}` | 몸통에 `scheduleId`: 숫자면 그 건을 완료 · 수기로(이미 다른 스캔으로 완료면 409 `ALREADY_DONE`), `null` 이면 인식 값(설비번호 · 점검 일시 · 점검자)으로 새 완료 · 수기 건, 안 보내면 올릴 때 고른 건 그대로. 결과는 인식 값에 '불량'이 있으면 NG |
+
+- 권한: 보기는 본사 관리자 · 공장 담당자, 추가 · 작성은 공장 담당자 (본사 관리자 403)
+- 설비번호 `EF-nn`: 공정 안 설비(카메라 제외)를 설비 id 순으로 센 번호. 양식 '설비번호' 칸의 숫자로 설비를 찾는다
+- 상태 `DELAYED`(누락) 판정은 그대로 (예정 시각이 지났는데 안 함)
+- 시드의 예전 완료 건(스캔 · 전자 값 없음)은 `source` · `result` 가 null

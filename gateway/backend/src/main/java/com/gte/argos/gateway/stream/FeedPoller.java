@@ -57,6 +57,7 @@ public class FeedPoller {
     private final ChecklistRepository checklists;
     private final SimTime time;
     private final FireService fires;
+    private final com.gte.argos.gateway.fire.FireIds fireIds;
     private final boolean enabled;
     private final com.gte.argos.gateway.common.ActivityLogger activity;
 
@@ -72,7 +73,9 @@ public class FeedPoller {
     public FeedPoller(CentralClient central, MasterCache masterCache, StreamHub hub, AlarmService alarms,
                       ChecklistRepository checklists, SimTime time, FireService fires,
                       @Value("${argos.central.feed-enabled:true}") boolean enabled,
-                      com.gte.argos.gateway.common.ActivityLogger activity) {
+                      com.gte.argos.gateway.common.ActivityLogger activity,
+                      com.gte.argos.gateway.fire.FireIds fireIds) {
+        this.fireIds = fireIds;
         this.activity = activity;
         this.central = central;
         this.masterCache = masterCache;
@@ -215,6 +218,19 @@ public class FeedPoller {
                 Map<String, Object> view = alarms.items(List.of(a), masterCache.get()).get(0);
                 hub.publish("alarm.created", id, view, s -> s.scope().canProcess(a.processId(), masterCache.get()));
                 fireCheck(a);
+                Long fireId = fireIds.byAlarm(a.alarmId());
+                if (fireId != null) {
+                    // 화재로 판정되면 그 알림에 fireId 를 붙여 다시 알린다
+                    Map<String, Object> fv = new LinkedHashMap<>();
+                    fv.put("id", a.alarmId());
+                    fv.put("level", Codes.level(a.stage()));
+                    fv.put("hazard", a.hazard());
+                    fv.put("status", a.status());
+                    fv.put("fireId", fireId);
+                    fv.put("at", item.at());
+                    hub.publish("alarm.updated", id + "-f", fv,
+                            s -> s.scope().canProcess(a.processId(), masterCache.get()));
+                }
             }
             case "ALARM_UPDATED", "ALARM_CLEARED", "ALARM_STATUS" -> {
                 long alarmId = num(d.get("alarmId"));
@@ -230,9 +246,10 @@ public class FeedPoller {
                     view.put("by", checklists.userNames(List.of(by)).get(by));
                 }
                 view.put("at", item.at());
+                fireCheck(a);
+                view.put("fireId", fireIds.byAlarm(alarmId));
                 hub.publish("alarm.updated", id, view, s -> s.scope().canProcess(a.processId(), masterCache.get()));
                 closeIfConfirmed(a);
-                fireCheck(a);
             }
             case "COMMAND_RESULT" -> {
                 long equipmentId = num(d.get("equipmentId"));

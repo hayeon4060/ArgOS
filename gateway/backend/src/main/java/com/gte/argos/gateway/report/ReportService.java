@@ -43,7 +43,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ReportService {
 
-    static final List<String> FONT_CANDIDATES = List.of(
+    public static final List<String> FONT_CANDIDATES = List.of(
             "C:/Windows/Fonts/malgun.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
             "/usr/share/fonts/nanum/NanumGothic.ttf",

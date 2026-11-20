@@ -100,6 +100,8 @@ public class FactoryAdminService {
         out.put("version", res.get("version"));
         out.put("created", res.get("created"));
         out.put("changedCount", changed);
+        // 지우지 않고 '사용 안 함'으로 바꾼 설비 id (센서·이력이 있는 설비)
+        out.put("kept", res.getOrDefault("kept", java.util.List.of()));
         return out;
     }
 
