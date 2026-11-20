@@ -289,6 +289,8 @@ public class AlarmService {
     }
 
     /** GET /alarms/{alarmId}/response: 경보 창 (같은 공정의 센서 전부, 정지시킬 설비, 로그) */
+    // TODO(백엔드): sensors 를 detail() 처럼 관제 단위 구성 센서만 넣어 주세요. 지금은 공정 센서가 전부 가서 경보 창에
+    //   TE-301~305 등이 다 나옴 (프론트는 detail 로 먼저 거름). equipment 는 공정 전체 그대로. docs/api/alarm-sensor-scope.md
     public Map<String, Object> response(long alarmId) {
         Alarm a = visibleAlarm(alarmId);
         MasterCache.Snapshot m = masterCache.get();
