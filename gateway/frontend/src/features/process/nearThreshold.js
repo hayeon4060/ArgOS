@@ -5,7 +5,7 @@
  * - 새 API 없이 GET /processes/{id}/layout + /status 값만으로 계산
  * - 열화상(IR)처럼 주의 기준이 없는 센서, 설비에 안 붙은 예비 센서는 뺌 (눌러서 갈 설비가 없음)
  */
-import { LEVEL } from '@/types/codes'
+import { shownSensorLevel } from '@/utils/sensorLevel'
 
 /** 카드에 보여 줄 센서 수 */
 export const NEAR_LIMIT = 5
@@ -29,7 +29,7 @@ export function nearThresholdRows(equipment, liveValues = {}, limit = NEAR_LIMIT
           value,
           warn: s.warn,
           alarm: s.alarm,
-          level: s.level ?? LEVEL.NORMAL, // 단계는 서버 판정 그대로 (화면에서 다시 판정하지 않음)
+          level: shownSensorLevel(s, value), // 서버 단계와 지금 값 단계 중 높은 쪽 (utils/sensorLevel.js, 2026-11-20)
           ratio: value / s.warn, // 주의 기준 대비 비율 (1 = 100%)
           equipmentId: eq.id,
           equipmentName: eq.name,

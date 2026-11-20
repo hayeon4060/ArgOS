@@ -42,7 +42,7 @@ const value = computed(() => {
   const v = props.liveValue ?? props.sensor.value
   return Number.isFinite(v) ? v.toFixed(props.type.dec) : '–'
 })
-// sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → sensorLevel.js)
+// sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → utils/sensorLevel.js)
 const valueClass = computed(() => ({
   warn: props.sensor.level === LEVEL.WARN,
   alarm: props.sensor.level === LEVEL.ALARM || props.sensor.level === LEVEL.FIRE,

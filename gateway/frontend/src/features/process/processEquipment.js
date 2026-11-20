@@ -7,6 +7,7 @@
  */
 import { drawingOf, hiddenDrawings } from './paintLayout'
 import { LEVEL } from '@/types/codes'
+import { shownSensorLevel, worseLevel } from '@/utils/sensorLevel'
 
 /**
  * 공장 관리에서 저장한 배치 → 배치도(PaintMap) 값
@@ -52,20 +53,30 @@ export function mergeByKey(list) {
   })
 }
 
+/**
+ * - 단계(2026-11-20): 서버 단계와 '지금 값이 위쪽 기준을 넘었는지' 중 높은 쪽 (utils/sensorLevel.js)
+ *   서버 단계가 늦거나 안 와도 값이 기준을 넘으면 배치도·설비 위치 그림이 주의·경보 색이 됨 (설비 상세 게이지와 같은 규칙)
+ */
 export function buildProcessEquipment(layout, status) {
   if (!layout || !status) return []
   const sensorNow = (id) => status.sensors.find((s) => s.id === id) ?? {}
   return layout.equipment.map((e) => {
     const now = status.equipment.find((x) => x.id === e.id) ?? {}
+    const sensors = layout.sensors
+      .filter((s) => s.equipmentId === e.id)
+      .map((s) => {
+        const merged = { ...s, ...sensorNow(s.id) }
+        return { ...merged, level: shownSensorLevel(merged) }
+      })
     return {
       id: e.id,
       ...drawingOf(e), // key(배치도 안 이름) · shape(그림 이름)
       code: e.code,
       name: e.name,
       seq: e.seq,
-      level: now.level ?? LEVEL.NORMAL,
+      level: sensors.reduce((lv, s) => worseLevel(lv, s.level), now.level ?? LEVEL.NORMAL),
       fan: now.fan ?? null,
-      sensors: layout.sensors.filter((s) => s.equipmentId === e.id).map((s) => ({ ...s, ...sensorNow(s.id) })),
+      sensors,
     }
   })
 }

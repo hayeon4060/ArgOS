@@ -22,9 +22,9 @@ import ThresholdModal from '@/features/threshold/ThresholdModal.vue'
 import SensorGaugeCard from '@/features/equipment/SensorGaugeCard.vue'
 import ThermalCard from '@/features/equipment/ThermalCard.vue'
 import TrendCard from '@/features/equipment/TrendCard.vue'
-import { withShownLevels, worseLevel } from '@/features/equipment/sensorLevel'
 import { useLiveValues } from '@/features/equipment/useLiveValues'
 import { buildProcessEquipment, layoutPlacement } from '@/features/process/processEquipment'
+import { withShownLevels } from '@/utils/sensorLevel'
 import { useLiveReload } from '@/utils/useLiveReload'
 
 const route = useRoute()
@@ -102,16 +102,11 @@ watch(range, loadSeries)
 const { values: liveValues, elapsedSec } = useLiveValues(() => equipment.value?.sensors)
 
 /*
- * 화면에 보여 줄 단계 (2026-11-20): 서버 단계 + 지금 값이 기준을 넘었는지 → 더 높은 쪽 (sensorLevel.js)
- * - 게이지 · 추이 · 제목 줄 상태 배지 · 설비 위치 그림의 이 설비가 모두 같은 단계를 씀
+ * 화면에 보여 줄 단계 (2026-11-20): 서버 단계 + 지금 값이 기준을 넘었는지 → 더 높은 쪽 (utils/sensorLevel.js)
+ * - 게이지 · 추이 · 제목 줄 상태 배지가 같은 단계를 씀 (설비 위치 그림은 buildProcessEquipment 가 같은 규칙으로 정함)
  * - 열화상 카드는 카메라 장면 색이라 서버 단계 그대로 (온도 센서 값만 넘었는데 '최고 52 ℃'가 주황이 되지 않게)
  */
 const shown = computed(() => (equipment.value ? withShownLevels(equipment.value, liveValues.value) : null))
-
-/** 설비 위치 그림: 이 설비 칸도 위와 같은 단계로 (다른 설비는 공정 상태 그대로) */
-const locationEquipment = computed(() =>
-  processEquipment.value.map((e) => (e.id === shown.value?.id ? { ...e, level: worseLevel(e.level, shown.value.level) } : e)),
-)
 
 /* ───────── 경로·링크 ───────── */
 const crumbs = computed(() => {
@@ -167,7 +162,7 @@ function onSelectEquipment(eq) {
     <div class="grid">
       <EquipmentLocationCard
         class="location"
-        :equipment="locationEquipment"
+        :equipment="processEquipment"
         :focus-key="focusKey"
         :positions="placement.positions"
         :inactive="placement.inactive"

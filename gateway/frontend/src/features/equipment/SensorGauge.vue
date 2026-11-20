@@ -5,7 +5,7 @@
       (서버가 평소 값(usual)을 아직 안 줌 → 값이 없으면 '정상 범위', 예전엔 '평소 NaN' 이 보였음)
     · '주의 21.6 · 경보 27 A'
   - sensor 가 없으면(이 설비에 그 종류 센서가 없음) 점선 동그라미 + '전류 센서 없음'
-  - sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → sensorLevel.js)
+  - sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → utils/sensorLevel.js)
 -->
 <script setup>
 import { computed } from 'vue'
