@@ -106,7 +106,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <template v-if="detail">
         <div class="title">
           <LevelBadge :level="detail.level" />
-          <span v-if="hazard" class="hz" :class="detail.hazard"><AppIcon :name="hazard.icon" :size="14" />{{ hazard.label }}</span>
+          <span v-if="hazard" class="hz" :class="detail.hazard"><AppIcon :name="hazard.icon" :size="14" :style="{ color: hazard.color }" />{{ hazard.label }}</span>
           <h3 id="alarm-detail-title">{{ place.equipment }}</h3>
           <span class="proc">{{ place.factory }} · {{ place.process }}</span>
         </div>
@@ -354,14 +354,6 @@ h4 small {
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
-}
-
-.hz.FIRE svg {
-  color: #7c3aed;
-}
-
-.hz.GAS svg {
-  color: #0d9488;
 }
 
 /* 센서 3종: 왼쪽 이름 줄 | 오른쪽 차트 (칸 높이를 차트와 맞춤) */

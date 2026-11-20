@@ -110,7 +110,7 @@ const view = computed(() => {
           >
             <td class="mono t-time">{{ v.time }}</td>
             <td>
-              <span class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" />{{ v.hazard.label }}</span>
+              <span class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" :style="{ color: v.hazard.color }" />{{ v.hazard.label }}</span>
             </td>
             <td class="t-place"><b>{{ v.equipment }}</b> <span class="sub">{{ v.process }}</span></td>
             <td><LevelBadge :level="v.row.level" /></td>
@@ -252,7 +252,7 @@ td:first-child {
   box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
-/* 유형 칩: 등급(주황·빨강)과 헷갈리지 않게 회색 바탕 + 아이콘 */
+/* 유형 칩: 회색 바탕 + 아이콘 (아이콘 색은 historyFilter.js HAZARD_META) */
 .hz {
   display: inline-flex;
   align-items: center;
@@ -264,14 +264,6 @@ td:first-child {
   color: #334155;
   font-size: 12.5px;
   font-weight: 600;
-}
-
-.hz.FIRE svg {
-  color: #7c3aed;
-}
-
-.hz.GAS svg {
-  color: #0d9488;
 }
 
 /* 상세 단추 */
