@@ -11,7 +11,7 @@
 | `hourly-alarm-one-day.md` | (2026-11-20 요청) 전일 시간대별 알림 주간/야간 → 하루 00~24시 한 줄 — `GET /alarms/hourly` 범위를 `date 00~24시` 로, `hours[]` 추가 |
 | `backend-feedback-1120.md` | (2026-11-20) 백엔드 피드백 4건 프론트 반영: 그날 점검 목록 API, 열화상 사진 blob, 배기팬 수동 승인 · 거절 버튼, 실제 설비 코드 |
 | `frontend-api-audit-1120.md` | (2026-11-20) 프론트 ↔ 백엔드 API 전수 비교: 프론트에서 고친 17건, 백엔드 요청(알림 `fireId`, 체크리스트 목록 `equipmentId`, 통계 `siteId`, 점검 목록 값, 배치 저장 설비 종류), 월별 보고서 31일 달 400 |
-| `inspection-redesign-api.md` | (2026-11-20 요청) 점검 관리 개편 A안: 점검 건 목록 `GET /inspections/schedule` 에 `month` · `from&to` 와 구분 · 결과 칸, 스케줄 추가, 전자 서류 양식 보기 · 저장, 빈 양식 PDF (월별 보고서는 프론트 계산) |
+| `inspection-redesign-api.md` | (2026-11-20 요청) 점검 관리 개편 A안: 점검 건 목록 `GET /inspections/schedule` 에 `month` · `from&to` 와 구분 · 결과 칸, 스케줄 추가, 전자 서류 양식 보기 · 저장, 빈 양식 PDF, 스캔본 ↔ 점검 건 연결(`PUT /inspections/{id}` 의 `scheduleId`). 점검 관리는 F02 만 (변전소 F03 제외) |
 
 ## 이 문서의 성격
 
