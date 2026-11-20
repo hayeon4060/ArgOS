@@ -2,7 +2,7 @@
  * 대시보드 API (설계 자료 API 명세서 B1 '울산공장 현황' 기준)
  * - GET /sites/{siteId}/overview : 지도·공장 카드·센서 종류별 도넛
  * - GET /alarms                  : 오늘 알림 내역 (오늘 0시부터 누적 전부, 최근 순)
- * - GET /alarms/hourly           : 전일 시간대별 알림 (주간·야간, date=어제)
+ * - GET /alarms/hourly           : 전일 시간대별 알림 (date=어제, 화면은 하루 00~24시 한 줄)
  */
 import { serverNow } from './clock'
 import http from './http'
@@ -114,15 +114,36 @@ function mockHourlyOf(alarms) {
 }
 
 /**
- * 전일 시간대별 알림 (주간 07~19시, 야간 19~07시)
+ * 주간·야간 두 칸 응답을 하루 한 줄로 합치기 (2026-11-20 재원님 요청: 주간/야간 구분 없이 하루 0~24시)
+ * - 응답에 hours 가 바로 있으면(백엔드 반영 후) 그대로 씀, 없으면 day + night 를 합침
+ * - TODO(백엔드): 지금 집계 범위는 date 07시 ~ 다음 날 07시라서 합치면 00~06시 칸은 '오늘' 새벽 값.
+ *   date 00시 ~ 24시 범위로 바꾸고 alarmCount · actionCount · hours 를 바로 달라고 요청함
+ *   → docs/api/hourly-alarm-one-day.md
+ * @returns {{ alarmCount: number, actionCount: number, hours: Array<{ hour, warn, alarm, action }> }}
+ */
+function toOneDay(res) {
+  if (Array.isArray(res.hours)) return res
+  const { day, night } = res
+  return {
+    alarmCount: day.alarmCount + night.alarmCount,
+    actionCount: day.actionCount + night.actionCount,
+    hours: [...day.hours, ...night.hours],
+  }
+}
+
+/**
+ * 전일 시간대별 알림 (하루 00~24시 한 줄)
  * - 2026-11-18 화면 제목이 '전일 시간대별 알림'으로 바뀌어 date 를 오늘 → 어제(서버 시연 시계 기준)로 보냄
- * - 예시 데이터 모드: 어제 예시가 따로 없어 오늘 예시 알림으로 그대로 그림
+ * - 서버 응답은 아직 주간(07~19시)·야간(19~07시) 두 칸 → toOneDay 로 합쳐서 돌려줌
+ * - 예시 데이터 모드: 어제 예시가 따로 없어 오늘 예시 알림으로 그대로 그림 (서버와 같은 두 칸 모양으로 만들어 같은 길로 합침)
  * @param {{ siteId?: number, factoryId?: number }} params
- * @returns {Promise<{ day: { alarmCount, actionCount, hours }, night: { ... } }>}
+ * @returns {Promise<{ alarmCount, actionCount, hours }>}
  */
 export function getHourlyAlarms({ siteId, factoryId }) {
-  if (USE_MOCK) return mockOk(mockHourlyOf(mockAlarmsOf({ siteId, factoryId })))
+  if (USE_MOCK) return mockOk(mockHourlyOf(mockAlarmsOf({ siteId, factoryId }))).then(toOneDay)
   const yesterday = serverNow()
   yesterday.setDate(yesterday.getDate() - 1)
-  return http.get('/alarms/hourly', { params: { ...scopeParams({ siteId, factoryId }), date: formatYmd(yesterday) } })
+  return http
+    .get('/alarms/hourly', { params: { ...scopeParams({ siteId, factoryId }), date: formatYmd(yesterday) } })
+    .then(toOneDay)
 }

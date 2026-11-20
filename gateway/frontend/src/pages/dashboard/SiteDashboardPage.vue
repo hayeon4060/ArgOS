@@ -3,6 +3,7 @@
   - 왼쪽: 구역 현황 지도(ZoneMapCard)
   - 오른쪽: 전일 시간대별 알림(HourlyAlarmCard), 오늘 알림 내역(AlarmListCard)
   - 아래: 전체 공장 상태(FactoryStatusCard)를 화면 끝까지 (2026-11-18 센서별 단계 현황 삭제)
+  - 공장 이동 (2026-11-20): 지도에서 공장을 누르면 바로 공장 화면, 공정 배치도가 없는 공장은 안내 문구
   - 이 파일은 데이터 불러오기와 화면 이동만 담당, 모양은 features/dashboard 의 카드가 담당
   - 데이터 (지금은 예시 데이터): GET /sites/{siteId}/overview, GET /alarms, GET /alarms/hourly
   - TODO: 실시간(SSE) 연결 후 값이 바뀌면 카드가 다시 그려지게
@@ -11,11 +12,13 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAlarms, getHourlyAlarms, getSiteOverview } from '@/api/dashboard'
+import AppNotice from '@/components/AppNotice.vue'
 import AlarmListCard from '@/features/dashboard/AlarmListCard.vue'
 import FactoryStatusCard from '@/features/dashboard/FactoryStatusCard.vue'
 import HourlyAlarmCard from '@/features/dashboard/HourlyAlarmCard.vue'
 import ZoneMapCard from '@/features/dashboard/ZoneMapCard.vue'
 import { useLiveReload } from '@/utils/useLiveReload'
+import { useNotice } from '@/utils/useNotice'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,7 +67,18 @@ function enterFactory(factory) {
   router.push({ name: 'dashboard', params: { siteId: route.params.siteId, factoryId: factory.id } })
 }
 
-/** 공장 카드 클릭: 들어갈 수 있으면 이동, 아니면 지도에 말풍선 */
+const { message: noticeMessage, show: showNotice } = useNotice()
+
+/**
+ * 지도에서 공장 클릭: 들어갈 수 있으면 바로 이동, 아니면 안내 문구
+ * - 5공장 말고는 공장 화면 데이터(공정 배치도)가 없어 이동하면 오류 화면이 됨
+ */
+function onMapSelect(factory) {
+  if (factory.id === ENTERABLE_FACTORY_ID) enterFactory(factory)
+  else showNotice(`${factory.name}의 공정 배치도는 아직 등록되지 않았습니다.`)
+}
+
+/** 아래 공장 카드 클릭: 들어갈 수 있으면 이동, 아니면 지도에 말풍선 */
 function onFactorySelect(factory) {
   if (factory.id === ENTERABLE_FACTORY_ID) enterFactory(factory)
   else zoneMap.value?.open(factory.code)
@@ -81,7 +95,7 @@ function onFactorySelect(factory) {
       :site-name="overview.site.name"
       :factories="overview.factories"
       :enterable-factory-id="ENTERABLE_FACTORY_ID"
-      @enter-factory="enterFactory"
+      @select-factory="onMapSelect"
     />
 
     <div class="right">
@@ -91,6 +105,8 @@ function onFactorySelect(factory) {
 
     <FactoryStatusCard class="wide" :factories="overview.factories" @select="onFactorySelect" />
   </div>
+
+  <AppNotice :message="noticeMessage" />
 </template>
 
 <style scoped>
