@@ -11,6 +11,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
+import { toLayoutPx } from '@/utils/screenScale'
 
 const props = defineProps({
   fileName: { type: String, default: '' },
@@ -92,7 +93,8 @@ function down(e) {
 }
 function move(e) {
   if (!drag) return
-  pan.value = [drag.pan[0] + e.clientX - drag.x, drag.pan[1] + e.clientY - drag.y]
+  // 마우스가 움직인 거리(확대된 화면 기준)를 CSS px 로 바꿔서 더함
+  pan.value = [drag.pan[0] + toLayoutPx(e.clientX - drag.x), drag.pan[1] + toLayoutPx(e.clientY - drag.y)]
 }
 const up = () => (drag = null)
 function wheel(e) {

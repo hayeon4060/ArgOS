@@ -8,6 +8,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { transitionState } from './pageTransition'
+import { toLayoutPx } from '@/utils/screenScale'
 
 const box = ref(null)
 const originStyle = ref({})
@@ -21,7 +22,8 @@ watch(
   () => {
     const rect = box.value?.getBoundingClientRect() ?? { left: 0, top: 0 }
     originStyle.value = {
-      '--zoom-origin': `${transitionState.originX - rect.left}px ${transitionState.originY - rect.top}px`,
+      // 누른 위치·rect 는 확대된 화면 기준 → CSS px 로 바꿈 (utils/screenScale.js)
+      '--zoom-origin': `${toLayoutPx(transitionState.originX - rect.left)}px ${toLayoutPx(transitionState.originY - rect.top)}px`,
     }
   },
 )

@@ -51,8 +51,8 @@ function statusText(a) {
 <style scoped>
 .list {
   width: 520px;
-  max-width: calc(100vw - 32px);
-  max-height: min(60vh, 440px);
+  max-width: calc(var(--screen-w) - 32px);
+  max-height: min(calc(var(--screen-h) * 0.6), 440px);
   overflow-y: auto;
   background: #fff;
   border: 1px solid var(--color-border);

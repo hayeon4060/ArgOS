@@ -166,7 +166,7 @@ async function download() {
 <style scoped>
 .wrap {
   display: flex;
-  height: min(760px, calc(100vh - 220px));
+  height: min(760px, calc(var(--screen-h) - 220px));
 }
 
 .months {

@@ -24,14 +24,16 @@ import loginBg from '@/assets/images/login-bg.svg'
   mask-image: radial-gradient(ellipse 520px 430px at 50% 49%, rgba(0, 0, 0, 0.12) 55%, #000 100%);
 }
 
-/* 그림은 1920×1080 크기 그대로 화면 가운데에 둠 */
+/*
+ * 그림(1920×1080)을 화면 전체에 채움 — 비율은 그대로 두고 남는 쪽은 잘라냄 (object-fit: cover)
+ * (전에는 1920×1080 크기로 고정해서, 그보다 큰 화면(QHD 등)에서는 그림이 가장자리까지 닿지 않고 끊겨 보였음)
+ */
 img {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1920px;
-  height: 1080px;
-  margin: -540px 0 0 -960px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   animation: drift 36s ease-in-out infinite alternate;
 }
 

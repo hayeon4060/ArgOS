@@ -126,7 +126,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   bottom: 0;
   z-index: 60; /* 화면 위, 알림 창(90~)·알림 띠(150) 아래 */
   width: 400px;
-  max-width: 100vw;
+  max-width: var(--screen-w);
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--color-border);

@@ -23,6 +23,7 @@ import { HALO_GROUPS, PAINT_EQUIPMENT, keyOfSvgId } from './paintLayout'
 import { mergeByKey } from './processEquipment'
 import paintSvg from '@/assets/images/paint-map.svg?raw'
 import { LEVEL } from '@/types/codes'
+import { toLayoutPx } from '@/utils/screenScale'
 
 const props = defineProps({
   /** 화면용 설비 목록 [{ key, name, level, fan, sensors: [{ tag, type, value, unit, level }] }] (ProcessPage 에서 만듦) */
@@ -252,6 +253,7 @@ function onDown(event) {
 }
 function onDrag(event) {
   if (!drag) return
+  // 마우스 위치와 getScreenCTM 은 둘 다 확대된 화면 기준이라 화면 배율(screenScale)을 따로 나눌 필요 없음
   const dx = (event.clientX - drag.start[0]) / drag.scale
   const dy = (event.clientY - drag.start[1]) / drag.scale
   // 격자에 맞추기: 끈 거리를 격자 칸으로 바꿔 반올림한 뒤 다시 그림 좌표로 (켜져 있지 않으면 그대로)
@@ -333,7 +335,8 @@ function placeChip(svg, h) {
   const left = Math.min(...rects.map((b) => b.left))
   const right = Math.max(...rects.map((b) => b.right))
   const top = Math.min(...rects.map((b) => b.top))
-  chipAt.value = { x: (left + right) / 2 - r.left, y: top - r.top }
+  // getBoundingClientRect 는 확대된 화면 기준 → 칩 위치(CSS px)로 바꿈
+  chipAt.value = { x: toLayoutPx((left + right) / 2 - r.left), y: toLayoutPx(top - r.top) }
 }
 
 /* ───────── 클릭: 설비 선택 (배기팬을 눌러도 그 설비) ───────── */

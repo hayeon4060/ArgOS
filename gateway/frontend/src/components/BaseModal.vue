@@ -84,7 +84,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .box {
   position: relative;
   max-width: 100%;
-  max-height: calc(100vh - 48px);
+  max-height: calc(var(--screen-h) - 48px); /* 화면 높이 (배율 반영, tokens.css) */
   overflow: auto;
   border-radius: 10px;
   background: #fff;

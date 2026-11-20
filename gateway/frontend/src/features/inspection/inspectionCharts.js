@@ -13,7 +13,7 @@ import { chartMotion } from '@/utils/echarts'
 export function gasOption(rows, limit = 30) {
   return {
     ...chartMotion(),
-    grid: { left: 34, right: 92, top: 14, bottom: 26 },
+    grid: { left: 34, right: 112, top: 14, bottom: 26 }, // right: 기준선 글자("기준 30 ppm 미만")가 잘리지 않을 만큼
     xAxis: {
       type: 'category',
       data: rows.map((r) => r.label),
