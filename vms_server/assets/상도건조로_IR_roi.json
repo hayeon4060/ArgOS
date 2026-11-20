@@ -1,0 +1,7 @@
+{
+  "sensor_serial_no": "IR-301",
+  "roi_id": "ROI-01",
+  "frame": { "width": 640, "height": 480 },
+  "bbox": { "x1": 30, "y1": 34, "x2": 330, "y2": 370 },
+  "format": "bbox는 프레임 왼쪽 위가 (0,0)인 픽셀 좌표 (x1,y1)=왼쪽 위, (x2,y2)=오른쪽 아래"
+}
