@@ -7,6 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue'
+import { serverNow } from '@/api/clock'
 import { HAZARDS, HAZARD_META, actionText, hazardOf, isActive, minutesOf, placeOf, shortTime } from './historyFilter'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
@@ -54,7 +55,8 @@ const to = computed(() => Math.min(props.total, page.value * props.perPage))
 
 const view = computed(() => {
   // 조치 중인 건의 '경과' 분 (다시 불러올 때마다 새로 셈, 서버 시각이 있으면 그걸로)
-  const now = props.serverTime ? new Date(props.serverTime).getTime() : Date.now()
+  // 서버(GET /stats/alarms)는 serverTime 을 주지 않음 → 로그인 때 맞춘 시연 시계로 셈 (PC 시계면 날짜가 달라 분이 크게 틀림)
+  const now = props.serverTime ? new Date(props.serverTime).getTime() : serverNow().getTime()
   return (props.rows ?? []).map((r) => {
     const place = placeOf(r.location)
     const active = isActive(r)

@@ -2,7 +2,7 @@
  * 공정 3D 배치도 API (설계 자료 API 명세서 B3 '도장 공정 3D 배치도' 기준)
  * - GET  /processes/{processId}/layout : 설비·센서 목록 (잘 안 바뀌는 값)
  * - GET  /processes/{processId}/status : 지금 값·단계, 배기팬 상태
- * - PUT  /processes/{processId}/layout : 공장 관리 배치 저장 (명세서 H1 — 백엔드 아직 없음)
+ * - PUT  /processes/{processId}/layout : 공장 관리 배치 저장 (명세서 H1, 백엔드 FactoryAdminController)
  * - (2026-11-19 배기팬 켜기·끄기·회전수 POST /equipment/{id}/fan 은 웹에서 안 씀 — 대시보드 배기팬 조절 창 삭제)
  * - GET  /inspections/today            : 오늘 설비 점검 목록
  */

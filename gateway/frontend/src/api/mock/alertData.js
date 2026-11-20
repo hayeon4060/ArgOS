@@ -252,6 +252,9 @@ export function checklistView(checklistId) {
       ? { equipmentName: '상도 건조로 버너실', sensorTag: 'CO-13', valueAtAlarm: 24, unit: 'ppm' }
       : { equipmentName: '상도 건조로 배기팬', sensorTag: 'CT-17', valueAtAlarm: 22.4, unit: 'A' }),
     assignee: { id: c.assigneeId, name: workerName(c.assigneeId) },
+    // 진행 수 — 서버 목록(GET /checklists) 줄은 items 없이 이 두 값만 줌 (ChecklistService.listRow)
+    doneCount: c.doneTimes.length,
+    totalCount: c.items.length,
     sentBy: c.sentBy,
     sentAt: todayAt(c.sentAt),
     remindCount: c.remindCount,

@@ -4,7 +4,7 @@
  * - GET  /chat/rooms/{roomId}/messages      : 글 30개씩 (before 로 이전 것)
  * - POST /chat/rooms/{roomId}/messages      : 보내기 { body, alarmId? } → 상대에게는 SSE chat.message
  * - POST /chat/rooms/{roomId}/read          : 읽음 { lastReadMessageId }
- * - 백엔드(develop)에는 채팅 API 가 없어 명세서 기준 (backend-notes 17장)
+ * - 백엔드 chat/ChatController (대화방 = 사업장, roomId = 사업장 id). 공정 담당자는 403 CHAT_NOT_ALLOWED
  */
 import http from './http'
 import { USE_MOCK, mockFail, mockOk } from './mock'

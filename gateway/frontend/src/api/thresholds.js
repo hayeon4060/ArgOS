@@ -5,8 +5,9 @@
  * - POST /thresholds/simulate           : 저장하지 않고 최근 7일에 적용했을 때 알림 수
  * - PUT  /equipment/{id}/thresholds     : 저장 (version 이 달라졌으면 409)
  * - GET  /thresholds/history            : 변경 이력 (기간·센서·계절로 거름)
- * - GET  /sensors/series (최근 7일, 30분) : 변경 미리보기 그래프 (설비 상세 추이와 같은 API)
+ * - GET  /sensors/series (최근 7일, 10분) : 변경 미리보기 그래프 (설비 상세 추이와 같은 API)
  */
+import { serverNow } from './clock'
 import http from './http'
 import { USE_MOCK, mockFail, mockOk } from './mock'
 import { equipmentThresholds, equipmentTree, history, save, simulate, weekSeries } from './mock/thresholdData'
@@ -56,11 +57,15 @@ export function getThresholdHistory({ equipmentId, from, to, sensorId, season })
   return http.get('/thresholds/history', { params: { equipmentId, from, to, sensorId, season } })
 }
 
-/** 최근 7일 30분 간격 값: { sensorId, tag, unit, warn, alarm, points: [[시각, 값]] } */
+/**
+ * 최근 7일 값: { sensorId, tag, unit, warn, alarm, points: [[시각, 값]] }
+ * - '지금'은 서버 시연 시계 (PC 시계로 보내면 서버 데이터와 날짜가 어긋나 빈 그래프가 됨)
+ * - 간격은 10분: 서버가 받는 step 은 5s · 1m · 10m 뿐 (30m 은 400). 예시 데이터는 30분 간격 그대로
+ */
 export async function getSensorWeek(sensorId) {
   if (USE_MOCK) return mockOk(weekSeries(sensorId))
-  const to = new Date()
+  const to = serverNow()
   const from = new Date(to.getTime() - 7 * 24 * 3600 * 1000)
-  const data = await http.get('/sensors/series', { params: { ids: sensorId, from: from.toISOString(), to: to.toISOString(), step: '30m' } })
+  const data = await http.get('/sensors/series', { params: { ids: sensorId, from: from.toISOString(), to: to.toISOString(), step: '10m' } })
   return data.series[0]
 }

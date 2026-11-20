@@ -21,7 +21,7 @@ import { LEVEL } from '@/types/codes'
 
 const notFound = () => mockFail({ code: 'EQUIPMENT_NOT_FOUND', message: '없는 설비입니다.', status: 404 })
 
-/** 설비 정보: { id, code, name, processId, seq, path, level, runState, sensors: [...], cameraId, activeChecklist } */
+/** 설비 정보: { id, code, name, type, path, level, runState, sensors: [...], cameraId, activeChecklist } (서버는 processId · seq 를 주지 않음) */
 export function getEquipment(equipmentId) {
   if (USE_MOCK) {
     const data = mockEquipment(equipmentId) // 지금 예시 상황으로 만듦

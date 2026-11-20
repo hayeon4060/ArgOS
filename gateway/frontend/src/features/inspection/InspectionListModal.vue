@@ -135,7 +135,7 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PER)))
                 <td><span class="code mono">{{ r.formType }}</span>{{ r.formName }}</td>
                 <td class="file">{{ r.fileName }}</td>
                 <td>{{ r.processName }}</td>
-                <td class="mono">{{ r.status === 'REVIEW' ? `${r.needCheckCount}개` : '–' }}</td>
+                <td class="mono">{{ r.status === 'REVIEW' && r.needCheckCount != null ? `${r.needCheckCount}개` : '–' }}</td>
                 <td>{{ r.uploadedBy }}</td>
                 <td><span class="m-chip" :class="statusChip(r.status).cls">{{ statusChip(r.status).label }}</span></td>
               </tr>

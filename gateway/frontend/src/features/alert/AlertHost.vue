@@ -129,7 +129,7 @@ watch(
       if (reportedIds.has(c.id) || emergency) continue
       reportedIds.add(c.id)
       if (alert.canAct && alert.modal?.type !== 'checklist') {
-        toast(`${c.assignee.name} 님이 체크리스트 ${c.items.length}개 항목을 모두 마쳤습니다.`, {
+        toast(`${c.assignee.name} 님이 체크리스트 ${c.totalCount}개 항목을 모두 마쳤습니다.`, {
           ms: 6000,
           action: '확인하기',
           onAction: () => alert.open('checklist', { alarmId: c.alarmId, checklistId: c.id }),

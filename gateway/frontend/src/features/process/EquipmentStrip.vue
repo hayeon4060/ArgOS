@@ -59,8 +59,8 @@ const checklist = computed(() => (openId.value && !emergency.value ? alert.check
 const checklistText = computed(() => {
   const c = checklist.value
   if (!c) return ''
-  const done = c.items.filter((i) => i.doneAt).length
-  return c.status === 'REPORTED' ? '체크리스트 완료 · 확인 필요' : `체크리스트 ${done}/${c.items.length}`
+  // 서버 목록 줄은 항목(items) 없이 doneCount · totalCount 만 줌
+  return c.status === 'REPORTED' ? '체크리스트 완료 · 확인 필요' : `체크리스트 ${c.doneCount}/${c.totalCount}`
 })
 function openChecklist() {
   alert.open('checklist', { alarmId: checklist.value.alarmId, checklistId: checklist.value.id })

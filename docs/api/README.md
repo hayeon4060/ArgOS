@@ -10,6 +10,7 @@
 | `erd-final-frontend-check.md` | (2026-11-19) 최종 ERD ↔ 프론트 대조: 프론트에서 고친 것, ERD에 없는데 화면이 쓰는 값(확인 요청), 아직 화면에 없는 ERD 기능 |
 | `hourly-alarm-one-day.md` | (2026-11-20 요청) 전일 시간대별 알림 주간/야간 → 하루 00~24시 한 줄 — `GET /alarms/hourly` 범위를 `date 00~24시` 로, `hours[]` 추가 |
 | `backend-feedback-1120.md` | (2026-11-20) 백엔드 피드백 4건 프론트 반영: 그날 점검 목록 API, 열화상 사진 blob, 배기팬 수동 승인 · 거절 버튼, 실제 설비 코드 |
+| `frontend-api-audit-1120.md` | (2026-11-20) 프론트 ↔ 백엔드 API 전수 비교: 프론트에서 고친 13건, 백엔드 요청(알림 `fireId`, 체크리스트 목록 `equipmentId`, 통계 `siteId`, 점검 목록 값), 월별 보고서 31일 달 400 |
 
 ## 이 문서의 성격
 

@@ -3,6 +3,8 @@
   - 아이디·비밀번호 입력, 아이디 저장, 비밀번호 재설정 안내, 로그인 버튼, 권한 안내
   - 로그인 성공(웹 사용 가능한 권한)이면 success 이벤트로 사용자 정보를 넘김
   - 이동·불러오기 화면은 부모(LoginPage)가 담당
+  - 비밀번호를 먼저 바꿔야 하는 계정(로그인 응답 pwResetRequired)이면 비밀번호 변경 창을 먼저 띄움
+    (그 전에는 서버가 다른 API 를 전부 403 으로 막음 — 2026-11-20 전수 비교에서 추가)
 -->
 <script setup>
 import { onMounted, ref } from 'vue'
@@ -13,6 +15,7 @@ import { USE_MOCK } from '@/api/mock'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import AppLogo from '@/components/AppLogo.vue'
+import PasswordModal from '@/features/user/PasswordModal.vue'
 import { SESSION_HOURS } from '@/features/session/sessionConfig'
 import { homeRouteOf } from '@/router/home'
 import { useAuthStore } from '@/stores/auth'
@@ -123,9 +126,38 @@ async function onSubmit() {
     return
   }
 
-  // 4) 아이디 저장 후 부모에 성공 알림
+  // 4) 비밀번호를 먼저 바꿔야 하는 계정이면 변경 창부터 (바꾸면 finish, 취소하면 로그아웃)
+  if (auth.pwResetRequired) {
+    loading.value = false
+    pwOpen.value = true
+    return
+  }
+
+  finish()
+}
+
+/** 아이디 저장 후 부모에 성공 알림 */
+function finish() {
   saveLoginId(rememberId.value ? loginId.value.trim() : '')
   emit('success', auth.user)
+}
+
+/* ───────── 첫 로그인 · 비밀번호 초기화 뒤: 비밀번호 변경 창 ───────── */
+const pwOpen = ref(false)
+
+/** 새 비밀번호로 바꿈 → 이제 다른 화면을 쓸 수 있음 */
+function onPasswordChanged() {
+  auth.passwordChanged()
+  finish()
+}
+
+/** 창이 닫힘: 바꾸지 않고 닫았으면 로그아웃 (바꾼 경우에는 위 onPasswordChanged 가 먼저 불림) */
+async function onPasswordClose() {
+  pwOpen.value = false
+  if (!auth.pwResetRequired) return
+  await auth.logout()
+  password.value = ''
+  alertBox.value = { icon: 'info', title: '비밀번호를 바꿔야 로그인할 수 있습니다', text: '임시 비밀번호로 다시 로그인한 뒤 새 비밀번호를 정해 주세요.' }
 }
 </script>
 
@@ -192,6 +224,14 @@ async function onSubmit() {
     <!-- 예시 데이터 모드 전용 안내 (백엔드 연결 후 사라짐) -->
     <p v-if="showMockHint" class="mock-hint">예시 계정: hq_admin, ulsan5_admin / argos1234</p>
   </form>
+
+  <!-- 임시 비밀번호로 들어온 계정: 지금 비밀번호 = 방금 넣은 임시 비밀번호 -->
+  <PasswordModal
+    :open="pwOpen"
+    notice="임시 비밀번호로 로그인했습니다. 새 비밀번호로 바꾼 뒤 이용할 수 있습니다. '지금 비밀번호'에는 임시 비밀번호를 넣어 주세요."
+    @changed="onPasswordChanged"
+    @close="onPasswordClose"
+  />
 </template>
 
 <style scoped>

@@ -89,7 +89,7 @@ function paintProcess() {
     levelsByType: { CURRENT: typeLevels('CURRENT'), TEMP: typeLevels('TEMP'), CO: typeLevels('CO') },
     abnormal: sensors
       .filter((s) => s.level !== NORMAL)
-      .map((s) => ({ sensorId: s.id, sensorTag: s.tag, type: s.type, value: s.value, unit: s.unit, level: s.level })),
+      .map((s) => ({ sensorId: s.id, tag: s.tag, type: s.type, value: s.value, unit: s.unit, level: s.level })), // 서버 DashboardService.abnormal 과 같은 이름
     thermalMax: THERMAL_MAX[scenario.state],
     hasFloorplan: true,
   }
@@ -196,9 +196,9 @@ export function mockSiteTrees() {
 /* ───────── 사업장 목록 (GET /sites) ───────── */
 
 const SITE_INFO = [
-  { id: 1, code: 'ULS-01', name: '울산공장', address: '울산광역시 북구 염포로 700', lat: 35.5438, lng: 129.3697, processCount: 22 },
-  { id: 2, code: 'ASN-01', name: '아산공장', address: '충청남도 아산시 인주면 현대로 1077', lat: 36.9237, lng: 126.9148, processCount: 6 },
-  { id: 3, code: 'JNJ-01', name: '전주공장', address: '전북특별자치도 완주군 봉동읍 완주산단5로 163', lat: 35.9198, lng: 127.1398, processCount: 7 },
+  { id: 1, code: 'USN', name: '울산공장', address: '울산광역시 북구 염포로 700', lat: 35.5438, lng: 129.3697, processCount: 22 },
+  { id: 2, code: 'ASN', name: '아산공장', address: '충청남도 아산시 인주면 현대로 1077', lat: 36.9237, lng: 126.9148, processCount: 6 },
+  { id: 3, code: 'JJU', name: '전주공장', address: '전북특별자치도 완주군 봉동읍 완주산단5로 163', lat: 35.9198, lng: 127.1398, processCount: 7 },
 ]
 
 /** 사업장 목록 (지금 상황): 단계·센서 개수는 공장 합, 울산 오늘 알림은 알림 목록에서 셈 (아산 1건은 고정) */

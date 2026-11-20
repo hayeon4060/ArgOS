@@ -3,6 +3,8 @@
   - 지금 비밀번호 / 새 비밀번호 / 새 비밀번호 확인
   - 규칙은 백엔드와 같게: 8자 이상, 영문·숫자·특수문자 포함 (설계안은 '영문, 숫자 8자 이상' — 코드 기준)
   - 틀리면 창이 흔들리고 아래 빨간 문구
+  - notice: 창 위쪽 안내 한 줄 (로그인 화면에서 '비밀번호를 먼저 바꿔야 하는 계정'일 때 씀)
+  - 바꾸면 changed → close 순서로 알림 (changed 는 '성공'만, close 는 취소 · 닫기에도)
 -->
 <script setup>
 import { ref, watch } from 'vue'
@@ -13,8 +15,10 @@ import BaseModal from '@/components/BaseModal.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
+  /** 창 위쪽 안내 문구 (없으면 안 보임) */
+  notice: { type: String, default: '' },
 })
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'changed'])
 
 const RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 const p0 = ref('')
@@ -50,6 +54,7 @@ async function submit() {
   try {
     await changeMyPassword({ currentPassword: p0.value, newPassword: p1.value })
     toast('비밀번호를 바꿨습니다.')
+    emit('changed')
     emit('close')
   } catch (error) {
     // 지금 비밀번호 틀림: 백엔드는 401(PASSWORD_MISMATCH)이지만 로그아웃하지 않음 (api/users.js) — 400 으로 바뀌어도 같은 문구
@@ -69,6 +74,7 @@ async function submit() {
           <button type="button" class="m-close" aria-label="닫기" @click="emit('close')"><AppIcon name="x" /></button>
         </div>
         <form class="pf" novalidate autocomplete="off" @submit.prevent="submit">
+          <p v-if="notice" class="notice">{{ notice }}</p>
           <label for="pw0">지금 비밀번호</label>
           <input id="pw0" v-model="p0" type="password" class="inp" autocomplete="current-password" />
           <label for="pw1">새 비밀번호</label>
@@ -96,6 +102,16 @@ async function submit() {
   display: flex;
   flex-direction: column;
   padding: 22px 28px 24px;
+}
+
+.notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-level-warn-bg, #fff7ed);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
 }
 
 .pf label {
