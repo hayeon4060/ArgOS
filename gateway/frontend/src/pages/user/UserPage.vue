@@ -271,6 +271,11 @@ onMounted(async () => {
   overflow-y: auto;
 }
 
+/* 권한별 요약 카드는 줄지 않음 → 남는 높이는 권한별 사용 범위 카드가 받고, 모자라면 그 표만 스크롤 */
+.left > :first-child {
+  flex: none;
+}
+
 @media (max-width: 1600px) {
   .grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
