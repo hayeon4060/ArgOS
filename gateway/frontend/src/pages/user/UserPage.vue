@@ -156,7 +156,7 @@ onMounted(async () => {
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />
-      <span class="desc">사용자를 조회 · 등록 · 수정 · 삭제</span>
+      <span class="desc">사용자 조회 · 등록 · 수정 · 삭제</span>
       <label class="search">
         <AppIcon name="search" :size="16" />
         <input type="search" placeholder="이름, 아이디 검색" aria-label="사용자 검색" @input="onSearch" />

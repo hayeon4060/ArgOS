@@ -29,7 +29,7 @@ export const groupOfType = (type) => LOG_GROUPS.find((g) => g.types.includes(typ
 
 /** 기간 (설계안: 오늘 / 7일 / 30일, 처음 7일) */
 export const PERIODS = [
-  { value: 'today', label: '오늘', days: 1, sub: '오늘' },
+  { value: 'today', label: '금일', days: 1, sub: '금일' },
   { value: '7d', label: '7일', days: 7, sub: '최근 7일' },
   { value: '30d', label: '30일', days: 30, sub: '최근 30일' },
 ]

@@ -86,7 +86,7 @@ export function trendOption({ series, level, dec, liveValue, showPrev, wholeDay,
     },
     series: [
       {
-        name: '오늘',
+        name: '금일',
         type: 'line',
         data,
         smooth: 0.3,
@@ -138,7 +138,7 @@ export function trendOption({ series, level, dec, liveValue, showPrev, wholeDay,
           : undefined,
       },
       {
-        name: '전날',
+        name: '전일',
         type: 'line',
         data: showPrev ? prev : [],
         smooth: 0.3,

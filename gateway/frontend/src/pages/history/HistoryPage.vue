@@ -221,7 +221,7 @@ useLiveReload(() => query({ silent: true }))
         <!-- 오른쪽: 일별 추이 · 공정별 알림, 상세 패널이 그 위를 덮음 -->
         <div class="side">
           <TrendCard :trend="trendView" :sub="trendSub" :show-shift="!filter.shift" />
-          <ProcessCard :rows="data.byProcess" :sub="`센서 종류별 · ${periodLabel} 합계`" />
+          <ProcessCard :rows="data.byProcess" :sub="`${periodLabel} 합계`" />
           <Transition name="panel">
             <AlarmDetailPanel
               v-if="selectedId"

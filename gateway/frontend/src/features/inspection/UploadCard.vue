@@ -45,7 +45,7 @@ function choose() {
 </script>
 
 <template>
-  <BaseCard class="up-card" title="서류 등록" sub="수기 서류 스캔 파일">
+  <BaseCard class="up-card" title="서류 등록">
     <div
       class="drop"
       :class="{ over, off: readOnly }"

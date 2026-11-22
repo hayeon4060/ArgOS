@@ -67,7 +67,7 @@ useOutsideClose(adminRoot, adminOpen)
             <AppIcon :name="item.icon" :size="16" />
             <span>
               <b>{{ item.label }}</b>
-              <small>{{ item.sub }}</small>
+              <small v-if="item.sub">{{ item.sub }}</small>
             </span>
           </RouterLink>
         </div>

@@ -3,7 +3,7 @@
   - 고리 게이지 + '전류 CT-17' + 기준 글자 두 줄
     · 정상: '평소 18.0 A'  / 주의·경보: '주의 기준 21.6 A 초과' (주황 #F97316 · 빨강 #DC2626 굵게)
       (서버가 평소 값(usual)을 아직 안 줌 → 값이 없으면 '정상 범위', 예전엔 '평소 NaN' 이 보였음)
-    · '주의 21.6 · 경보 27 A'
+    · '주의 21.6 · 경보 27 A' (주의 값 주황 · 경보 값 빨강, 2026-11-22 재원님 요청)
   - sensor 가 없으면(이 설비에 그 종류 센서가 없음) 점선 동그라미 + '전류 센서 없음'
   - sensor.level 은 화면에 보여 줄 단계 (EquipmentPage 에서 지금 값과 기준을 비교해 다시 정함 → utils/sensorLevel.js)
 -->
@@ -61,7 +61,9 @@ const stateText = computed(() => {
       <div class="th" :class="{ warn: isWarn, alarm: isAlarm }">
         {{ stateText }}
       </div>
-      <div class="th">주의 {{ sensor.warn }} · 경보 {{ sensor.alarm }} {{ sensor.unit }}</div>
+      <div class="th">
+        <span class="lv-warn">주의 {{ sensor.warn }}</span> · <span class="lv-alarm">경보 {{ sensor.alarm }}</span> {{ sensor.unit }}
+      </div>
     </template>
 
     <template v-else>
@@ -125,6 +127,17 @@ const stateText = computed(() => {
 .th.alarm {
   color: var(--color-level-alarm); /* #DC2626 */
   font-weight: 700;
+}
+
+/* 아래 줄 기준 값: 단계 색 */
+.lv-warn {
+  color: var(--color-level-warn); /* #F97316 */
+  font-weight: 600;
+}
+
+.lv-alarm {
+  color: var(--color-level-alarm); /* #DC2626 */
+  font-weight: 600;
 }
 
 /* 센서 없음: 점선 동그라미 */

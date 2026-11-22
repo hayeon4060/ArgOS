@@ -23,7 +23,7 @@ const emit = defineEmits(['close', 'pick'])
 const PER = 11
 const today = new Date()
 const QUICK = [
-  { value: 'today', label: '오늘' },
+  { value: 'today', label: '금일' },
   { value: '7d', label: '7일' },
   { value: 'month', label: '이번 달' },
 ]

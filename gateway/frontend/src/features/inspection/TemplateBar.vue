@@ -38,7 +38,6 @@ async function download() {
     <button type="button" class="tpl" :disabled="busy" @click="download">
       <span class="fc mono">{{ f }}</span>{{ FORM_LABEL[f] }}<AppIcon name="download" :size="15" />
     </button>
-    <span class="hint">빈 양식을 인쇄해 현장에서 손으로 쓰고, 스캔해 아래 '서류 등록'에 올립니다.</span>
   </div>
 </template>
 
@@ -99,12 +98,6 @@ h3 svg {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--color-primary);
-}
-
-.hint {
-  margin-left: 6px;
-  font-size: 12.5px;
-  color: var(--color-text-weak);
 }
 
 button:disabled {

@@ -66,7 +66,7 @@ function add() {
       </span>
     </template>
     <template #actions>
-      <button type="button" class="btn btn-sm" @click="goToday">오늘</button>
+      <button type="button" class="btn btn-sm" @click="goToday">금일</button>
       <button v-if="!readOnly" type="button" class="btn btn-sm btn-primary" @click="add"><AppIcon name="plus" :size="14" />스케줄 추가</button>
     </template>
 

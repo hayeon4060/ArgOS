@@ -35,7 +35,7 @@ let seq = 0
 const rep = computed(() => buildReport(items.value, ym.value, props.today))
 const note = computed(() => {
   if (rep.value.future) return ''
-  if (rep.value.partial) return `이번 달은 오늘(${rep.value.to.slice(5)})까지만 담습니다.`
+  if (rep.value.partial) return `이번 달은 금일(${rep.value.to.slice(5)})까지만 담습니다.`
   return `${rep.value.from.slice(5)} ~ ${rep.value.to.slice(5)} 전체`
 })
 const MISS = SCHEDULE_STATE.DELAYED.label
