@@ -1,6 +1,6 @@
 <!--
   로그인 카드 (화면설계안 js/v-login.js, css/views.css .lc 기준)
-  - 아이디·비밀번호 입력, 아이디 저장, 비밀번호 재설정 안내, 로그인 버튼, 권한 안내
+  - 아이디·비밀번호 입력, 아이디 저장, 비밀번호 재설정 안내, 로그인 버튼
   - 로그인 성공(웹 사용 가능한 권한)이면 success 이벤트로 사용자 정보를 넘김
   - 이동·불러오기 화면은 부모(LoginPage)가 담당
   - 비밀번호를 먼저 바꿔야 하는 계정(로그인 응답 pwResetRequired)이면 비밀번호 변경 창을 먼저 띄움
@@ -11,7 +11,6 @@ import { onMounted, ref } from 'vue'
 import LoginAlert from './LoginAlert.vue'
 import LoginField from './LoginField.vue'
 import LoginSubmit from './LoginSubmit.vue'
-import { USE_MOCK } from '@/api/mock'
 import AppCheckbox from '@/components/AppCheckbox.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import AppLogo from '@/components/AppLogo.vue'
@@ -57,9 +56,6 @@ const shaking = ref(false) // 실패 시 카드 흔들기
 
 const loginIdField = ref(null)
 const passwordField = ref(null)
-
-// 예시 데이터 모드면 예시 계정 안내를 보여 줌
-const showMockHint = USE_MOCK
 
 onMounted(() => {
   // 저장된 아이디가 있으면 비밀번호 칸에, 없으면 아이디 칸에 커서
@@ -215,14 +211,6 @@ async function onPasswordClose() {
     <p v-if="notice" class="notice">{{ notice }}</p>
 
     <LoginSubmit :loading="loading" />
-
-    <p class="guide">
-      계정 권한에 따라 로그인 후 첫 화면이 다릅니다.<br />
-      본사 관리자: 사업장 선택 · 공장 담당자: 담당 공장 대시보드
-    </p>
-
-    <!-- 예시 데이터 모드 전용 안내 (백엔드 연결 후 사라짐) -->
-    <p v-if="showMockHint" class="mock-hint">예시 계정: hq_admin, ulsan5_admin / argos1234</p>
   </form>
 
   <!-- 임시 비밀번호로 들어온 계정: 지금 비밀번호 = 방금 넣은 임시 비밀번호 -->
@@ -239,8 +227,9 @@ async function onPasswordClose() {
   position: relative;
   width: 440px;
   max-width: calc(100% - 32px);
-  margin: max(32px, calc(var(--screen-h) / 2 - 296px)) auto 80px;
-  padding: 44px 40px 32px;
+  /* 카드 높이(약 476px)의 절반 + 10px → 화면 가운데보다 살짝 위 (안내 문구 삭제로 카드가 줄어 다시 맞춤) */
+  margin: max(32px, calc(var(--screen-h) / 2 - 248px)) auto 80px;
+  padding: 44px 40px 40px;
   background: #fff;
   border: 1px solid var(--color-border-card);
   border-radius: 10px;
@@ -314,20 +303,5 @@ h1 {
   margin-top: 8px;
   font-size: 12.5px;
   color: var(--color-text-sub);
-}
-
-.guide {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--color-border);
-  font-size: 12.5px;
-  color: #64748b;
-  line-height: 20px;
-}
-
-.mock-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--color-text-weak);
 }
 </style>
