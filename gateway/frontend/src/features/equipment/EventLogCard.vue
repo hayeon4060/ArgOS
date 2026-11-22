@@ -2,7 +2,6 @@
   '이벤트 이력' 카드 (설계안 vEquip() #lg2): 오늘 이벤트를 최근 순으로
   - 위쪽 구분 버튼으로 걸러 보기 (전체 / 알람 / 조치 / 기준값). 바꿀 때마다 줄이 다시 차례로 나타남
   - 아래: 이전 이력은 통계·이력 관리 화면으로
-  - 기준값 조정 줄의 '기준값 관리에서 보기' → threshold 이벤트 (화면이 기준값 관리 창을 엶)
 -->
 <script setup>
 import { computed, ref } from 'vue'
@@ -18,8 +17,6 @@ const props = defineProps({
   historyTo: { type: Object, required: true },
 })
 
-const emit = defineEmits(['threshold'])
-
 const filter = ref('ALL')
 const rows = computed(() => (filter.value === 'ALL' ? props.events : props.events.filter((e) => e.type === filter.value)))
 </script>
@@ -33,7 +30,7 @@ const rows = computed(() => (filter.value === 'ALL' ? props.events : props.event
     <div class="body">
       <!-- key 를 걸러 보기 값으로 → 바꿀 때마다 줄이 새로 그려지며 다시 나타남 -->
       <div v-if="rows.length" :key="filter" class="list">
-        <EventRow v-for="(e, i) in rows" :key="e.at + e.text" :event="e" :index="i" @threshold="emit('threshold')" />
+        <EventRow v-for="(e, i) in rows" :key="e.at + e.text" :event="e" :index="i" />
       </div>
       <div v-else class="empty">
         <AppIcon name="clock" :size="24" />
