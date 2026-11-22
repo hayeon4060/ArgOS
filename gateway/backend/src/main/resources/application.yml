@@ -81,6 +81,10 @@ argos:
   # 방송 시스템 REST API 주소. 비우면 로그만
   broadcast:
     url: ${BROADCAST_API_URL:}
+    # 방송 시스템이 키를 요구하면 X-API-Key 헤더로 보냄. 비우면 헤더 없음
+    api-key: ${BROADCAST_API_KEY:}
+    # 연결 · 응답 대기 시간 (ms). 시작은 실패하면 한 번 더 시도
+    timeout-ms: ${BROADCAST_TIMEOUT_MS:3000}
 
 # API 명세서. 운영에서 숨기려면 ARGOS_API_DOCS=false
 springdoc:

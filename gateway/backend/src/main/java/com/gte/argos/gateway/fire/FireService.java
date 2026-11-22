@@ -117,7 +117,8 @@ public class FireService {
             return;
         }
         String message = broadcastMessage(a.processId(), m);
-        boolean ok = broadcast.start(fireId, a.plantId(), a.processId(), message);
+        boolean ok = broadcast.start(new BroadcastSender.Start(fireId, a.plantId(), a.factoryId(), a.processId(),
+                a.equipmentId(), location(a.factoryId(), a.processId(), a.equipmentId(), m, false), message, detected));
         if (ok) {
             jdbc.update("UPDATE fire_incident SET broadcast_started_at = :now WHERE fire_id = :id",
                     new MapSqlParameterSource("now", now).addValue("id", fireId));
@@ -318,7 +319,7 @@ public class FireService {
                        broadcast_ended_at = COALESCE(broadcast_ended_at, :now)
                 WHERE fire_id = :id
                 """, new MapSqlParameterSource("by", scope.userId()).addValue("now", now).addValue("id", fireId));
-        broadcast.stop(fireId);
+        broadcast.stop(fireId, "CLEARED");
         pushWorkers(f.processId(), "FIRE_CLEARED", fireId);
         checklists.addAction(f.alarmId(), "MANUAL_NOTE", "화재 해제", "OK",
                 memo == null || memo.isBlank() ? "화재 경보 해제" : "화재 경보 해제: " + memo, scope.userId(), now);
@@ -356,7 +357,7 @@ public class FireService {
                        broadcast_ended_at = COALESCE(broadcast_ended_at, :now)
                 WHERE fire_id = :id
                 """, new MapSqlParameterSource("now", now).addValue("id", f.id()));
-        broadcast.stop(f.id());
+        broadcast.stop(f.id(), "AUTO_CLEARED");
         pushWorkers(f.processId(), "FIRE_CLEARED", f.id());
         checklists.addAction(alarmId, "MANUAL_NOTE", "화재 자동 해제", "OK", "값이 정상으로 돌아와 화재 경보 자동 해제",
                 null, now);
