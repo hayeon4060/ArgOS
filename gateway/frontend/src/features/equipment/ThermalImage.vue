@@ -6,9 +6,13 @@
   - 설비 상세 '열화상 카메라' 카드와 주의 상세 창(열화상 이미지)이 같이 씀
   - 그림 비율은 4:3, 폭은 감싸는 쪽이 정함
   - 서버 사진('/api/v1/thermal/images/{fileId}')은 로그인이 필요해 useThermalSrc 로 받아서 띄움
-  - streamUrl 이 있으면(3단계, thermalStream.js 가 고름) 사진 대신 VMS 영상(mp4)을 반복 재생
-    · 영상이 뜨기 전에는 사진을 포스터로 보여 줌
-    · 영상 오류(404 등)나 STREAM_TIMEOUT_MS 안에 첫 장면이 안 오면(VMS 방화벽 막힘 등) 사진으로 되돌림
+  - streamUrl 이 있으면(3단계, thermalStream.js 가 고름) 사진 위에 VMS 영상(mp4)을 반복 재생
+    · 사진은 늘 아래에 깔려 있고, 영상은 첫 장면이 온 뒤에만 그 위에 보임 (실패해도 화면이 비지 않음)
+    · 영상 오류(404 등)나 STREAM_TIMEOUT_MS 안에 첫 장면이 안 오면(VMS 방화벽 막힘 등) 사진 그대로
+    · 실패하면 STREAM_RETRY_MS 뒤에 다시 시도 (2026-11-20 추가)
+      VMS 는 자기가 3단계로 판정한 동안만 영상을 주는데(아니면 404), 화재 창은 그보다 먼저 열리거나 오래 열려 있을 수 있어서
+  - VMS 가 보낸 진짜 사진·영상에는 LIVE · 카메라 이름 · 색 눈금 · 최고 지점이 이미 그려져 있음
+    → 그때는 우리 표시를 숨김 (겹쳐서 LIVE 가 두 개로 보였음). 예시 그림일 때만 우리 표시
 -->
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -17,6 +21,8 @@ import { useThermalSrc } from './useThermalSrc'
 
 /** 영상 첫 장면을 기다리는 시간 (넘으면 사진으로) */
 const STREAM_TIMEOUT_MS = 7000
+/** 영상이 실패한 뒤 다시 시도할 때까지 기다리는 시간 */
+const STREAM_RETRY_MS = 10000
 
 const props = defineProps({
   imageUrl: { type: String, required: true },
@@ -41,37 +47,53 @@ const props = defineProps({
 // <img> 에 넣을 주소 (서버 사진이면 blob:, 예시 그림이면 그대로)
 const src = useThermalSrc(() => props.imageUrl)
 
+// 서버(VMS)가 보낸 진짜 사진인지 — 서버 사진만 blob: 주소가 됨 (useThermalSrc), 예시 그림은 아님
+const vmsPhoto = computed(() => !!src.value?.startsWith('blob:'))
+
 // ── 실시간 영상 ──
-// 영상이 실패했는지 (true 면 사진으로). 주소 글자가 바뀔 때만 다시 시도함
-// (설비 화면이 열화상을 다시 받아도 같은 주소면 죽은 영상을 또 부르지 않음)
-const streamFailed = ref(false)
+// tryVideo: <video> 를 올려 재생을 시도하는 중 / playing: 첫 장면이 와서 영상이 보이는 중
+const tryVideo = ref(false)
+const playing = ref(false)
 let timer = null
+let warned = false // 실패 안내는 주소마다 콘솔에 한 번만
 const clearTimer = () => {
   clearTimeout(timer)
   timer = null
 }
 
+/** 영상 재생 시도 (주소가 없으면 사진만) */
+function startVideo() {
+  clearTimer()
+  playing.value = false
+  tryVideo.value = !!props.streamUrl
+  // 주소에 닿지 못하면 error 없이 오래 멈춰 있을 수 있어서 시간 제한을 둠
+  if (tryVideo.value) timer = setTimeout(failVideo, STREAM_TIMEOUT_MS)
+}
+
+/** 영상 실패(404 · 연결 실패 · 시간 초과) → 사진만 보여 주고, 조금 뒤 다시 시도 */
+function failVideo() {
+  clearTimer()
+  playing.value = false
+  tryVideo.value = false
+  if (!warned) console.warn('[열화상] 영상을 재생하지 못해 사진을 보여 줍니다 (10초마다 다시 시도):', props.streamUrl)
+  warned = true
+  timer = setTimeout(startVideo, STREAM_RETRY_MS)
+}
+
+/** 첫 장면 도착 → 시간 제한 끄고 영상을 보여 줌 */
+function onVideoLoaded() {
+  clearTimer()
+  playing.value = true
+}
+
 watch(
   () => props.streamUrl,
-  (url) => {
-    streamFailed.value = false
-    clearTimer()
-    if (!url) return
-    // 주소에 닿지 못하면 error 없이 오래 멈춰 있을 수 있어서 시간 제한을 둠
-    timer = setTimeout(() => (streamFailed.value = true), STREAM_TIMEOUT_MS)
+  () => {
+    warned = false
+    startVideo()
   },
   { immediate: true },
 )
-
-const showVideo = computed(() => !!props.streamUrl && !streamFailed.value)
-
-/** 첫 장면 도착 → 시간 제한 끔 */
-const onVideoLoaded = () => clearTimer()
-/** 영상 오류(404 · 연결 실패 등) → 사진으로 */
-function onVideoError() {
-  clearTimer()
-  streamFailed.value = true
-}
 
 onBeforeUnmount(clearTimer)
 
@@ -80,28 +102,28 @@ const point = computed(() => (props.maxPoint ? { left: `${props.maxPoint.x * 100
 
 <template>
   <div class="ir">
-    <!-- 3단계: VMS 영상 (자동 재생은 muted 가 꼭 있어야 함, 오류 · 시간 초과면 아래 사진으로) -->
+    <!-- 사진은 늘 깔아 둠 (VMS 사진은 그 안의 글자가 잘리지 않게 전체 보이기) -->
+    <img v-if="src" class="frame" :class="{ live, whole: vmsPhoto }" :src="src" alt="열화상 카메라 장면" />
+    <!-- 3단계: VMS 영상을 사진 위에 (자동 재생은 muted 가 꼭 있어야 함). 첫 장면이 올 때까지는 투명 -->
     <video
-      v-if="showVideo"
-      class="frame"
-      :class="{ live }"
+      v-if="tryVideo"
+      class="frame video"
+      :class="{ live, ready: playing }"
       :src="streamUrl"
-      :poster="src ?? undefined"
       autoplay
       muted
       loop
       playsinline
       aria-label="열화상 카메라 실시간 영상"
       @loadeddata="onVideoLoaded"
-      @error="onVideoError"
+      @error="failVideo"
     />
-    <img v-else-if="src" class="frame" :class="{ live }" :src="src" alt="열화상 카메라 장면" />
     <!--
-      사진 위 표시(LIVE · 구역 이름 · 색 눈금 · 최고 지점 · 시각)는 사진일 때만.
-      VMS 영상에는 LIVE · 카메라 이름 · 색 눈금 · 최고 지점이 이미 그려져 있어 겹치고,
-      최고 지점은 사진 한 장 기준이라 움직이는 영상과 맞지 않음
+      우리 표시(LIVE · 구역 이름 · 색 눈금 · 최고 지점 · 시각)는 예시 그림일 때만.
+      VMS 영상 · VMS 사진에는 같은 표시가 이미 그려져 있어 겹치고,
+      최고 지점 위치도 예시 그림 기준이라 실제 장면과 맞지 않음
     -->
-    <template v-if="!showVideo">
+    <template v-if="!playing && !vmsPhoto">
       <div class="tl">
         <span class="tag"><template v-if="live"><i />LIVE</template><template v-else>SNAPSHOT</template></span>
         <span v-if="zoneName" class="tag name">{{ zoneName }}</span>
@@ -136,10 +158,24 @@ const point = computed(() => (props.maxPoint ? { left: `${props.maxPoint.x * 100
   object-fit: cover;
 }
 
-/* 영상은 화면 안에 글자(카메라 이름 · 눈금)가 그려져 있어 잘리지 않게 전체를 보여 줌
+/* VMS 영상 · VMS 사진은 화면 안에 글자(카메라 이름 · 눈금)가 그려져 있어 잘리지 않게 전체를 보여 줌
    (본사 화재 상세처럼 넓은 칸이면 양옆이 어두운 바탕으로 남음) */
-video.frame {
+.frame.whole,
+.frame.video {
   object-fit: contain;
+}
+
+/* 영상은 사진 위에 겹쳐 두고, 첫 장면이 오면 보이게 함
+   (display: none 으로 숨기면 브라우저가 자동 재생을 미룰 수 있어 투명도로 숨김) */
+.frame.video {
+  position: absolute;
+  inset: 0;
+  background: #0b0720;
+  opacity: 0;
+}
+
+.frame.video.ready {
+  opacity: 1;
 }
 
 /* 실시간일 때 밝기가 살짝 일렁임 (설계안 irflick 3초) */
