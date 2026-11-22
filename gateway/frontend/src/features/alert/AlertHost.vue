@@ -5,6 +5,8 @@
   - 하는 일
     · 처음 + 데이터가 바뀔 때마다 대응 중인 알림·체크리스트를 다시 받음 (useLiveReload)
     · 새 알림이 생기면 (화재 > 경보 > 주의 중 높은 것 하나)
+      같은 설비에 경보·화재가 진행 중이면 그 설비의 주의는 새 알림으로 안 봄 (stores/alert.js visibleAlarms, 2026-11-22 2중 알림)
+      → 경보가 끝난 뒤에도 그 주의가 '발생 중'이면 그때 주의 알림 창이 뜸
       공장 담당자: 주의 알림 창 / 경보·화재 대응 창을 바로 띄움 (경보·화재는 열려 있던 창 위로)
       본사 관리자: 알림 띠 ('위치 보기', 화재는 '화재 현황 보기'로 닫을 때까지)
     · 담당자가 체크리스트를 모두 마치면: 알림 띠 '확인하기' → 체크리스트 진행 창
@@ -89,7 +91,7 @@ function closeStale(list) {
 }
 
 watch(
-  () => alert.activeAlarms,
+  () => alert.visibleAlarms,
   (list) => {
     const first = !known
     const before = known ?? {}
@@ -99,7 +101,7 @@ watch(
       closeFireToast()
       closeFireToast = null
     }
-    closeStale(list)
+    closeStale(alert.activeAlarms) // 창 정리는 숨긴 주의까지 포함한 전체 목록으로
     // 새로 '발생 중(OPEN)'이 된 알림 (처음이면 지금 OPEN 인 것 전부)
     const fresh = list.filter((a) => a.status === 'OPEN' && before[a.id] !== 'OPEN')
     if (!fresh.length) return

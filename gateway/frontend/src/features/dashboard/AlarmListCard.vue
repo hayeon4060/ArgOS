@@ -45,9 +45,9 @@ watch(
   { immediate: true },
 )
 
-/** 진행 중 알림 → 알맞은 창 (본사 관리자가 조치 전 알림을 누르면 안내만) */
+/** 진행 중 알림 → 알맞은 창 (조치 중 주의는 단추 이름대로 체크리스트 진행 창, 본사 관리자가 조치 전 알림을 누르면 안내만) */
 function onAct(alarm) {
-  if (!alert.openFor(alarm)) toast('주의 확인과 조치는 공장 담당자 화면에서 합니다.', { type: 'info' })
+  if (!alert.openFor(alarm, { checklist: true })) toast('주의 확인과 조치는 공장 담당자 화면에서 합니다.', { type: 'info' })
 }
 
 /**

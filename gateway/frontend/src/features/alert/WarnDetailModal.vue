@@ -11,6 +11,7 @@
   - 데이터: GET /alarms/{id}/detail, GET /checklist-templates, GET /processes/{id}/workers
   - 전송: POST /checklists → '보내는 중' → 알림 띠 → 창 닫힘 (상단 바에 체크리스트 진행이 나타남)
   - 이미 보낸 알림이면 항목을 고칠 수 없고 단추는 '전송 완료'
+    (2026-11-22) 보낸 뒤 상단 바 '주의' 를 눌러도 이 창이 열림 → 보낸 체크리스트의 항목·받는 사람을 GET /checklists/{id} 로 채움
 -->
 <script setup>
 import { computed, onMounted, ref } from 'vue'
@@ -24,7 +25,7 @@ import WarnCause from './WarnCause.vue'
 import WarnSensorRows from './WarnSensorRows.vue'
 import WorkerPicker from './WorkerPicker.vue'
 import { getAlarmDetail } from '@/api/alarms'
-import { getChecklistTemplate, getProcessWorkers, sendChecklist } from '@/api/checklists'
+import { getChecklist, getChecklistTemplate, getProcessWorkers, sendChecklist } from '@/api/checklists'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import ThermalImage from '@/features/equipment/ThermalImage.vue'
@@ -50,17 +51,21 @@ const errorMessage = ref('')
 onMounted(async () => {
   try {
     const d = await getAlarmDetail(props.alarmId)
-    const [template, list] = await Promise.all([
+    // 이미 보낸 알림: 보낸 체크리스트 번호 (알림 목록 줄의 checklist.id)
+    const sentId = d.status === 'ACTING' ? alert.activeAlarms.find((a) => a.id === props.alarmId)?.checklist?.id : null
+    const [template, list, sentList] = await Promise.all([
       // 센서 종류: 백엔드 detail 에는 sensorType 이 없어 알림 센서에서 찾음 (전류로 고정하지 않음)
       getChecklistTemplate({ equipmentType: d.equipmentType, sensorType: sensorTypeOfDetail(d) }),
       getProcessWorkers(d.processId),
+      sentId ? getChecklist(sentId).catch(() => null) : null, // 못 받으면 기본 항목으로 보여 줌
     ])
     detail.value = d
-    items.value = [...template.items]
+    items.value = sentList?.items?.length ? sentList.items.map((i) => i.content) : [...template.items]
     templateId.value = template.templateId
     workers.value = list
     // 기본 선택: 근무 중인 첫 번째 담당자 (화면설계서: 근무 중이고 진행 건이 가장 적은 사람 → 진행 건 수는 API 에 없음)
-    assigneeId.value = list.find((w) => w.onDuty)?.id ?? list[0]?.id ?? null
+    // 이미 보냈으면 그 체크리스트를 받은 사람
+    assigneeId.value = sentList?.assignee?.id ?? list.find((w) => w.onDuty)?.id ?? list[0]?.id ?? null
   } catch (error) {
     errorMessage.value = error.message
   }
@@ -187,7 +192,7 @@ async function send() {
           <ChecklistEditor v-model="items" :readonly="sent()" class="gap" />
 
           <div class="m-sect top"><AppIcon name="phone" :size="15" />전송 대상</div>
-          <WorkerPicker v-model="assigneeId" :workers="workers" :process-name="placeOf(detail).processName" class="gap" />
+          <WorkerPicker v-model="assigneeId" :workers="workers" :process-name="placeOf(detail).processName" :disabled="sent()" class="gap" />
 
           <p class="note">
             체크리스트와 센서 값, 열화상 이미지가 함께 전송됩니다.<br />

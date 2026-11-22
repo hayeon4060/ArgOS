@@ -6,7 +6,9 @@
   - 대응 중인 알림이 여러 건이면 (2026-11-19 재원님 요청): '주의 2건  상도 건조로 외 1건 · 눌러서 선택 ⌄'
     누르면 띠 아래로 목록(AlertPillList)이 미끄러져 내려오고, 한 건을 고르면 그 알림 창이 열림
     목록은 바깥을 누르거나 Esc, 다시 띠를 누르면 닫힘
-  - 누르면(한 건일 때 · 목록에서 골랐을 때): 공장 담당자 → 알림 상태에 맞는 창 (주의 알림 / 주의 상세 / 체크리스트 진행 / 경보·화재 대응)
+  - 누르면(한 건일 때 · 목록에서 골랐을 때): 공장 담당자 → 알림 상태에 맞는 창 (주의 알림 / 주의 상세 / 경보·화재 대응)
+    체크리스트를 보낸 뒤(조치 중)에도 주의 상세 (2026-11-22 재원님 요청, 체크리스트는 상단 바 '체크리스트 진행' 단추)
+  - 같은 설비에 경보·화재가 진행 중이면 그 설비의 주의는 띠·목록에 안 나옴 (2026-11-22 재원님 요청: 2중 알림)
             본사 관리자 → 화재면 사업장 선택(화재 현황), 그 밖에는 그 공정 배치도 화면으로 (조치는 공장 담당자 몫)
   - 색: 재원님이 정한 주의색 #F97316 (설계안은 띠 바탕만 조금 진한 #EA580C)
 -->
@@ -23,7 +25,8 @@ const alert = useAlertStore()
 
 const a = computed(() => alert.primary)
 const meta = computed(() => LEVEL_META[a.value?.level] ?? null)
-const count = computed(() => alert.activeAlarms.filter((x) => x.level === a.value?.level).length)
+// 건수: 같은 설비 경보 중인 주의는 뺀 목록으로 (stores/alert.js visibleAlarms)
+const count = computed(() => alert.visibleAlarms.filter((x) => x.level === a.value?.level).length)
 const isFire = computed(() => a.value?.level === LEVEL.FIRE)
 // 설비 이름: 위치의 마지막 칸에서 부품 이름을 뺌 ('상도 건조로 배기팬' → '상도 건조로'), 화재는 부품까지
 const where = computed(() => {
@@ -32,7 +35,7 @@ const where = computed(() => {
 })
 
 /* ───────── 여러 건일 때 내려오는 목록 ───────── */
-const total = computed(() => alert.activeAlarms.length)
+const total = computed(() => alert.visibleAlarms.length)
 const many = computed(() => total.value > 1)
 const listOpen = ref(false)
 const root = ref(null)
