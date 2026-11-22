@@ -376,6 +376,7 @@ public class InspectionService {
         }
         Map<String, Object> form = form(String.valueOf(r.get("form_type")));
         List<Map<String, Object>> fields = merge(fields(r), changes == null ? List.of() : changes);
+        normalizeChoices(fields, form);
         List<String> bad = validate(fields, form);
         if (!bad.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "날짜·숫자 형식을 확인하세요.",
@@ -574,10 +575,15 @@ public class InspectionService {
             Map<String, Object> copy = new LinkedHashMap<>(f);
             for (Map<String, Object> c : changes) {
                 if (String.valueOf(f.get("key")).equals(String.valueOf(c.get("key")))) {
+                    boolean edited = false;
                     if (c.containsKey("value")) {
-                        copy.put("value", c.get("value") == null ? "" : String.valueOf(c.get("value")));
+                        String before = f.get("value") == null ? "" : String.valueOf(f.get("value")).strip();
+                        String after = c.get("value") == null ? "" : String.valueOf(c.get("value"));
+                        copy.put("value", after);
+                        edited = !before.equals(after.strip());
                     }
-                    if (Boolean.TRUE.equals(c.get("checked"))) {
+                    // '확인' 단추(checked) 또는 사람이 값을 직접 고친 칸은 확인 필요를 푼다 (화면 기준과 같게)
+                    if (edited || Boolean.TRUE.equals(c.get("checked"))) {
                         copy.put("needCheck", false);
                         copy.remove("reason");
                     }
@@ -586,6 +592,30 @@ public class InspectionService {
             out.add(copy);
         }
         return out;
+    }
+
+    /** 선택 칸(choice)은 띄어쓰기를 무시하고 선택지와 같으면 그 선택지로 바꾼다 (예: 해당없음 → 해당 없음) */
+    @SuppressWarnings("unchecked")
+    static void normalizeChoices(List<Map<String, Object>> fields, Map<String, Object> form) {
+        Map<String, List<String>> options = new LinkedHashMap<>();
+        for (Map<String, Object> d : (List<Map<String, Object>>) form.get("fields")) {
+            if ("choice".equals(String.valueOf(d.get("type"))) && d.get("options") instanceof List<?> o) {
+                options.put(String.valueOf(d.get("key")), o.stream().map(String::valueOf).toList());
+            }
+        }
+        for (Map<String, Object> f : fields) {
+            List<String> opts = options.get(String.valueOf(f.get("key")));
+            if (opts == null || f.get("value") == null) {
+                continue;
+            }
+            String v = String.valueOf(f.get("value")).replaceAll("\\s+", "");
+            for (String o : opts) {
+                if (o.replaceAll("\\s+", "").equals(v)) {
+                    f.put("value", o);
+                    break;
+                }
+            }
+        }
     }
 
     /** 날짜·숫자 칸 형식이 틀린 칸 key 목록 (빈 값은 통과) */
