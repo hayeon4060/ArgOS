@@ -29,7 +29,7 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
 </script>
 
 <template>
-  <BaseCard title="임계값 근접 센서">
+  <BaseCard title="기준값 근접 센서">
     <template #actions>
       <span class="legend"><i class="ok" />정상</span>
       <span class="legend"><i class="warn" />주의</span>
