@@ -202,7 +202,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | `POST /fires/{fireId}/approve-unlock` | 본사 관리자 | 실패 횟수 0으로. SSE `fire.updated` |
 
 - **화재 판정 (가정)**: 위험 종류 화재(FIRE) 경보가 3단계이고 근거에 열화상(IR) 센서 이벤트가 있으면 화재. 중앙 경보 피드를 보다가 그 순간 `fire_incident` 를 만들고 SSE `fire.started` 를 보냄. 판정 기준이 바뀌면 `FireService.isFire` 한 곳만 고치면 됨
-- 경고 방송은 방송 시스템 API 가 정해지기 전까지 로그만 남김 (`BroadcastSender`). 조치 이력에는 `BROADCAST` 로 남음
+- 경고 방송: 화재 판정 때 **자동으로** 방송 시스템(외부 기존 시스템) REST API 를 부름 (`BroadcastSender`). 해제(비밀번호 · 자동) 때 방송 종료를 부름. 조치 이력에는 `BROADCAST`(OK · FAIL) 로 남음. 아래 "방송 시스템 연동" 참고
 - 열화상 `min`·`avg` 와 대피 확인(EVACUATED) 입력 API 는 아직 없음. 대피 수는 조치 이력의 `EVACUATED` 를 셈
 - 테이블: `V4__gateway_chat_fire.sql` (`chat_message`, `chat_read`, `fire_incident`, 테이블 명세서 v5 기준)
 
@@ -258,12 +258,32 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 - 안전 등급: 점수 = 100 − 경보 5점×건수 − 주의 1점×건수 − 점검 지연 2점×건수, A ≥ 90 · B ≥ 70 · C. `safety_grade` 에 저장
 - 한글 글꼴: `ARGOS_REPORT_FONT`(.ttf) → 없으면 맑은 고딕(Windows) · 나눔고딕 · Noto CJK 순서. 다 없으면 500 `REPORT_FONT_MISSING`
 
+### 방송 시스템 연동 (중앙 서버 → 방송 시스템, 화재 때 자동)
+
+아키텍처 그림의 "경고 방송 REST API". 화면이 부르는 API 가 아니고, 중앙 서버가 외부 방송 시스템을 부른다.
+`BROADCAST_API_URL` 이 비어 있으면 부르지 않고 로그만 남기며 성공으로 본다 (시연 PC).
+
+| 언제 | 호출 | 본문 |
+| --- | --- | --- |
+| 화재 판정 (`fire.started` 직전) | `POST {url}/start` | `{ requestId: "fire-{fireId}", type: "FIRE", plantId, factoryId, processId, equipmentId, location, message, repeat: true, detectedAt }` |
+| 비밀번호 해제 `POST /fires/{id}/clear` | `POST {url}/stop` | `{ requestId: "fire-{fireId}", reason: "CLEARED" }` |
+| 값이 정상으로 돌아와 자동 해제 | `POST {url}/stop` | `{ requestId: "fire-{fireId}", reason: "AUTO_CLEARED" }` |
+
+- 헤더: `Content-Type: application/json`, `X-API-Key`(설정했을 때만)
+- 응답: 2xx 면 성공 (본문은 보지 않음. 기대 모양 start `{ broadcastId, status: "ON", startedAt }` · stop `{ status: "OFF", endedAt }`)
+- 같은 `requestId` 는 같은 방송으로 봐 달라고 가정 (재시도 때문에)
+- 시작 실패(연결 실패 · 시간 초과 · 2xx 아님)는 **한 번 더 시도**. 그래도 실패하면 `fire_incident.broadcast_started_at` 은 비우고 조치 이력 `BROADCAST` 를 `FAIL` 로 남김 → `GET /fires/{id}` 의 `broadcast.on = false`, 화재 처리는 계속 진행
+- 종료 실패는 로그만 남김 (화재 해제는 그대로 진행)
+- `message` 예: "도장 공정에서 화재가 발생했습니다. 작업자는 즉시 대피하십시오." · `location` 예: "5공장 · 도장 공정 · 상도 건조로 버너실"
+
 ### 외부 연동 설정 (비우면 로그만)
 
 | 환경 변수 | 하는 일 |
 | --- | --- |
 | `FCM_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON. 있으면 FCM HTTP v1 로 실제 푸시 |
-| `BROADCAST_API_URL` | 방송 시스템. `POST {url}/start`, `POST {url}/stop` (방송 시스템 API 가 정해지면 경로만 맞추면 됨) |
+| `BROADCAST_API_URL` | 방송 시스템 주소. `POST {url}/start`, `POST {url}/stop` (아래 "방송 시스템 연동") |
+| `BROADCAST_API_KEY` | 방송 시스템이 키를 요구하면 `X-API-Key` 헤더로 보냄. 비우면 헤더 없음 |
+| `BROADCAST_TIMEOUT_MS` | 연결 · 응답 대기 시간 (기본 3000) |
 | `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` | CLOVA OCR |
 | `ARGOS_FILES_DIR` | 올린 파일 저장 위치 (기본 `./data/files`) |
 
