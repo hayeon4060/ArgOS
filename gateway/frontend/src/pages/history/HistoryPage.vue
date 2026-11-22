@@ -234,7 +234,7 @@ useLiveReload(() => query({ silent: true }))
         </div>
       </div>
     </div>
-    <MonthlyReportModal :open="reportOpen" :factory-id="filter.factoryId" @close="reportOpen = false" />
+    <MonthlyReportModal :open="reportOpen" @close="reportOpen = false" />
   </div>
 </template>
 

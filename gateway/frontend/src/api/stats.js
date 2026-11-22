@@ -7,7 +7,7 @@
  * - GET /stats/alarms/{id}: 알림 상세 패널 (센서 3종 시계열·열화상·조치 이력·체크리스트, 새 API)
  * - GET /stats/export     : 알림 이력 상세 CSV (열 추가 요청)
  * - 새로 바뀐 API 는 docs/stats-history-api.md 에 정리
- * - GET /reports/monthly  : 월별 보고서 PDF (백엔드 ReportController, factoryId · month 필수)
+ * - GET /reports/monthly  : 월별 보고서 PDF (백엔드 ReportController) — 화면에서는 안 씀. 미리보기를 그대로 인쇄(PDF 저장)함
  *
  * 조건(criteria) 모양: { from, to ('YYYY-MM-DD'), siteId, factoryId, processId, sensorType, level, shift } (+ 표는 hazard)
  * - 빈 값('' · null)은 보내지 않음
@@ -100,13 +100,7 @@ export function getMonthlyReports() {
   return Promise.resolve(monthlyReports())
 }
 
-/** 월별 보고서 미리보기 내용 (예시 데이터만 — 명세서는 미리보기 없이 PDF 만) */
+/** 월별 보고서 내용 — 요약 · 공장별 등급 · 주요 경보 · 알림 내역 전체 (예시 데이터만 — 명세서는 미리보기 없이 PDF 만) */
 export function getMonthlyReport(month) {
   return mockOk(monthlyReport(month))
-}
-
-/** 월별 보고서 PDF → Blob (GET /reports/monthly — factoryId 가 없으면 서버가 400) */
-export function downloadMonthlyReport({ month, factoryId }) {
-  if (USE_MOCK) return mockFail({ code: 'NOT_READY', message: '예시 데이터에는 PDF 파일이 없습니다. 백엔드 연결 후 내려받을 수 있습니다.', status: 400 })
-  return http.get('/reports/monthly', { params: clean({ month, factoryId }), responseType: 'blob' })
 }
