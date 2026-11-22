@@ -67,6 +67,31 @@ class ClovaNormalizeTest {
         assertThat(amp.get("needCheck")).isEqualTo(false);
     }
 
+    /** 2026-11-22 CLOVA 템플릿 43974(빌드 61920)로 채운 F02 를 읽은 실제 글자 */
+    @Test
+    void 실제_CLOVA_F02_결과() {
+        OcrEngine.Form form = new OcrEngine.Form("F02", "환기·배기설비 점검일지", List.of(
+                Map.of("key", "inspectedAt", "label", "점검 일자·시각", "type", "datetime"),
+                Map.of("key", "factory", "label", "공장", "type", "text"),
+                Map.of("key", "inspector", "label", "점검자", "type", "text"),
+                Map.of("key", "item08Value", "label", "배기 풍량 측정값", "type", "number"),
+                Map.of("key", "issue1DoneAt", "label", "1줄 조치 완료일", "type", "date"),
+                Map.of("key", "item05Note", "label", "덕트·후드 비고", "type", "text")));
+        OcrEngine.Result r = ClovaOcrEngine.toResult(List.of(
+                Map.of("name", "inspectedAt", "inferText", "2026.11.20 09: 10", "inferConfidence", 0.983),
+                Map.of("name", "factory", "inferText", "□울산 아산 □전주", "inferConfidence", 0.994),
+                Map.of("name", "inspector", "inferText", "김도현", "inferConfidence", 1.0),
+                Map.of("name", "item08Value", "inferText", "1,200", "inferConfidence", 0.969),
+                Map.of("name", "issue1DoneAt", "inferText", "26. 11.25", "inferConfidence", 0.997),
+                Map.of("name", "item05Note", "inferText", "", "inferConfidence", 0.0)),
+                Map.of("width", 1000, "height", 1000), form);
+
+        assertThat(r.fields()).extracting(f -> f.get("value"))
+                .containsExactly("2026-11-20 09:10", "", "김도현", "1200", "2026-11-25", "");
+        assertThat(r.fields()).extracting(f -> f.get("needCheck"))
+                .containsExactly(false, true, false, false, false, false);
+    }
+
     @Test
     void CLOVA_양식_목록() {
         assertThat(InspectionService.parseForms(" f02, F03 ,")).containsExactly("F02", "F03");

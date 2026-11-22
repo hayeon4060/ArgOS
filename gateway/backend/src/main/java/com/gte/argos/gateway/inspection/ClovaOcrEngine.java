@@ -100,10 +100,13 @@ public class ClovaOcrEngine implements OcrEngine {
                 v.put("value", text == null ? raw : text);
                 v.put("box", box((Map<String, Object>) hit.get("boundingPoly"), w, h));
                 String reason = null;
-                if (CHECK_TYPES.contains(type)) {
+                if (CHECK_TYPES.contains(type) || CHECK_MARKS.matcher(raw).find()) {
                     // 체크 표시(V · ☑)는 글자 인식으로 믿을 수 없어서 값은 비우고 사람이 원본을 보고 고른다
                     v.put("value", "");
                     reason = "체크 칸은 원본을 보고 직접 선택";
+                } else if (raw.isEmpty()) {
+                    // 비어 있는 칸 (비고 · 이상 사항 빈 줄 등). 신뢰도 0 이 와도 확인 필요로 보지 않는다
+                    reason = null;
                 } else if (text == null) {
                     reason = "date".equals(type) ? "날짜 형식 확인 (YYYY-MM-DD)"
                             : "datetime".equals(type) ? "일시 형식 확인 (YYYY-MM-DD HH:mm)" : "시각 형식 확인 (HH:mm)";
@@ -145,6 +148,9 @@ public class ClovaOcrEngine implements OcrEngine {
 
     /** 글자로 믿을 수 없는 칸 (선택지 체크 · 예/아니오 체크) */
     static final Set<String> CHECK_TYPES = Set.of("choice", "check");
+
+    /** 인쇄된 체크 상자가 같이 읽힌 칸 (예: 글자 칸인 공장 · 구역이 종이에서는 □울산 □아산 □전주) */
+    private static final Pattern CHECK_MARKS = Pattern.compile("[□☐☑☒■✓✔]");
 
     private static final Pattern DATE = Pattern.compile("(\\d{4}|\\d{2})\\s*[.\\-/년]\\s*(\\d{1,2})\\s*[.\\-/월]\\s*(\\d{1,2})");
     private static final Pattern TIME = Pattern.compile("(\\d{1,2})\\s*[:시]\\s*(\\d{1,2})");
