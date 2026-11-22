@@ -372,7 +372,7 @@ export function monthlyReports() {
   })
 }
 
-/** 보고서 미리보기 (설계안 statReport() 의 첫 쪽 내용) */
+/** 보고서 미리보기 (설계안 statReport() 의 첫 쪽 내용 + 그달 알림 내역 전체) */
 export function monthlyReport(month) {
   const from = `${month}-01`
   const [y, m] = month.split('-').map(Number)
@@ -407,5 +407,14 @@ export function monthlyReport(month) {
     major: filtered({ from, to, siteId: 1, level: 'ALARM' })
       .slice(0, 3)
       .map((a) => ({ at: a.raisedAt, location: a.location, text: a.title.replace(' 해제', ''), action: '설비 셧다운' })),
+    // 알림 내역 (그달 전체 — 2쪽부터 표로 이어짐, 건수는 요약 '전체 알림'과 같음)
+    alarms: filtered({ from, to, siteId: 1 }).map((a) => ({
+      id: a.id,
+      at: a.raisedAt,
+      level: a.level,
+      location: a.location,
+      text: a.title.replace(' 해제', ''),
+      actionMinutes: a.actionMinutes,
+    })),
   }
 }

@@ -1,21 +1,22 @@
 <!--
   월별 보고서 창 (화면설계안 v-rev3.js statReport())
   - 왼쪽: 달 목록 (지난달까지, 이번 달은 '작성 중' — 누르면 '…일에 발행됩니다')
-  - 오른쪽: 보고서 첫 쪽 미리보기 (요약 4칸, 공장별 안전 등급, 주요 경보)
+  - 오른쪽: 보고서 미리보기 — 전체 쪽을 세로로 이어 보여 줌 (스크롤)
+    1쪽: 요약 4칸, 공장별 안전 등급, 주요 경보 / 2쪽부터: 그달 알림 내역 전체 (한 쪽에 ROWS 줄)
   - 공장별 등급(A·B·C)은 대시보드에 없고 이 보고서에만 나옴 (설계안 안내 문구)
-  - PDF 내려받기: GET /reports/monthly?factoryId=&month= (백엔드 ReportController, factoryId 필수). 예시 모드에서는 안내만
+  - PDF 로 저장: window.print() — 아래 @media print 가 미리보기 종이만 A4 크기로 남김 (인쇄 창에서 'PDF 로 저장')
+    → 저장한 파일이 미리보기와 쪽 수 · 모양까지 같음 (백엔드 PDF GET /reports/monthly 는 양식이 달라 안 씀)
   - 미리보기 내용 · 고를 수 있는 달 목록은 서버 API 가 없어 실제 서버에서도 예시 값 (docs/api/frontend-api-audit-1120.md 5장)
 -->
 <script setup>
-import { ref, watch } from 'vue'
-import { downloadMonthlyReport, getMonthlyReport, getMonthlyReports } from '@/api/stats'
+import { computed, ref, watch } from 'vue'
+import { getMonthlyReport, getMonthlyReports } from '@/api/stats'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
-  factoryId: { type: [Number, String], default: '' },
 })
 
 const emit = defineEmits(['close'])
@@ -24,7 +25,17 @@ const months = ref([])
 const month = ref('')
 const report = ref(null)
 const loading = ref(false)
-const busy = ref(false)
+
+/** 알림 내역 한 쪽에 들어가는 줄 수 (종이 높이 792px 기준 — 줄 높이를 바꾸면 같이 맞출 것) */
+const ROWS = 24
+/** 2쪽부터의 알림 내역 [[알림, ...], ...] */
+const alarmPages = computed(() => {
+  const list = report.value?.alarms ?? []
+  return Array.from({ length: Math.ceil(list.length / ROWS) }, (_, i) => list.slice(i * ROWS, (i + 1) * ROWS))
+})
+const pageCount = computed(() => 1 + alarmPages.value.length)
+const LEVEL = { WARN: '주의', ALARM: '경보', FIRE: '화재' }
+const mdhm = (at) => at.slice(5, 16).replace('T', ' ')
 
 const label = (m) => `${m.slice(0, 4)}년 ${Number(m.slice(5))}월`
 const md = (d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`
@@ -54,27 +65,15 @@ async function select(m) {
   }
 }
 
-async function download() {
-  // 서버는 공장 하나의 보고서만 만듦 (factoryId 없으면 400) → 조건 줄에서 공장을 먼저 고르게 안내
-  if (!props.factoryId) {
-    toast('조건 줄에서 공장을 먼저 골라 주세요. 월별 보고서는 공장별로 내려받습니다.', { type: 'info' })
-    return
-  }
-  busy.value = true
-  try {
-    const blob = await downloadMonthlyReport({ month: month.value, factoryId: props.factoryId })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `ArgOS_월별보고서_${month.value}.pdf`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    toast(`ArgOS_월별보고서_${month.value}.pdf 파일을 저장했습니다.`)
-  } catch (error) {
-    toast(error.message, { type: error.code === 'NOT_READY' ? 'info' : 'err' })
-  } finally {
-    busy.value = false
-  }
+/**
+ * PDF 로 저장: body 에 print-monthly 를 잠깐 붙여, 아래 @media print 규칙이 이 보고서를 인쇄할 때만 걸리게 함
+ * (점검 관리 ReportModal 과 같은 방식)
+ */
+function print() {
+  document.body.classList.add('print-monthly')
+  const done = () => document.body.classList.remove('print-monthly')
+  window.addEventListener('afterprint', done, { once: true })
+  window.print()
 }
 </script>
 
@@ -82,15 +81,15 @@ async function download() {
   <Teleport to="body">
     <Transition name="modal" :duration="{ enter: 300, leave: 200 }">
       <BaseModal v-if="open" :width="1180" label="월별 보고서" @close="emit('close')">
-        <div class="m-head">
+        <div class="m-head mrep-noprint">
           <h2>월별 보고서</h2>
-          <span class="loc">매달 1일 자동 발행 · 내려받기만 할 수 있습니다</span>
+          <span class="loc">매달 1일 자동 발행 · 저장만 할 수 있습니다</span>
           <button type="button" class="m-close" aria-label="닫기" @click="emit('close')"><AppIcon name="x" /></button>
         </div>
 
-        <div class="wrap">
+        <div class="wrap mrep-wrap">
           <!-- 달 목록 -->
-          <nav class="months" aria-label="보고서 달">
+          <nav class="months mrep-noprint" aria-label="보고서 달">
             <button
               v-for="m in months"
               :key="m.month"
@@ -105,9 +104,9 @@ async function download() {
             <p class="note"><AppIcon name="info" :size="14" />공장별 등급(A·B·C)은 대시보드에는 나오지 않고 월별 보고서에서만 확인합니다.</p>
           </nav>
 
-          <!-- 첫 쪽 미리보기 -->
-          <div class="preview" :class="{ busy: loading }">
-            <article v-if="report" :key="report.month" class="page pop-in">
+          <!-- 미리보기: 전체 쪽 (인쇄하면 이 종이들이 그대로 A4 한 장씩) -->
+          <div class="preview mrep-preview" :class="{ busy: loading }">
+            <article v-if="report" :key="report.month" class="page mrep-page pop-in">
               <header class="rh">
                 <div>
                   <small>ArgOS 환경안전 통합관제</small>
@@ -152,16 +151,34 @@ async function download() {
                 </tr>
                 <tr v-if="!report.major.length"><td colspan="4">이달에는 경보가 없었습니다.</td></tr>
               </table>
-              <footer class="rf"><span>ArgOS · 자동 생성 문서 · 수정할 수 없습니다</span><span class="mono">1 / 3</span></footer>
+              <footer class="rf"><span>ArgOS · 자동 생성 문서 · 수정할 수 없습니다</span><span class="mono">1 / {{ pageCount }}</span></footer>
             </article>
+
+            <template v-if="report">
+              <article v-for="(rows, p) in alarmPages" :key="`${report.month}-${p}`" class="page mrep-page pop-in">
+                <h4 class="first">3. 알림 내역 <small>전체 {{ report.alarms.length }}건{{ p ? ' · 이어서' : '' }}</small></h4>
+                <table class="rt list">
+                  <tr><th class="w34">번호</th><th class="w92">일시</th><th class="w38">등급</th><th>위치</th><th class="w62">내용</th><th class="w50">조치</th></tr>
+                  <tr v-for="(a, i) in rows" :key="a.id">
+                    <td class="mono">{{ p * ROWS + i + 1 }}</td>
+                    <td class="mono">{{ mdhm(a.at) }}</td>
+                    <td><b :class="a.level === 'WARN' ? 'lw' : 'la'">{{ LEVEL[a.level] ?? a.level }}</b></td>
+                    <td>{{ a.location }}</td>
+                    <td>{{ a.text }}</td>
+                    <td class="mono">{{ a.actionMinutes != null ? `${a.actionMinutes}분` : '조치 중' }}</td>
+                  </tr>
+                </table>
+                <footer class="rf"><span>ArgOS · 자동 생성 문서 · 수정할 수 없습니다</span><span class="mono">{{ p + 2 }} / {{ pageCount }}</span></footer>
+              </article>
+            </template>
           </div>
         </div>
 
-        <div class="m-actions foot">
-          <span class="size">PDF · A4 3쪽</span>
+        <div class="m-actions foot mrep-noprint">
+          <span class="size">A4 {{ pageCount }}쪽 · 인쇄 창에서 'PDF로 저장'을 고르면 미리보기 그대로 저장됩니다</span>
           <button type="button" class="btn" @click="emit('close')">닫기</button>
-          <button type="button" class="btn btn-primary" :disabled="busy || !month" @click="download">
-            <span v-if="busy" class="m-spin" /><AppIcon v-else name="download" :size="16" />{{ busy ? '내려받는 중' : 'PDF 내려받기' }}
+          <button type="button" class="btn btn-primary" :disabled="!report || loading" @click="print">
+            <AppIcon name="download" :size="16" />PDF로 저장
           </button>
         </div>
       </BaseModal>
@@ -253,7 +270,9 @@ async function download() {
   flex: 1;
   overflow-y: auto;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
   padding: 24px;
   background: #eef2f6;
   transition: opacity 150ms;
@@ -263,9 +282,14 @@ async function download() {
   opacity: 0.4;
 }
 
+/* 종이 한 장: A4 비율 (560 × 792 = 210 × 297mm). 인쇄할 때는 이 크기 그대로 A4 로 키움 */
 .page {
+  flex: none;
+  display: flex;
+  flex-direction: column;
   width: 560px;
-  min-height: 700px;
+  height: 792px;
+  overflow: hidden;
   padding: 30px 34px 20px;
   background: #fff;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.14);
@@ -359,6 +383,45 @@ h4 {
   font-weight: 600;
 }
 
+/* 알림 내역 표: 한 줄 높이를 고정해야 쪽마다 ROWS 줄이 정확히 들어감 */
+h4.first {
+  margin-top: 0;
+}
+
+h4 small {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.list {
+  table-layout: fixed;
+}
+
+.list th,
+.list td {
+  height: 26px;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.w34 { width: 34px; }
+.w38 { width: 38px; }
+.w50 { width: 50px; }
+.w62 { width: 62px; }
+.w92 { width: 92px; }
+
+.lw {
+  color: var(--color-level-warn-text);
+}
+
+.la {
+  color: var(--color-level-alarm-text);
+}
+
 .gr {
   display: inline-grid;
   place-items: center;
@@ -377,7 +440,7 @@ h4 {
 .rf {
   display: flex;
   justify-content: space-between;
-  margin-top: 24px;
+  margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid var(--color-border);
   font-size: 10px;
@@ -402,5 +465,75 @@ h4 {
 .foot .btn {
   height: 44px;
   padding: 0 20px;
+}
+</style>
+
+<style>
+/*
+ * 인쇄(PDF 저장): 'PDF로 저장' 버튼을 누른 동안(body.print-monthly)만, 미리보기 종이들만 남김
+ * - 화면(#app) · 어두운 배경 · 창 머리 · 달 목록 · 아래 버튼은 숨기고, 창 틀(고정 위치 · 높이 · 스크롤)을 풂
+ * - 종이(560 × 792px)를 A4(210 × 297mm = 794 × 1123px)로 그대로 키워 한 장에 한 쪽씩 → 미리보기와 같은 모양
+ * - 창은 body 바로 아래(Teleport)에 있어 > 로 고름. scoped 가 아니어야 body 에 걸림
+ */
+@page mrep {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  body.print-monthly {
+    background: #fff;
+  }
+
+  body.print-monthly > *:not(.modal-root) {
+    display: none !important;
+  }
+
+  body.print-monthly .modal-root {
+    position: static;
+    display: block;
+    padding: 0;
+  }
+
+  body.print-monthly .modal-root > .dim,
+  body.print-monthly .mrep-noprint {
+    display: none !important;
+  }
+
+  body.print-monthly .modal-root > [role='dialog'] {
+    width: auto !important;
+    max-height: none;
+    overflow: visible;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  body.print-monthly .mrep-wrap {
+    display: block;
+    height: auto;
+  }
+
+  body.print-monthly .mrep-preview {
+    display: block;
+    overflow: visible;
+    padding: 0;
+    background: none;
+    opacity: 1;
+  }
+
+  body.print-monthly .mrep-page {
+    page: mrep;
+    zoom: 1.4179;
+    break-after: page;
+    box-shadow: none;
+    animation: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.print-monthly .mrep-page:last-child {
+    break-after: auto;
+  }
 }
 </style>
