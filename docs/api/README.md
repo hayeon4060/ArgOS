@@ -17,6 +17,7 @@
 | `paint-equipment-edit.md` | (2026-11-20 요청) 공장 관리 설비 추가 · 삭제를 도장 공정에도, 설비는 기존 배치도 그림 그대로: `PUT /processes/{id}/layout` 의 `equipment.delete` · `create[].shape` 사용 (새 API 없음), `equipment.shape` 에 넣는 그림 이름 표, 확인 4건 |
 | `fan-speed-control.md` | (2026-11-20 요청) 가스 주의 때 배기팬 속도 직접 조절 20 ~ 60 Hz: 이미 있는 `POST /equipment/{id}/fan` 의 `{ hz }` 사용 (새 API 없음), 요청: 알림 `fanAuto.manualHz`, 명령에 `alarmId`, 경보 승격 · 승인 대기 · 복귀 규칙 확인 |
 | `alarm-sensor-scope.md` | (2026-11-20) 경보 창 '센서 데이터'에 공정 센서가 전부 나오던 문제: `GET /alarms/{id}/response` 의 `sensors` 를 관제 단위 센서만으로 (프론트는 `detail` 로 먼저 걸러 둠) |
+| `caution-dedupe-same-equipment.md` | (2026-11-22 요청) 체크리스트 보낸 뒤 '주의' 단추 → 주의 상세, 같은 설비 경보 중 주의 2중 알림 숨김: 새 API 없음, 확인: 같은 설비에 경보 · 주의가 따로 열리는 경우, 요청: 알림 줄 `coveredBy` · 푸시 · 건수 제외, 경보 열릴 때 기존 주의 처리 규칙 |
 
 ## 이 문서의 성격
 
