@@ -69,6 +69,8 @@ argos:
     clova:
       url: ${CLOVA_OCR_URL:}
       secret: ${CLOVA_OCR_SECRET:}
+      # CLOVA 템플릿이 있는 양식만 CLOVA 로 읽음 (쉼표로 여러 개). 나머지는 시연용 인식기
+      forms: ${CLOVA_OCR_FORMS:F02}
 
   # 월간 보고서 한글 글꼴 (.ttf). 비우면 맑은 고딕 · 나눔고딕 · Noto 순서로 찾음
   report:

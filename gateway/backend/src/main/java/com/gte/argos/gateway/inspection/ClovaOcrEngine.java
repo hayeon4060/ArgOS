@@ -1,11 +1,16 @@
 package com.gte.argos.gateway.inspection;
 
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -86,16 +91,25 @@ public class ClovaOcrEngine implements OcrEngine {
                 v.put("needCheck", true);
                 v.put("reason", "인식되지 않은 칸");
             } else {
-                String text = String.valueOf(hit.getOrDefault("inferText", "")).strip();
+                String raw = String.valueOf(hit.getOrDefault("inferText", "")).strip();
                 double conf = num(hit.get("inferConfidence"), 0);
                 sum += conf;
                 n++;
-                v.put("value", text);
+                String type = String.valueOf(f.get("type"));
+                String text = normalize(type, raw);
+                v.put("value", text == null ? raw : text);
                 v.put("box", box((Map<String, Object>) hit.get("boundingPoly"), w, h));
                 String reason = null;
-                if (conf < MIN_CONFIDENCE) {
+                if (CHECK_TYPES.contains(type)) {
+                    // 체크 표시(V · ☑)는 글자 인식으로 믿을 수 없어서 값은 비우고 사람이 원본을 보고 고른다
+                    v.put("value", "");
+                    reason = "체크 칸은 원본을 보고 직접 선택";
+                } else if (text == null) {
+                    reason = "date".equals(type) ? "날짜 형식 확인 (YYYY-MM-DD)"
+                            : "datetime".equals(type) ? "일시 형식 확인 (YYYY-MM-DD HH:mm)" : "시각 형식 확인 (HH:mm)";
+                } else if (conf < MIN_CONFIDENCE) {
                     reason = "인식 신뢰도가 낮음 (" + Math.round(conf * 100) + "%)";
-                } else if ("number".equals(f.get("type")) && !text.matches("-?\\d+(\\.\\d+)?")) {
+                } else if ("number".equals(type) && !text.isEmpty() && !text.matches("-?\\d+(\\.\\d+)?")) {
                     reason = "숫자가 아님";
                 } else if (f.get("limit") instanceof Number lim && text.matches("-?\\d+(\\.\\d+)?")
                         && Double.parseDouble(text) > lim.doubleValue()) {
@@ -127,6 +141,71 @@ public class ClovaOcrEngine implements OcrEngine {
             maxY = Math.max(maxY, y);
         }
         return List.of(r(minX / w), r(minY / h), r((maxX - minX) / w), r((maxY - minY) / h));
+    }
+
+    /** 글자로 믿을 수 없는 칸 (선택지 체크 · 예/아니오 체크) */
+    static final Set<String> CHECK_TYPES = Set.of("choice", "check");
+
+    private static final Pattern DATE = Pattern.compile("(\\d{4}|\\d{2})\\s*[.\\-/년]\\s*(\\d{1,2})\\s*[.\\-/월]\\s*(\\d{1,2})");
+    private static final Pattern TIME = Pattern.compile("(\\d{1,2})\\s*[:시]\\s*(\\d{1,2})");
+
+    /**
+     * 읽은 글자를 칸 형식에 맞게 바꾼다. 양식에 인쇄된 모양 그대로 읽히기 때문
+     * (예: "26 . 11 . 27" → 2026-11-27, "2026 . 11 . 20 09 : 10" → 2026-11-20 09:10, "1,200 " → 1200).
+     * 날짜 · 일시 · 시각인데 바꿀 수 없으면 null (빈 글자는 빈 글자 그대로)
+     */
+    static String normalize(String type, String raw) {
+        String t = raw == null ? "" : raw.strip();
+        if (t.isEmpty()) {
+            return "";
+        }
+        switch (type) {
+            case "number" -> {
+                return t.replaceAll("[\\s,]", "");
+            }
+            case "date" -> {
+                return date(t);
+            }
+            case "datetime" -> {
+                Matcher d = DATE.matcher(t);
+                if (!d.find()) {
+                    return null;
+                }
+                String day = date(d.group());
+                String time = time(t.substring(d.end()));
+                return day == null || time == null ? null : day + " " + time;
+            }
+            case "time" -> {
+                return time(t);
+            }
+            default -> {
+                return t;
+            }
+        }
+    }
+
+    private static String date(String t) {
+        Matcher m = DATE.matcher(t);
+        if (!m.find()) {
+            return null;
+        }
+        int y = Integer.parseInt(m.group(1));
+        try {
+            return LocalDate.of(y < 100 ? 2000 + y : y, Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)))
+                    .toString();
+        } catch (DateTimeException e) {
+            return null;
+        }
+    }
+
+    private static String time(String t) {
+        Matcher m = TIME.matcher(t);
+        if (!m.find()) {
+            return null;
+        }
+        int hh = Integer.parseInt(m.group(1));
+        int mm = Integer.parseInt(m.group(2));
+        return hh > 23 || mm > 59 ? null : String.format("%02d:%02d", hh, mm);
     }
 
     private static String format(String mime, String name) {
