@@ -29,7 +29,7 @@ const equipmentTotal = computed(() => props.processes.reduce((n, p) => n + (p.eq
 </script>
 
 <template>
-  <BaseCard title="공정별 설비 상태" :sub="`${factoryName} · 설비 ${equipmentTotal}대 · 공정별 알림 센서 수`">
+  <BaseCard title="공정별 설비 상태" :sub="`${factoryName} · 설비 ${equipmentTotal}대`">
     <template #actions>
       <span v-for="l in LEGEND" :key="l.key" class="legend">
         <i :style="{ background: l.color }" />{{ l.label }}

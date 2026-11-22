@@ -68,7 +68,7 @@ const emit = defineEmits(['toggle', 'enter', 'enter-factory'])
           <span v-for="s in STAGES" :key="s.level" class="r">
             <i :style="{ background: s.color }" />{{ s.label }}
           </span>
-          <span class="r">오늘 알림</span>
+          <span class="r">금일 알림</span>
         </div>
         <p v-if="tree?.loading" class="state">불러오는 중</p>
         <p v-else-if="tree?.error" class="state error">{{ tree.error }}</p>

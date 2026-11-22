@@ -1,5 +1,5 @@
 <!--
-  전일 시간대별 알림 카드: 어제 하루 00~24시 한 줄 (GET /alarms/hourly?date=어제)
+  전일 시간대별 알림 카드: 어제 시간대별 한 줄 (2026-11-22 재원님 요청: 왼쪽 '하루 00–24시' 글자 삭제) (GET /alarms/hourly?date=어제)
   - 2026-11-18: 제목 '시간대별 알림' → '전일 시간대별 알림', 부제(주간 · 야간) 삭제
   - 2026-11-20 재원님 요청: 주간(07~19시) · 야간(19~07시) 두 줄 → 구분 없이 하루 한 줄
     (두 칸 응답을 합치는 일은 api/dashboard.js 의 getHourlyAlarms 가 함)
@@ -32,8 +32,6 @@ const LEGEND = [
 
     <div class="body">
       <div class="label">
-        <b>하루</b>
-        <span class="mono">00–24시</span>
         <em>
           알림 <b class="mono">{{ hourly.alarmCount }}</b> ·
           조치 <b class="mono">{{ hourly.actionCount }}</b>
@@ -74,17 +72,7 @@ const LEGEND = [
   padding: 8px 0 0 8px;
 }
 
-.label > b {
-  font-size: 14px;
-}
-
-.label > span {
-  font-size: 11px;
-  color: var(--color-text-weak);
-}
-
 .label em {
-  margin-top: 8px;
   font-size: 11.5px;
   font-style: normal;
   line-height: 17px;

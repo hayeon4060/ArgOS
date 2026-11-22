@@ -17,8 +17,8 @@ export const NAV_TABS = [
 /** '관리' 펼침 메뉴 */
 export const NAV_ADMIN = [
   { nav: 'admin', name: 'user', label: '사용자 관리', sub: '권한 부여·변경', icon: 'users' },
-  { nav: 'admin', name: 'factory', label: '공장 관리', sub: '설비 재배치 · 기준값', icon: 'factory' },
-  { nav: 'admin', name: 'logs', label: '이용 로그', sub: '누가 언제 무엇을', icon: 'clock' },
+  { nav: 'admin', name: 'factory', label: '공장 관리', sub: '설비 재배치 · 기준값 설정', icon: 'factory' },
+  { nav: 'admin', name: 'logs', label: '이용 로그', icon: 'clock' },
 ]
 
 /**

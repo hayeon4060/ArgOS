@@ -13,7 +13,6 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import UlsanMap from './UlsanMap.vue'
 import ZonePopover from './ZonePopover.vue'
-import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
 import CardCrumb from '@/components/CardCrumb.vue'
 import { STAGES } from '@/features/site/stages'
@@ -83,9 +82,6 @@ onMounted(async () => {
           :enterable="selectedFactory.id === enterableFactoryId"
         />
       </div>
-      <div class="hint">
-        <AppIcon name="zoomin" :size="15" />공장에 마우스를 올리면 공정 목록, 누르면 공장 화면으로 이동합니다
-      </div>
     </div>
   </BaseCard>
 </template>
@@ -108,7 +104,6 @@ onMounted(async () => {
 /*
  * 카드가 화면 높이에 맞춰 늘어날 때 (페이지가 남는 높이를 이 카드에 나눠 줌)
  * - 지도는 비율 그대로 두고 남는 높이의 가운데에 둠 (.map-frame)
- * - 안내 문구(.hint)는 지도 아래가 아니라 카드 왼쪽 아래 구석에 붙음
  */
 .base-card {
   display: flex;
@@ -127,25 +122,5 @@ onMounted(async () => {
 .map-area {
   position: relative;
   aspect-ratio: 1545 / 715;
-}
-
-.hint {
-  position: absolute;
-  left: 16px;
-  bottom: 14px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.92);
-  font-size: 12.5px;
-  color: var(--color-text-sub);
-}
-
-.hint .app-icon {
-  color: var(--color-text-weak);
 }
 </style>

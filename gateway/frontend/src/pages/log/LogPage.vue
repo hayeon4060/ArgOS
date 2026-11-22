@@ -169,7 +169,6 @@ onMounted(async () => {
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />
-      <span class="desc">누가 언제 무엇을 했는지 기록</span>
     </div>
 
     <LogFilterBar
@@ -212,11 +211,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.desc {
-  font-size: 13px;
-  color: var(--color-text-weak);
 }
 
 .grid {

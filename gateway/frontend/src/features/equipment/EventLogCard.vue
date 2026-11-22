@@ -25,7 +25,7 @@ const rows = computed(() => (filter.value === 'ALL' ? props.events : props.event
 </script>
 
 <template>
-  <BaseCard title="이벤트 이력" sub="오늘">
+  <BaseCard title="이벤트 이력" sub="금일">
     <template #actions>
       <SegButtons v-model="filter" :options="EVENT_FILTERS" small />
     </template>
@@ -37,7 +37,7 @@ const rows = computed(() => (filter.value === 'ALL' ? props.events : props.event
       </div>
       <div v-else class="empty">
         <AppIcon name="clock" :size="24" />
-        <b>{{ filter === 'ALL' ? '오늘 기록된 이벤트가 없습니다' : '이 종류의 이벤트가 없습니다' }}</b>
+        <b>{{ filter === 'ALL' ? '금일 기록된 이벤트가 없습니다' : '이 종류의 이벤트가 없습니다' }}</b>
       </div>
 
       <RouterLink :to="historyTo" class="more">이전 이력은 통계·이력 관리에서<AppIcon name="cr" :size="13" /></RouterLink>

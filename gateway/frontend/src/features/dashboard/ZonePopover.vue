@@ -77,7 +77,7 @@ const popStyle = computed(() => (onLeft.value ? style.value : { ...style.value, 
 
     <template v-else>
       <div class="row">
-        <span class="name sub">오늘 알림</span>
+        <span class="name sub">금일 알림</span>
         <b class="mono">{{ factory.todayAlarmCount }}건</b>
       </div>
       <div class="row note">

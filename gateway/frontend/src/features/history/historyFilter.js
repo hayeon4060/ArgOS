@@ -11,13 +11,13 @@ export const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.g
 
 /** 기간 빠른 선택 */
 export const PERIODS = [
-  { value: 'today', label: '오늘' },
+  { value: 'today', label: '금일' },
   { value: '7d', label: '7일' },
   { value: '30d', label: '30일' },
   { value: 'custom', label: '직접 선택' },
 ]
 /** 카드 설명에 쓰는 기간 이름 */
-export const PERIOD_LABEL = { today: '오늘', '7d': '최근 7일', '30d': '최근 30일', custom: '선택한 기간' }
+export const PERIOD_LABEL = { today: '금일', '7d': '최근 7일', '30d': '최근 30일', custom: '선택한 기간' }
 
 /** 센서 종류 (백엔드 sensorType 값) */
 export const SENSOR_TYPES = [

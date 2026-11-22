@@ -1,7 +1,8 @@
 <!--
   '센서 추이' 카드 (설계안 vEquip() #ct)
   - 센서마다 한 줄씩 (전류 · 온도 · CO 순서), 세 그래프는 한 묶음이라 확대·이동·마우스 세로선이 같이 움직임
-  - 제목줄: 범위(1시간 / 6시간 / 오늘), '전날 같이 보기' 스위치, 확대 단추(− / 전체 / +), 범례(전날 · 주의 기준 · 경보 기준)
+  - 제목줄: 범위(1시간 / 6시간 / 금일), '전일 비교' 스위치, 확대 단추(− / 전체 / +), 범례(전일 · 주의 기준 · 경보 기준)
+    (2026-11-22 재원님 요청: '오늘' → '금일', '전날 같이 보기' → '전일 비교', '전날' → '전일')
     (범위 버튼은 2026-11-19 설비 상세 제목 줄에서 이 카드로 옮김)
   - 범위를 바꾸면(v-model:pick) 페이지가 다시 불러오고, 그동안 카드가 흐려짐(loading)
 -->
@@ -31,10 +32,10 @@ const pick = defineModel('pick', { type: String, required: true })
 const RANGES = [
   { value: '1h', label: '1시간' },
   { value: '6h', label: '6시간' },
-  { value: 'today', label: '오늘' },
+  { value: 'today', label: '금일' },
 ]
 
-const RANGE_LABEL = { '1h': '최근 1시간', '6h': '최근 6시간', today: '오늘 00시부터' }
+const RANGE_LABEL = { '1h': '최근 1시간', '6h': '최근 6시간', today: '금일 00시부터' }
 
 // 세 그래프 묶기: 같은 group 이름을 가진 그래프끼리 확대·툴팁이 같이 움직임
 const GROUP = 'equipment-trend'
@@ -77,14 +78,14 @@ const missing = computed(() =>
     <template #actions>
       <SegButtons v-model="pick" :options="RANGES" small />
       <button type="button" class="switch" role="switch" :aria-checked="showPrev" @click="showPrev = !showPrev">
-        전날 같이 보기<span class="tg" :class="{ on: showPrev }" />
+        전일 비교<span class="tg" :class="{ on: showPrev }" />
       </button>
       <span class="zoom">
         <button type="button" title="축소" @click="zoomBy(-1)"><AppIcon name="minus" :size="14" /></button>
         <button type="button" title="전체 보기" @click="zoomBy(0)">전체</button>
         <button type="button" title="확대" @click="zoomBy(1)"><AppIcon name="plus" :size="14" /></button>
       </span>
-      <span class="legend"><i class="prev" />전날</span>
+      <span class="legend"><i class="prev" />전일</span>
       <span class="legend"><i class="warn" />주의 기준</span>
       <span class="legend"><i class="alarm" />경보 기준</span>
     </template>
