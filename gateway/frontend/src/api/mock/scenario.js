@@ -7,6 +7,8 @@
  *   실제 서버에서는 이 파일 대신 SSE 이벤트가 같은 일을 함
  * - 상황 바꾸기 도구(features/demo/DemoTool.vue, 개발 모드에서만)와 주의 확인·체크리스트 API 흉내가 아래 함수를 부름
  * - 새로고침해도 이어지게 sessionStorage 에 저장 (브라우저 탭을 닫으면 처음 상황으로)
+ * - 개발 서버에서는 웹·담당자 앱(휴대폰)이 같은 상황을 봄: 바뀌면 개발 서버(mockSync.js)에 올리고,
+ *   다른 화면이 바꾼 상황을 받아 덮어씀 (scenarioSynced = 처음 한 번 맞춘 뒤)
  *
  * 처음 상황(기본값) = 그동안 화면들이 보여 주던 상황:
  *   16:38:20 상도 건조로 배기팬 전류 CT-17 22.4 A 주의 → 16:38:31 확인 → 16:41:05 체크리스트 전송 → 김도현 2/5 진행 중
@@ -21,6 +23,7 @@
 import { reactive, toRaw, watch } from 'vue'
 import { emitLive } from '../live'
 import { LEVEL } from '@/types/codes'
+import { USE_MOCK } from './index'
 
 const STORAGE_KEY = 'argos.mock.scenario'
 
@@ -166,15 +169,67 @@ function load() {
 /** 지금 예시 상황 (화면에서 직접 고치지 말고 아래 함수로만 바꿈) */
 export const scenario = reactive(load())
 
-// 바뀔 때마다 저장
+/* ───────── 화면끼리 같은 상황 (개발 서버 중계) ───────── */
+
+// 설치형 앱(APK) 시연 빌드는 앱 안에 개발 서버가 없으므로 PC 개발 서버 주소를 빌드할 때 넣음 (담당자 앱 .env.production.local)
+// 앱 로그인 화면에서 바꾼 PC 주소(argos.relay)가 있으면 그것 — PC 주소가 바뀌어도 다시 빌드하지 않게
+const RELAY = import.meta.env.DEV ? '' : savedRelay() || (import.meta.env.VITE_MOCK_RELAY ?? '')
+function savedRelay() {
+  try {
+    return localStorage.getItem('argos.relay') ?? ''
+  } catch {
+    return ''
+  }
+}
+const SYNC = USE_MOCK && (import.meta.env.DEV || !!RELAY)
+const SYNC_URL = `${RELAY}/__mock/scenario`
+const syncId = Math.random().toString(36).slice(2) // 내가 올린 것은 다시 받지 않음
+let synced = '' // 마지막으로 서버와 같았던 상황 (JSON) — 같으면 다시 올리지 않음
+
+function pushScenario(json) {
+  synced = json
+  fetch(SYNC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: `{"from":"${syncId}","state":${json}}` }).catch(
+    () => {}, // 개발 서버가 꺼져 있으면 이 화면 혼자 동작
+  )
+}
+
+function applyRemote(state) {
+  for (const k of Object.keys(scenario)) if (!(k in state)) delete scenario[k]
+  Object.assign(scenario, state)
+  synced = JSON.stringify(toRaw(scenario))
+  emitLive('level.changed')
+}
+
+/** 처음 한 번 서버 상황에 맞춤 (서버에 아직 없으면 내 상황을 올림). 개발 서버가 아니면 바로 끝 */
+export const scenarioSynced = !SYNC
+  ? Promise.resolve()
+  : new Promise((resolve) => {
+      const sync = () =>
+        fetch(SYNC_URL)
+          .then((r) => r.json())
+          .then(({ state }) => (state ? applyRemote(state) : pushScenario(JSON.stringify(toRaw(scenario)))))
+          .catch(() => {})
+          .finally(resolve)
+      const es = new EventSource(`${SYNC_URL}/stream`)
+      es.onopen = sync // 개발 서버를 다시 켜서 다시 연결돼도 맞춤
+      es.onerror = resolve // 중계가 없는 서버면 기다리지 않음
+      es.onmessage = (e) => {
+        const { from, state } = JSON.parse(e.data)
+        if (from !== syncId) applyRemote(state)
+      }
+    })
+
+// 바뀔 때마다 저장 (+ 개발 서버에 올림)
 watch(
   scenario,
   () => {
+    const json = JSON.stringify(toRaw(scenario))
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toRaw(scenario)))
+      sessionStorage.setItem(STORAGE_KEY, json)
     } catch {
       // 저장 못 해도 화면은 그대로 동작
     }
+    if (SYNC && json !== synced) pushScenario(json)
   },
   { deep: true },
 )
@@ -316,7 +371,8 @@ export function sendChecklist({ items, assigneeId, sentBy }) {
     result: null,
   }
   emitLive('checklist.updated')
-  startAutoTick()
+  // 담당자가 앱을 켜 두었으면 사람이 앱에서 체크 (phoneUsers: 담당자 앱 api/myChecklists.js markPhoneUser)
+  if (!scenario.phoneUsers?.includes(assigneeId)) startAutoTick()
   return scenario.checklist
 }
 

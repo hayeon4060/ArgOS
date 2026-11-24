@@ -27,6 +27,19 @@ class FcmClientTest {
         assertThat(v.verify(Base64.getUrlDecoder().decode(parts[2]))).isTrue();
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void 화면이_꺼져도_보이게_알림과_채널을_같이_보냄() {
+        java.util.Map<String, Object> m = FcmClient.message("tok",
+                java.util.Map.of("type", "CHECKLIST_REMIND", "checklistId", "7"));
+        assertThat((java.util.Map<String, Object>) m.get("notification")).containsKey("title").containsKey("body");
+        assertThat(m.get("data")).isEqualTo(java.util.Map.of("type", "CHECKLIST_REMIND", "checklistId", "7"));
+        java.util.Map<String, Object> android = (java.util.Map<String, Object>) m.get("android");
+        assertThat(android.get("notification")).isEqualTo(java.util.Map.of("channel_id", "argos_alert"));
+        // 모르는 종류도 기본 문구로 알림은 뜸
+        assertThat(FcmClient.message("tok", java.util.Map.of("type", "NEW_KIND"))).containsKey("notification");
+    }
+
     private static String[] jwtParts(KeyPair kp, String pem) throws Exception {
         java.nio.file.Path f = java.nio.file.Files.createTempFile("sa", ".json");
         java.nio.file.Files.writeString(f, "{\"project_id\":\"argos\",\"client_email\":\"a@b.c\",\"private_key\":\""

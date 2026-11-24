@@ -40,8 +40,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** 아이디·비밀번호 로그인: 성공하면 상태와 브라우저에 저장 */
-  async function login(loginId, password) {
-    const result = await authApi.login({ loginId, password })
+  async function login(loginId, password, client = 'WEB') {
+    const result = await authApi.login({ loginId, password, client })
     accessToken.value = result.accessToken
     user.value = result.user
     // 서버가 만료 시각을 주면 그 값, 없으면 지금부터 13시간

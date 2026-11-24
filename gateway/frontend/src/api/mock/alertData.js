@@ -264,9 +264,11 @@ export function checklistView(checklistId) {
       seq: i + 1,
       content,
       doneAt: c.doneTimes[i] ? todayAt(c.doneTimes[i]) : null,
-      result: c.doneTimes[i] ? '이상 없음' : null,
-      memo: i === memoIndex ? c.memo.text : null,
+      // 담당자 앱에서 체크한 항목은 그 결과·메모 (c.results), 흉내로 진행한 항목은 '이상 없음'
+      result: c.doneTimes[i] ? (c.results?.[i]?.result ?? '이상 없음') : null,
+      memo: c.results?.[i] ? c.results[i].memo : i === memoIndex ? c.memo.text : null,
     })),
+    reportMemo: c.reportMemo ?? null,
     reportedAt: c.reportedAt && todayAt(c.reportedAt),
     confirmedAt: c.confirmedAt && todayAt(c.confirmedAt),
     // 서버 지금 시각 (명세서에 없음): '경과 시간'을 서버 시계 기준으로 세려고. 예시 데이터는 예시 시계

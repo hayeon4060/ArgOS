@@ -13,16 +13,21 @@ import { ROLE } from '@/types/codes'
 
 /**
  * 로그인
- * @param {{ loginId: string, password: string }} payload
+ * @param {{ loginId: string, password: string, client?: 'WEB'|'APP' }} payload  client: 웹 / 담당자 앱
  * @returns {Promise<{ accessToken, expiresIn, sessionExpiresAt, pwResetRequired, firstPage, user }>}
  *   sessionExpiresAt: 로그인 유지 만료 시각 (ISO 문자열, 로그인 + 13시간)
  *   user: { id, loginId, name, role, scope: { siteId, factoryIds, processIds } }
  */
-export function login({ loginId, password }) {
+export function login({ loginId, password, client = 'WEB' }) {
   if (USE_MOCK) {
     const found = MOCK_USERS.find((u) => u.loginId === loginId)
     if (!found || password !== MOCK_PASSWORD) {
       return mockFail({ code: 'AUTH_INVALID', message: '아이디 또는 비밀번호가 맞지 않습니다', status: 401 })
+    }
+    // 공정 담당자는 앱, 관리자는 웹으로만 (서버와 같은 검사)
+    if ((found.role === ROLE.WORKER) !== (client === 'APP')) {
+      const message = client === 'APP' ? '관리자 계정은 PC 웹에서 로그인해 주세요' : '공정 담당자는 담당자 앱으로 로그인해 주세요'
+      return mockFail({ code: 'CLIENT_NOT_ALLOWED', message, status: 403 })
     }
     return mockOk({
       accessToken: `mock-access-${found.id}`,
@@ -34,7 +39,7 @@ export function login({ loginId, password }) {
     })
   }
   // client: 웹(WEB) / 앱(APP) 구분 — 서버가 권한별 접속 기기를 검사함
-  return http.post('/auth/login', { loginId, password, client: 'WEB' })
+  return http.post('/auth/login', { loginId, password, client })
 }
 
 /**

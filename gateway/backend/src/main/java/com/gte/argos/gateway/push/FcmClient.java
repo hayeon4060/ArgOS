@@ -44,17 +44,38 @@ public class FcmClient {
         this.key = privateKey(String.valueOf(json.get("private_key")));
     }
 
-    /** data 메시지 전송. 실패하면 예외 */
+    /** 앱(phone/src/push.js)이 만드는 알림 채널 — 중요도 최대(화면 위로 뜨는 알림 + 소리) */
+    static final String ANDROID_CHANNEL = "argos_alert";
+
+    /** 종류별 알림 문구 { 제목, 내용 } — 관제 웹 개발 서버 시연 알림(mockSync.js)과 같은 말투 */
+    private static final Map<String, String[]> TEXT = Map.of(
+            "CHECKLIST_ASSIGNED", new String[] {"새 점검 체크리스트가 도착했습니다", "눌러서 확인하세요"},
+            "CHECKLIST_REMIND", new String[] {"다시 알림 · 체크리스트를 확인해 주세요", "눌러서 확인하세요"},
+            "CHECKLIST_REASSIGNED", new String[] {"체크리스트 담당자가 바뀌었습니다", "더 이상 내 체크리스트가 아닙니다"},
+            "WORKER_CALL", new String[] {"공장 담당자 호출", "현장을 확인해 주세요"},
+            "FIRE", new String[] {"화재 발생", "안내에 따라 바로 대피하세요"},
+            "FIRE_CLEARED", new String[] {"화재 해제", "화재 상황이 해제되었습니다"});
+
+    /** 알림 + data 메시지 전송. 실패하면 예외 */
     public void send(String token, Map<String, String> data) {
-        Map<String, Object> android = Map.of("priority", "high");
-        Map<String, Object> message = new LinkedHashMap<>();
-        message.put("token", token);
-        message.put("data", data);
-        message.put("android", android);
         rest.post().uri("https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send")
                 .header("Authorization", "Bearer " + accessToken())
-                .contentType(MediaType.APPLICATION_JSON).body(Map.of("message", message)).retrieve()
+                .contentType(MediaType.APPLICATION_JSON).body(Map.of("message", message(token, data))).retrieve()
                 .body(new ParameterizedTypeReference<Map<String, Object>>() { });
+    }
+
+    /**
+     * FCM 메시지 본문. data 만 보내면 앱이 꺼져 있거나 화면이 꺼져 있을 때 Android 가 알림을 띄우지 않으므로
+     * notification(제목 · 내용 · 채널)을 같이 넣음. 알림을 누르면 data(checklistId 등)가 앱으로 감
+     */
+    static Map<String, Object> message(String token, Map<String, String> data) {
+        String[] text = TEXT.getOrDefault(data.get("type"), new String[] {"ArgOS 알림", "눌러서 확인하세요"});
+        Map<String, Object> message = new LinkedHashMap<>();
+        message.put("token", token);
+        message.put("notification", Map.of("title", text[0], "body", text[1]));
+        message.put("data", data);
+        message.put("android", Map.of("priority", "high", "notification", Map.of("channel_id", ANDROID_CHANNEL)));
+        return message;
     }
 
     private synchronized String accessToken() {

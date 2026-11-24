@@ -38,6 +38,21 @@ export const MOCK_USERS = [
     role: ROLE.PLANT_ADMIN,
     scope: { siteId: 1, factoryIds: [5], processIds: [] },
   },
+  // 공정 담당자: 담당자 앱(phone)으로만 로그인 (id 는 scenario.js WORKERS 와 같게)
+  {
+    id: 21,
+    loginId: 'u5_paint01',
+    name: '김도현',
+    role: ROLE.WORKER,
+    scope: { siteId: 1, factoryIds: [5], processIds: [12] },
+  },
+  {
+    id: 22,
+    loginId: 'u5_paint02',
+    name: '박성훈',
+    role: ROLE.WORKER,
+    scope: { siteId: 1, factoryIds: [5], processIds: [12] },
+  },
 ]
 
 /* ───────── 공통 ───────── */
