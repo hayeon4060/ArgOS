@@ -23,7 +23,7 @@ const emit = defineEmits(['close', 'pick'])
 const PER = 11
 const today = new Date()
 const QUICK = [
-  { value: 'today', label: '오늘' },
+  { value: 'today', label: '금일' },
   { value: '7d', label: '7일' },
   { value: 'month', label: '이번 달' },
 ]
@@ -135,7 +135,7 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PER)))
                 <td><span class="code mono">{{ r.formType }}</span>{{ r.formName }}</td>
                 <td class="file">{{ r.fileName }}</td>
                 <td>{{ r.processName }}</td>
-                <td class="mono">{{ r.status === 'REVIEW' ? `${r.needCheckCount}개` : '–' }}</td>
+                <td class="mono">{{ r.status === 'REVIEW' && r.needCheckCount != null ? `${r.needCheckCount}개` : '–' }}</td>
                 <td>{{ r.uploadedBy }}</td>
                 <td><span class="m-chip" :class="statusChip(r.status).cls">{{ statusChip(r.status).label }}</span></td>
               </tr>
@@ -192,7 +192,7 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PER)))
 }
 
 .ilt {
-  height: min(560px, calc(100vh - 300px));
+  height: min(560px, calc(var(--screen-h) - 300px));
   overflow-y: auto;
 }
 

@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAlarms, getHourlyAlarms } from '@/api/dashboard'
 import { getFactoryOverview } from '@/api/factory'
 import { getSiteName } from '@/api/sites'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import AlarmListCard from '@/features/dashboard/AlarmListCard.vue'
 import HourlyAlarmCard from '@/features/dashboard/HourlyAlarmCard.vue'
@@ -33,7 +34,7 @@ const errorMessage = ref('')
 
 /**
  * 네 가지를 한꺼번에 불러옴 (하나라도 실패하면 오류 문구)
- * - silent: 상황이 바뀌어 다시 부를 때는 '불러오는 중'을 띄우지 않음
+ * - silent: 상황이 바뀌어 다시 부를 때는 뼈대를 띄우지 않음
  */
 async function load({ silent = false } = {}) {
   const { siteId, factoryId } = route.params
@@ -79,7 +80,8 @@ function onSelectProcess(process) {
 </script>
 
 <template>
-  <p v-if="loading" class="state">불러오는 중</p>
+  <!-- 처음 들어올 때·주소가 바뀔 때만 뼈대 (조용히 다시 받을 때는 그대로) -->
+  <PageSkeleton v-if="loading" shape="dashboard" layout="dashboard" />
   <p v-else-if="errorMessage" class="state error">{{ errorMessage }}</p>
 
   <div v-else class="factory-dashboard">
@@ -121,6 +123,13 @@ function onSelectProcess(process) {
   grid-template-columns: minmax(0, 1fr) 628px;
   gap: 16px;
   align-items: stretch;
+  /*
+   * 화면 높이를 채움: 본문 높이(화면 − 상단 바 − 본문 위아래 여백 40px)만큼 최소 높이를 주고,
+   * 남는 높이는 위 줄(지도 카드 · 오른쪽 알림 목록)이 가져감. 아래 줄 카드는 내용 높이 그대로
+   * (전에는 내용 높이만큼만 그려서 큰 화면에서 아래가 비었음)
+   */
+  min-height: calc(var(--screen-h) - var(--topbar-height) - 40px);
+  grid-template-rows: 1fr auto;
 }
 
 .wide {
@@ -130,6 +139,9 @@ function onSelectProcess(process) {
 @media (max-width: 1400px) {
   .factory-dashboard {
     grid-template-columns: minmax(0, 1fr);
+    /* 한 열로 쌓일 때는 내용 높이대로 */
+    min-height: 0;
+    grid-template-rows: none;
   }
 }
 

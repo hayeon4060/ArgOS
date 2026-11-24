@@ -31,7 +31,7 @@ function onRow(item) {
 </script>
 
 <template>
-  <BaseCard title="오늘 설비 점검" :sub="`${processName} · ${inspections.totalCount}건`">
+  <BaseCard title="금일 설비 점검" :sub="`${processName} · ${inspections.totalCount}건`">
     <template #actions>
       완료 <b class="mono">{{ inspections.doneCount }}/{{ inspections.totalCount }}</b>
       <RouterLink :to="inspectionRoute" class="link">점검 관리</RouterLink>
@@ -39,7 +39,7 @@ function onRow(item) {
 
     <div class="list">
       <InspectionRow v-for="item in inspections.items" :key="item.scheduleId" :item="item" @click="onRow(item)" />
-      <p v-if="inspections.items.length === 0" class="empty">오늘 점검 일정이 없습니다.</p>
+      <p v-if="inspections.items.length === 0" class="empty">금일 점검 일정이 없습니다.</p>
     </div>
   </BaseCard>
 </template>

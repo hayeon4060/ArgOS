@@ -166,6 +166,12 @@
     animation: none !important;
   }
 
+  /* 뼈대 화면: 밝은 띠를 멈추고 고정 회색만 (components/skeleton/SkeletonBlock.vue) */
+  .sk-block::after {
+    animation: none !important;
+    opacity: 0;
+  }
+
   /* 깜빡임 대신 테두리를 굵게 */
   .halo.glow {
     --halo-width: 10px !important; /* 그림에 직접 붙은 값보다 우선 */

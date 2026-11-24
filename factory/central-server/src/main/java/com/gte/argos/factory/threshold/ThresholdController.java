@@ -69,7 +69,7 @@ public class ThresholdController {
 
     @PutMapping("/sensors/{sensorId}")
     public ApiResponse<Map<String, Object>> updateSensor(@PathVariable long sensorId, @RequestBody SensorRequest body) {
-        return ApiResponse.ok(service.updateSensor(sensorId, body.sampleSec(), body.active()));
+        return ApiResponse.ok(service.updateSensor(sensorId, body.sampleSec(), body.active(), body.streamUrl()));
     }
 
     public record SaveRequest(@NotBlank String season, Long version, String reason, Long userId,
@@ -80,6 +80,7 @@ public class ThresholdController {
                                   Integer warnSamples, Integer alarmSamples, Integer days) {
     }
 
-    public record SensorRequest(Integer sampleSec, Boolean active) {
+    /** streamUrl: VMS 영상 주소. null 이면 그대로, 빈 글자면 지움 */
+    public record SensorRequest(Integer sampleSec, Boolean active, String streamUrl) {
     }
 }

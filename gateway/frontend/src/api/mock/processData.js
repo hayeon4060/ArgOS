@@ -6,6 +6,7 @@
  *   예) 주의: CT-17 22.4 A 주의 / 정상: 18.1 A → 공장·사업장 화면 숫자도 같이 바뀜
  * - 센서 19개 = 전류 9 + 온도 6 + CO 4 (CO-14 는 예비 센서라 그림에 위치 없음)
  */
+import { addedLayout } from './addedScope'
 import { LAYOUT, editsOf } from './layoutData'
 import { FAN_RATED_RPM, autoRpmOf, fanAutoMode } from './fanAuto'
 import { isGasWarn, scenario, topOvenValue } from './scenario'
@@ -19,16 +20,19 @@ const { NORMAL, WARN, ALARM, FIRE } = LEVEL
  * - 설비 상세 예시 데이터(equipmentData.js)도 이 목록을 그대로 씀 → 두 화면 숫자가 어긋나지 않음
  * - type: DB equipment.equipment_type 코드. 지금 DB 시드 · 체크리스트 양식에 있는 코드(OVEN · TANK …)만 쓰고,
  *   코드가 정해지지 않은 설비(실링 · 부스 · 공조기 · 도료 혼합실 · 소각설비)는 null (backend-notes 15장 질문)
+ * - code: 실제 서버(중앙 시드 공정 12)에 있는 설비는 그 코드 (PT-TANK · ED-TANK · ED-OVEN · PR-OVEN · TC-OVEN, 2026-11-20)
+ *   실제 시드에 없는 설비(실링 · 부스 · 공조기 · 도료 혼합실 · 소각설비)는 화면설계안 그림 때문에 'PNT-' 코드로 남김
+ *   (실제 서버의 배기팬 · 버너실 · 펌프 · 열화상 카메라는 따로 설비지만, 예시는 건조로 · 탱크 한 대로 묶어 둠)
  */
 export const EQUIPMENT = [
-  { id: 24, code: 'PNT-PRETREAT', name: '전처리', type: 'TANK', seq: 1, manager: '이재호' },
-  { id: 25, code: 'PNT-ED-TANK', name: '전착 탱크', type: 'TANK', seq: 2, manager: '이재호' },
-  { id: 26, code: 'PNT-ED-OVEN', name: '전착 건조로', type: 'OVEN', seq: 3, manager: '박성훈' },
+  { id: 24, code: 'PT-TANK', name: '전처리', type: 'TANK', seq: 1, manager: '이재호' },
+  { id: 25, code: 'ED-TANK', name: '전착 탱크', type: 'TANK', seq: 2, manager: '이재호' },
+  { id: 26, code: 'ED-OVEN', name: '전착 건조로', type: 'OVEN', seq: 3, manager: '박성훈' },
   { id: 27, code: 'PNT-SEALING', name: '실링', type: null, seq: 4, manager: '박성훈' },
   { id: 28, code: 'PNT-PRIMER-BOOTH', name: '중도 부스', type: null, seq: 5, manager: '박성훈' },
-  { id: 29, code: 'PNT-PRIMER-OVEN', name: '중도 건조로', type: 'OVEN', seq: 6, manager: '박성훈' },
+  { id: 29, code: 'PR-OVEN', name: '중도 건조로', type: 'OVEN', seq: 6, manager: '박성훈' },
   { id: 30, code: 'PNT-TOP-BOOTH', name: '상도 부스', type: null, seq: 7, manager: '김도현' },
-  { id: 31, code: 'PNT-TOP-OVEN', name: '상도 건조로', type: 'OVEN', seq: 8, manager: '김도현' },
+  { id: 31, code: 'TC-OVEN', name: '상도 건조로', type: 'OVEN', seq: 8, manager: '김도현' },
   { id: 32, code: 'PNT-AHU', name: '공조기 (AHU)', type: null, seq: null, manager: '이재호' },
   { id: 33, code: 'PNT-PAINT-MIX', name: '도료 혼합실', type: null, seq: null, manager: '이재호' },
   { id: 34, code: 'PNT-INCINERATOR', name: '소각설비', type: null, seq: null, manager: '이재호' },
@@ -102,7 +106,7 @@ export function runStateOf(equipmentId) {
  * 배기팬이 있는 설비 → 팬 상태 (상도 건조로는 주의 이상이면 회전수를 올려 둔 상태, 정지되면 꺼짐)
  * - 가스(CO) 알림 + 배기팬 자동이면 자동 회전수 (주의 75% 1,350 rpm · 경보 100% 1,800 rpm, fanAuto.js)
  *   수동이면 그동안처럼 1,240 rpm (사람이 올려 둔 값)
- * - 평소(알림 없음)는 1,200 rpm (40 Hz) — 알림이 끝나면 서버가 이 값으로 되돌림
+ * - 평소(알림 없음)는 900 rpm (30 Hz) — 알림이 끝나면 서버가 이 값으로 되돌림
  */
 function fansNow(topLevel) {
   const fan = { power: 'ON', rpm: FAN_RATED_RPM, targetRpm: FAN_RATED_RPM }
@@ -144,6 +148,9 @@ export function mockProcess(processId) {
   const sensors = sensorsNow()
   const levelOfEq = (id) => equipmentLevel(id, sensors)
   const fans = fansNow(levelOfEq(31))
+  // 공장 관리 설비 추가 · 삭제 (2026-11-20): 지운 원래 설비는 빼고, 추가한 설비(그림 이름 shape · 위치 pos)를 뒤에 붙임
+  const seed = EQUIPMENT.filter((e) => !LAYOUT.removed.includes(e.id))
+  const extra = structuredClone(addedLayout(12).equipment)
   return {
     // GET /processes/{processId}/layout
     layout: {
@@ -153,22 +160,28 @@ export function mockProcess(processId) {
       floorplan: null,
       // 백엔드 DashboardService.processLayout 과 같은 모양: type(equipment_type) · pos{x,y,z}(pos_x · pos_y · pos_z) · active(is_active)
       // 위치는 DB 시드처럼 처음엔 비어 있음(그림에 그려진 자리). 공장 관리에서 저장한 값을 덮어씀 (layoutData.js)
-      equipment: EQUIPMENT.map(({ manager, ...e }) => ({
-        ...e,
-        pos: { x: null, y: null, z: null },
-        active: true,
-        managers: [{ id: 0, name: manager, primary: true }],
-        // 배기팬 자동(true)/수동(false), 배기팬이 없는 설비는 null (2026-11-19 추가, DB equipment.fan_auto)
-        fanAuto: fanAutoMode(e.id),
-        ...editsOf(e.id),
-      })),
+      equipment: [
+        ...seed.map(({ manager, ...e }) => ({
+          ...e,
+          pos: { x: null, y: null, z: null },
+          active: true,
+          managers: [{ id: 0, name: manager, primary: true }],
+          // 배기팬 자동(true)/수동(false), 배기팬이 없는 설비는 null (2026-11-19 추가, DB equipment.fan_auto)
+          fanAuto: fanAutoMode(e.id),
+          ...editsOf(e.id),
+        })),
+        ...extra,
+      ],
       sensors: sensors.map(({ id, tag, type, unit, equipmentId }) => ({ id, tag, type, unit, equipmentId, active: true })),
     },
     // GET /processes/{processId}/status
     status: {
       processId: 12,
       level: scenario.state === FIRE ? FIRE : maxLevel(sensors.map((s) => s.level)),
-      equipment: EQUIPMENT.map((e) => ({ id: e.id, level: levelOfEq(e.id), runState: runStateOf(e.id), fan: fans[e.id] ?? null })),
+      equipment: [
+        ...seed.map((e) => ({ id: e.id, level: levelOfEq(e.id), runState: runStateOf(e.id), fan: fans[e.id] ?? null })),
+        ...extra.map((e) => ({ id: e.id, level: LEVEL.NORMAL, runState: 'RUNNING', fan: null })), // 추가한 설비는 센서가 없어 늘 정상
+      ],
       sensors: sensors.map(({ id, tag, value, level, warn, alarm }) => ({ id, tag, value, level, warn, alarm })),
     },
     // GET /inspections/today?processId=12

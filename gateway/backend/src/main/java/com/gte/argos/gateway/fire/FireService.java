@@ -117,7 +117,8 @@ public class FireService {
             return;
         }
         String message = broadcastMessage(a.processId(), m);
-        boolean ok = broadcast.start(fireId, a.plantId(), a.processId(), message);
+        boolean ok = broadcast.start(new BroadcastSender.Start(fireId, a.plantId(), a.factoryId(), a.processId(),
+                a.equipmentId(), location(a.factoryId(), a.processId(), a.equipmentId(), m, false), message, detected));
         if (ok) {
             jdbc.update("UPDATE fire_incident SET broadcast_started_at = :now WHERE fire_id = :id",
                     new MapSqlParameterSource("now", now).addValue("id", fireId));
@@ -169,6 +170,19 @@ public class FireService {
         return out;
     }
 
+    /** 상단 바: 내 범위에서 진행 중인 화재 하나 (가장 최근) {id, location}. 없으면 null */
+    public Map<String, Object> activeFire() {
+        List<Map<String, Object>> active = list("ACTIVE", null);
+        if (active.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> f = active.get(0);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", f.get("id"));
+        out.put("location", f.get("location"));
+        return out;
+    }
+
     /** GET /fires/{fireId} */
     public Map<String, Object> detail(long fireId) {
         UserScope scope = currentUser.scope();
@@ -196,7 +210,12 @@ public class FireService {
         Event ir = a == null ? null : irEvent(a);
         Map<String, Object> thermal = new LinkedHashMap<>();
         thermal.put("cameraId", ir == null ? null : ir.sensorId());
-        thermal.put("imageUrl", a == null || a.thermalFileId() == null ? null : "/files/" + a.thermalFileId());
+        // VMS 실시간 영상 주소 (ERD V6 sensor.stream_url). 3단계면 화면이 이 주소로 바로 연결
+        CentralDto.Sensor camera = ir != null ? m.sensor(ir.sensorId())
+                : m.sensorsOfProcess(f.processId()).stream().filter(x -> "IR".equals(x.type())).findFirst().orElse(null);
+        thermal.put("cameraTag", camera == null ? null : camera.tag());
+        thermal.put("streamUrl", camera == null ? null : camera.streamUrl());
+        thermal.put("imageUrl", a == null ? null : com.gte.argos.gateway.thermal.ThermalService.imageUrl(a.thermalFileId()));
         thermal.put("max", f.maxTemp());
         thermal.put("min", null);
         thermal.put("avg", null);
@@ -209,6 +228,58 @@ public class FireService {
         v.put("hqNotifiedAt", f.hqNotifiedAt());
         v.put("unlock", unlock(f.unlockFailCount()));
         v.put("actions", actions(f));
+        v.put("values", values(f, a, m));
+        v.put("serverTime", time.now());
+        return v;
+    }
+
+    /**
+     * 감지 근거 숫자 3칸 { thermalMax, temp, co }. 열화상 최고는 화재 기록 값, 온도·CO 는 그 관제 단위 센서의 지금 값
+     * (경보 원인 이벤트가 있으면 그 최고값). 센서가 없으면 null
+     */
+    private Map<String, Object> values(Fire f, Alarm a, MasterCache.Snapshot m) {
+        Double temp = null;
+        Double co = null;
+        Double ir = f.maxTemp();
+        java.util.Set<Long> unitSensors = new java.util.HashSet<>();
+        if (a != null && m.unit(a.unitId()) != null) {
+            m.unit(a.unitId()).members().forEach(x -> unitSensors.add(x.sensorId()));
+        }
+        if (f.processId() != null) {
+            try {
+                for (CentralDto.SensorStatus s : central.status(f.processId()).sensors()) {
+                    if (!unitSensors.isEmpty() && !unitSensors.contains(s.sensorId()) || s.value() == null) {
+                        continue;
+                    }
+                    switch (s.type()) {
+                        case "TE" -> temp = temp == null ? s.value() : Math.max(temp, s.value());
+                        case "AT" -> co = co == null ? s.value() : Math.max(co, s.value());
+                        case "IR" -> ir = ir == null ? s.value() : ir;
+                        default -> { }
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.debug("화재 근거 값 조회 실패: {}", e.getMessage());
+            }
+        }
+        if (a != null) {
+            for (Event e : a.events()) {
+                if (e.peak() == null) {
+                    continue;
+                }
+                if ("TE".equals(e.type())) {
+                    temp = temp == null ? e.peak() : Math.max(temp, e.peak());
+                } else if ("AT".equals(e.type())) {
+                    co = co == null ? e.peak() : Math.max(co, e.peak());
+                } else if ("IR".equals(e.type())) {
+                    ir = ir == null ? e.peak() : Math.max(ir, e.peak());
+                }
+            }
+        }
+        Map<String, Object> v = new LinkedHashMap<>();
+        v.put("thermalMax", ir);
+        v.put("temp", temp);
+        v.put("co", co);
         return v;
     }
 
@@ -248,7 +319,7 @@ public class FireService {
                        broadcast_ended_at = COALESCE(broadcast_ended_at, :now)
                 WHERE fire_id = :id
                 """, new MapSqlParameterSource("by", scope.userId()).addValue("now", now).addValue("id", fireId));
-        broadcast.stop(fireId);
+        broadcast.stop(fireId, "CLEARED");
         pushWorkers(f.processId(), "FIRE_CLEARED", fireId);
         checklists.addAction(f.alarmId(), "MANUAL_NOTE", "화재 해제", "OK",
                 memo == null || memo.isBlank() ? "화재 경보 해제" : "화재 경보 해제: " + memo, scope.userId(), now);
@@ -267,6 +338,54 @@ public class FireService {
         hub.publish("fire.cleared", Map.of("fireId", fireId, "clearedBy", me.name(), "clearedAt", now),
                 s -> s.scope().isHq() || s.scope().canSite(f.plantId(), masterCache.get()));
         return out;
+    }
+
+    /**
+     * 값이 정상으로 돌아와 화재 경보가 자동 종료되면 화재도 자동 해제한다 (비밀번호 없이, 2026-11-20).
+     * 방송을 멈추고 작업자에게 해제 푸시, 조치 기록 · 이용 로그(사용자 없음), SSE fire.cleared. 해제했으면 fire id
+     */
+    public Long autoClear(long alarmId) {
+        List<Fire> active = jdbc.query("SELECT * FROM fire_incident WHERE alarm_id = :a AND status <> 'CLEARED'",
+                new MapSqlParameterSource("a", alarmId), (rs, i) -> fire(rs));
+        if (active.isEmpty()) {
+            return null;
+        }
+        Fire f = active.get(0);
+        OffsetDateTime now = time.now();
+        jdbc.update("""
+                UPDATE fire_incident SET status = 'CLEARED', cleared_at = :now,
+                       broadcast_ended_at = COALESCE(broadcast_ended_at, :now)
+                WHERE fire_id = :id
+                """, new MapSqlParameterSource("now", now).addValue("id", f.id()));
+        broadcast.stop(f.id(), "AUTO_CLEARED");
+        pushWorkers(f.processId(), "FIRE_CLEARED", f.id());
+        checklists.addAction(alarmId, "MANUAL_NOTE", "화재 자동 해제", "OK", "값이 정상으로 돌아와 화재 경보 자동 해제",
+                null, now);
+        activity.logAs(null, "FIRE_CLEAR", f.plantId(), f.processId(), "fire_incident", f.id(),
+                "화재 경보 자동 해제 (값이 정상으로 돌아옴)");
+        hub.publish("fire.cleared", Map.of("fireId", f.id(), "clearedBy", "자동 해제", "clearedAt", now),
+                s -> s.scope().isHq() || s.scope().canSite(f.plantId(), masterCache.get()));
+        log.info("화재 {} 자동 해제 (경보 {} 값 회복)", f.id(), alarmId);
+        return f.id();
+    }
+
+    /**
+     * 진행 중 화재인데 그 경보가 이미 닫힌 건을 자동 해제한다. 수집 서버를 다시 켤 때 정리한 경보 알림은
+     * 피드에서 건너뛸 수 있어서, 중앙 서버가 수집 서버 재시작을 알아챌 때 한 번 훑는다. 해제한 수
+     */
+    public int sweepClosedAlarms() {
+        int n = 0;
+        for (Long alarmId : jdbc.queryForList("SELECT alarm_id FROM fire_incident WHERE status <> 'CLEARED'",
+                new MapSqlParameterSource(), Long.class)) {
+            try {
+                if ("CLOSED".equals(central.alarm(alarmId).status()) && autoClear(alarmId) != null) {
+                    n++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("화재 정리 중 경보 {} 확인 실패: {}", alarmId, e.getMessage());
+            }
+        }
+        return n;
     }
 
     /** POST /fires/{fireId}/approve-unlock: 본사 관리자가 잠금을 풀어 준다 */
@@ -419,8 +538,12 @@ public class FireService {
     private List<Map<String, Object>> actions(Fire f) {
         List<ChecklistRepository.Action> acts = checklists.actions(f.alarmId());
         List<Map<String, Object>> out = new ArrayList<>();
-        out.add(step("DETECTED", f.detectedAt(), true, null));
-        out.add(step("BROADCAST", f.broadcastStartedAt(), f.broadcastStartedAt() != null, null));
+        boolean active = !"CLEARED".equals(f.status());
+        out.add(step("DETECTED", f.detectedAt(), true, "열화상 화재 감지", false));
+        boolean broadcasting = f.broadcastStartedAt() != null && f.broadcastEndedAt() == null;
+        out.add(step("BROADCAST", f.broadcastStartedAt(), f.broadcastStartedAt() != null,
+                broadcasting ? "공장 경고 방송 송출 중" : f.broadcastStartedAt() == null ? "공장 경고 방송 전" : "공장 경고 방송 종료",
+                broadcasting));
         ChecklistRepository.Action shut = null;
         Set<Long> evacuated = new java.util.HashSet<>();
         for (ChecklistRepository.Action ac : acts) {
@@ -432,21 +555,22 @@ public class FireService {
             }
         }
         out.add(step("SHUTDOWN", shut == null ? null : shut.doneAt(), shut != null,
-                shut == null ? "설비 셧다운 전" : ChecklistRepository.actionText(shut)));
+                shut == null ? "설비 셧다운 전" : ChecklistRepository.actionText(shut), false));
         int total = f.processId() == null ? 0 : checklists.workers(f.processId()).size();
-        out.add(step("EVACUATED", null, total > 0 && evacuated.size() >= total,
-                "공정 담당자 대피 확인 " + evacuated.size() + "/" + total));
+        boolean allOut = total > 0 && evacuated.size() >= total;
+        out.add(step("EVACUATED", null, allOut,
+                "공정 담당자 대피 확인 " + evacuated.size() + "/" + total, active && !allOut));
         return out;
     }
 
-    private static Map<String, Object> step(String step, OffsetDateTime at, boolean done, String text) {
+    /** running: 지금 진행 중인 조치 ('송출 중' 칩) */
+    private static Map<String, Object> step(String step, OffsetDateTime at, boolean done, String text, boolean running) {
         Map<String, Object> s = new LinkedHashMap<>();
         s.put("step", step);
         s.put("at", at);
         s.put("done", done);
-        if (text != null) {
-            s.put("text", text);
-        }
+        s.put("text", text);
+        s.put("running", running);
         return s;
     }
 

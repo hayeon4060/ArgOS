@@ -43,9 +43,22 @@ public class AlarmService {
     private final SimTime time;
     private final ChecklistRepository checklists;
     private final ThermalService thermal;
+    private final com.gte.argos.gateway.fire.FireIds fireIds;
+    private com.gte.argos.gateway.chat.ChatService chat;
+    private com.gte.argos.gateway.fire.FireService fires;
+
+    /** 상단 바 채팅 · 화재 숫자용 (서로 기대지 않게 setter 로) */
+    @org.springframework.beans.factory.annotation.Autowired
+    void setSummarySources(@org.springframework.context.annotation.Lazy com.gte.argos.gateway.chat.ChatService chat,
+                           @org.springframework.context.annotation.Lazy com.gte.argos.gateway.fire.FireService fires) {
+        this.chat = chat;
+        this.fires = fires;
+    }
 
     public AlarmService(CentralClient central, MasterCache masterCache, CurrentUser currentUser, SimTime time,
-                        ChecklistRepository checklists, ThermalService thermal) {
+                        ChecklistRepository checklists, ThermalService thermal,
+                        com.gte.argos.gateway.fire.FireIds fireIds) {
+        this.fireIds = fireIds;
         this.central = central;
         this.masterCache = masterCache;
         this.currentUser = currentUser;
@@ -94,8 +107,9 @@ public class AlarmService {
     }
 
     /**
-     * GET /alarms/hourly?date= : 그날(기본 어제) 주간 07~19시, 야간 19시 ~ 다음 날 07시의 시간별 주의·경보·조치 건수.
-     * 집계 범위 = date 07:00 ~ date+1 07:00 (시연 시계 날짜 기준). 조치는 확인 시각이 범위 안인 것만 센다.
+     * GET /alarms/hourly?date= : 그날(기본 어제) 00~24시의 시간별 주의·경보·조치 건수 (hours, alarmCount, actionCount).
+     * 집계 범위 = date 00:00 ~ date+1 00:00 (시연 시계 날짜 기준, 2026-11-20 하루 한 줄로 변경). 조치는 확인 시각이 범위 안인 것만 센다.
+     * day(07~19시) · night(19~24시 + 00~07시, 같은 날) 는 예전 화면 호환용으로 남긴다.
      */
     public Map<String, Object> hourly(Long siteId, Long factoryId, String date) {
         UserScope scope = currentUser.require(UserScope.HQ_ADMIN, UserScope.PLANT_ADMIN);
@@ -123,6 +137,7 @@ public class AlarmService {
         out.put("date", day.toString());
         out.put("from", range[0]);
         out.put("to", range[1]);
+        out.putAll(shift(byHour, 0, 24));
         out.put("day", shift(byHour, 7, 19));
         out.put("night", shift(byHour, 19, 31));
         return out;
@@ -139,9 +154,9 @@ public class AlarmService {
         return LocalDate.parse(date);
     }
 
-    /** 주간 07시 ~ 다음 날 07시 (야간이 날짜를 넘어감) */
+    /** 그날 00시 ~ 다음 날 00시 */
     static OffsetDateTime[] hourlyRange(LocalDate day) {
-        OffsetDateTime start = day.atTime(7, 0).atZone(SimTime.ZONE).toOffsetDateTime();
+        OffsetDateTime start = day.atStartOfDay(SimTime.ZONE).toOffsetDateTime();
         return new OffsetDateTime[] {start, start.plusDays(1)};
     }
 
@@ -252,6 +267,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("cause", cause);
@@ -259,18 +275,22 @@ public class AlarmService {
         out.put("rule", rule);
         out.put("sensors", sensors);
         // 열화상 그림(VMS)은 아직 없어서 IR 센서 값으로 요약 (imageUrl 은 null → 화면이 단계별 예시 그림 사용)
-        out.put("thermal", thermal.forAlarm(a.processId(), eq == null ? null : eq.id(), status, time.now()));
+        out.put("thermal", withImage(thermal.forAlarm(a.processId(), eq == null ? null : eq.id(), status, time.now()), a));
         out.put("trend", trend);
+        // 같은 관제 단위 센서 3종(전류·온도·CO) 추이. 화면이 유형에 맞는 2개를 고름 (docs/api/warn-detail-trends.md)
+        out.put("trends", trends(a, status, unitSensors));
         out.put("causeCandidates", template == null ? List.of() : List.of(template.cause()));
         out.put("templateId", template == null ? null : template.id());
         out.put("equipmentId", eq == null ? null : eq.id());
         out.put("equipmentType", eq == null ? null : eq.type());
         out.put("processId", a.processId());
         out.put("valueStillOver", a.valueStillOver());
+        out.put("fanAuto", AlarmViews.fanAuto(a));
         return out;
     }
 
     /** GET /alarms/{alarmId}/response: 경보 창 (같은 공정의 센서 전부, 정지시킬 설비, 로그) */
+    // sensors 는 공정 센서 전부를 준다 (관제 단위로 거르는 건 화면이 detail 로 함). equipment 도 공정 전체
     public Map<String, Object> response(long alarmId) {
         Alarm a = visibleAlarm(alarmId);
         MasterCache.Snapshot m = masterCache.get();
@@ -336,21 +356,234 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
-        out.put("fireId", null);
-        out.put("title", a.unitName() + "에서 " + Codes.stageName(a.stage()) + "가 발생했습니다");
+        String hazardLabel = AlarmViews.hazardLabel(a);
+        out.put("hazardLabel", hazardLabel);
+        out.put("fireId", fireIds.byAlarm(a.alarmId()));
+        String hazardPrefix = hazardLabel.isEmpty() ? "" : hazardLabel + " ";
+        out.put("title", a.unitName() + "에서 " + hazardPrefix + Codes.stageName(a.stage()) + "가 발생했습니다");
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("reason", String.join(", ", reasons));
         out.put("reasonDetail", String.join(" · ", details));
         out.put("cameraId", cameraId);
         // 열화상 그림(VMS)은 아직 없어서 IR 센서 값으로 요약 (imageUrl 은 null → 화면이 단계별 예시 그림 사용)
-        out.put("thermal", thermal.forAlarm(a.processId(), mainEq == null ? null : mainEq.id(), status, time.now()));
+        out.put("thermal", withImage(thermal.forAlarm(a.processId(), mainEq == null ? null : mainEq.id(), status, time.now()), a));
         out.put("shutdown", shutdownView(actions, m.equipmentOf(a.processId()), eqStatus));
         out.put("sensors", sensors);
         out.put("equipment", equipment);
         out.put("logs", logs);
         out.put("valueStillOver", a.valueStillOver());
+        out.put("fanAuto", AlarmViews.fanAuto(a));
         return out;
+    }
+
+    /**
+     * GET /stats/alarms/{alarmId}: 통계·이력 알림 상세 패널 (stats-history-api.md 2장).
+     * 지난 알림 · 진행 중 알림, 주의 · 경보 모두 같은 모양. 담당 범위 밖이면 404.
+     */
+    public Map<String, Object> historyDetail(long alarmId) {
+        UserScope scope = currentUser.require(UserScope.HQ_ADMIN, UserScope.PLANT_ADMIN);
+        Alarm a;
+        try {
+            a = central.alarm(alarmId);
+        } catch (ApiException e) {
+            throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
+        }
+        MasterCache.Snapshot m = masterCache.get();
+        if (!scope.canProcess(a.processId(), m)) {
+            throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
+        }
+        Map<String, Object> row = items(List.of(a), m).get(0);
+        OffsetDateTime now = time.now();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", a.alarmId());
+        out.put("level", Codes.level(a.stage()));
+        out.put("status", a.status());
+        out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
+        out.put("location", row.get("location"));
+        out.put("factoryId", a.factoryId());
+        out.put("processId", a.processId());
+        out.put("equipmentId", row.get("equipmentId"));
+        out.put("raisedAt", a.raisedAt());
+        out.put("closedAt", a.closedAt());
+        out.put("closeReason", a.closeReason());
+        OffsetDateTime end = a.closedAt() != null ? a.closedAt() : now;
+        out.put("actionMinutes", a.raisedAt() == null ? null
+                : Math.max(1, java.time.Duration.between(a.raisedAt(), end).toMinutes()));
+        out.put("sensorTag", row.get("sensorTag"));
+        out.put("sensorType", row.get("sensorType"));
+        out.put("value", row.get("value"));
+        out.put("unit", row.get("unit"));
+        out.put("threshold", row.get("threshold"));
+        out.put("ackedBy", row.get("ackedBy"));
+        out.put("fanAuto", AlarmViews.fanAuto(a));
+
+        CentralDto.AlarmSeries s = central.alarmSeries(alarmId);
+        Map<String, Object> series = new LinkedHashMap<>();
+        series.put("from", s.from());
+        series.put("to", s.to());
+        series.put("intervalSec", s.intervalSec());
+        List<Map<String, Object>> sensors = new ArrayList<>();
+        for (CentralDto.AlarmSensorSeries x : s.sensors()) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("sensorId", x.sensorId());
+            r.put("tag", x.tag());
+            r.put("type", Codes.sensorType(x.type()));
+            r.put("unit", x.unit());
+            r.put("warn", x.warn());
+            r.put("alarm", x.alarm());
+            r.put("lowWarn", x.lowWarn());
+            r.put("lowAlarm", x.lowAlarm());
+            r.put("trigger", x.trigger());
+            r.put("points", x.points());
+            sensors.add(r);
+        }
+        series.put("sensors", sensors);
+        out.put("series", series);
+
+        Map<String, Object> th = thermal.forAlarm(a.processId(),
+                a.equipmentId(), central.status(a.processId()), now);
+        if (th != null) {
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("imageUrl", a.thermalFileId() != null ? ThermalService.imageUrl(a.thermalFileId()) : th.get("imageUrl"));
+            t.put("capturedAt", a.raisedAt());
+            t.put("max", th.get("max"));
+            t.put("avg", th.get("avg"));
+            t.put("maxPoint", th.get("maxPoint"));
+            t.put("cameraTag", th.get("cameraTag"));
+            out.put("thermal", t);
+        } else {
+            out.put("thermal", null);
+        }
+
+        List<Map<String, Object>> timeline = new ArrayList<>();
+        for (Object o : (List<?>) timeline(alarmId).get("timeline")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> st = (Map<String, Object>) o;
+            String step = historyStep(String.valueOf(st.get("step")));
+            if (step == null) {
+                continue;
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("at", st.get("at"));
+            r.put("step", step);
+            r.put("by", st.get("by"));
+            r.put("text", st.get("text") != null ? st.get("text") : historyText(step, a, row));
+            timeline.add(r);
+        }
+        timeline.sort(java.util.Comparator.comparing(r -> (OffsetDateTime) r.get("at"),
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        out.put("timeline", timeline);
+
+        if (a.stage() < 3) {
+            Checklist c = checklists.latestForAlarm(alarmId);
+            if (c == null) {
+                out.put("checklist", null);
+            } else {
+                Map<String, Object> ck = new LinkedHashMap<>();
+                ck.put("assignee", c.assigneeName());
+                ck.put("doneCount", c.doneCount());
+                ck.put("totalCount", c.items().size());
+                List<Map<String, Object>> items = new ArrayList<>();
+                for (ChecklistRepository.Item it : c.items()) {
+                    Map<String, Object> i = new LinkedHashMap<>();
+                    i.put("seq", it.seq());
+                    i.put("content", it.content());
+                    i.put("doneAt", it.doneAt());
+                    i.put("result", it.result());
+                    i.put("memo", it.memo());
+                    items.add(i);
+                }
+                ck.put("items", items);
+                out.put("checklist", ck);
+            }
+            out.put("shutdown", null);
+        } else {
+            out.put("checklist", null);
+            Map<Long, CentralDto.EquipmentStatus> eqStatus = new HashMap<>();
+            central.status(a.processId()).equipment().forEach(x -> eqStatus.put(x.equipmentId(), x));
+            Map<String, Object> sd = shutdownView(checklists.actions(alarmId), m.equipmentOf(a.processId()), eqStatus);
+            out.put("shutdown", sd == null ? null : Map.of("steps", sd.get("steps")));
+        }
+        return out;
+    }
+
+    /** 주의 상세 추이 그래프들: 알림 발생 30분 전 ~ 지금, 1분 간격. 순서 전류 → 온도 → CO, 열화상 제외 */
+    private List<Map<String, Object>> trends(Alarm a, CentralDto.Status status, Set<Long> unitSensors) {
+        List<SensorStatus> targets = status.sensors().stream()
+                .filter(s -> unitSensors.contains(s.sensorId()) && !"IR".equals(s.type()))
+                .sorted(java.util.Comparator.comparingInt((SensorStatus s) -> trendOrder(s.type()))
+                        .thenComparingLong(SensorStatus::sensorId))
+                .toList();
+        if (targets.isEmpty()) {
+            return List.of();
+        }
+        OffsetDateTime from = a.raisedAt().minusMinutes(30);
+        OffsetDateTime to = time.now();
+        CentralDto.Series series = central.series(targets.stream().map(SensorStatus::sensorId).toList(), from,
+                to.isAfter(from) ? to : from.plusMinutes(31), "1m");
+        Map<Long, CentralDto.SensorSeries> byId = new HashMap<>();
+        series.series().forEach(x -> byId.put(x.sensorId(), x));
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (SensorStatus s : targets) {
+            CentralDto.SensorSeries x = byId.get(s.sensorId());
+            List<List<Object>> points = new ArrayList<>();
+            if (x != null && x.points() != null) {
+                for (List<Object> p : x.points()) {
+                    points.add(java.util.Arrays.asList(p.get(0), p.get(1)));
+                }
+            }
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("sensorId", s.sensorId());
+            t.put("tag", s.tag());
+            t.put("type", Codes.sensorType(s.type()));
+            t.put("unit", s.unit());
+            t.put("warn", s.warn());
+            t.put("alarm", s.alarm());
+            t.put("points", points);
+            out.add(t);
+        }
+        return out;
+    }
+
+    /** 전류 → 온도 → CO → 그 밖 */
+    static int trendOrder(String type) {
+        return switch (type == null ? "" : type) {
+            case "IT" -> 0;
+            case "TE" -> 1;
+            case "AT" -> 2;
+            default -> 3;
+        };
+    }
+
+    /** 경보에 VMS 열화상 사진이 붙어 있으면 imageUrl 을 채운다 */
+    private static Map<String, Object> withImage(Map<String, Object> thermal, Alarm a) {
+        if (thermal != null && a.thermalFileId() != null) {
+            thermal.put("imageUrl", ThermalService.imageUrl(a.thermalFileId()));
+        }
+        return thermal;
+    }
+
+    /** 조치 이력 단계 → 상세 패널 단계 (RAISED ACK CHECKLIST REPORTED SHUTDOWN CLOSED). 나머지는 빼지 않고 그대로 */
+    static String historyStep(String step) {
+        return switch (step) {
+            case "REPORT" -> "REPORTED";
+            case "CLOSE" -> "CLOSED";
+            default -> step;
+        };
+    }
+
+    private static String historyText(String step, Alarm a, Map<String, Object> row) {
+        return switch (step) {
+            case "RAISED" -> Codes.stageName(a.stage()) + " 발생"
+                    + (row.get("sensorTag") == null ? "" : " · " + row.get("sensorTag") + " " + row.get("value")
+                    + " " + (row.get("unit") == null ? "" : row.get("unit"))
+                    + (row.get("threshold") == null ? "" : " (기준 " + row.get("threshold") + ")"));
+            case "ACK" -> "알림 확인";
+            case "CLOSED" -> "알림 해제";
+            default -> step;
+        };
     }
 
     /** POST /alarms/{alarmId}/ack — 공장 담당자만 */
@@ -396,6 +629,14 @@ public class AlarmService {
         return out;
     }
 
+    private static <T> T safe(java.util.function.Supplier<T> s, T fallback) {
+        try {
+            return s.get();
+        } catch (RuntimeException e) {
+            return fallback; // 상단 바 숫자 하나 때문에 요약 전체가 실패하지 않게
+        }
+    }
+
     /** GET /notifications/summary: 상단 바 숫자 */
     public Map<String, Object> summary() {
         UserScope scope = currentUser.scope();
@@ -421,8 +662,8 @@ public class AlarmService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("unackedAlarmCount", unacked);
         out.put("activeChecklistCount", activeChecklists);
-        out.put("unreadChatCount", 0);  // 채팅은 아직
-        out.put("activeFire", null);    // 화재 판정은 아직
+        out.put("unreadChatCount", safe(() -> chat.unreadTotal(scope), 0));
+        out.put("activeFire", safe(() -> fires.activeFire(), null));
         return out;
     }
 
@@ -441,9 +682,12 @@ public class AlarmService {
         for (Checklist c : checklists.list(null, null, alarmIds)) {
             byAlarm.putIfAbsent(c.alarmId(), c); // 최근 것 (sent_at DESC)
         }
+        Map<Long, Long> fires = fireIds.byAlarm(alarmIds);
         List<Map<String, Object>> out = new ArrayList<>();
         for (Alarm a : alarms) {
-            out.add(AlarmViews.item(a, m, names, byAlarm.get(a.alarmId())));
+            Map<String, Object> row = AlarmViews.item(a, m, names, byAlarm.get(a.alarmId()));
+            row.put("fireId", fires.get(a.alarmId())); // 화재가 아니면 null
+            out.add(row);
         }
         return out;
     }

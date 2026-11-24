@@ -66,12 +66,20 @@ export const WEB_ROLES = Object.freeze([ROLE.HQ_ADMIN, ROLE.PLANT_ADMIN])
  * 가스(CO) 알림 때 배기팬 자동 제어 (2026-11-19 재원님 결정, 값은 최종 ERD equipment_command 기준)
  * - 설비 배기팬이 '자동'일 때만: 주의 75%, 경보 100%
  * - %는 배기팬 최고 회전수(1,800 rpm) 기준 → 75% = 1,350 rpm, 100% = 1,800 rpm
- * - DB 는 주파수(Hz)로 저장: 평소 40 Hz / 가스 주의 45 Hz / 경보 60 Hz, 회전수 = 30 × Hz (4극 모터)
- *   → 평소 1,200 rpm / 주의 1,350 rpm / 경보 1,800 rpm. 화면은 rpm 으로만 보여 줌
- * - 알림이 끝나면 서버가 평소 회전수(40 Hz)로 되돌림 (equipment_command.source = RECOVERY)
+ * - DB 는 주파수(Hz)로 저장: 평소 30 Hz / 가스 주의 45 Hz / 경보 60 Hz, 회전수 = 30 × Hz (4극 모터)
+ *   → 평소 900 rpm / 주의 1,350 rpm / 경보 1,800 rpm. 화면은 rpm 으로만 보여 줌 (평소 값은 2026-11-20 백엔드 피드백으로 1,200 → 900)
+ * - 알림이 끝나면 서버가 평소 회전수(30 Hz)로 되돌림 (equipment_command.source = RECOVERY)
  * - 실제로 팬을 돌리는 건 서버(알림이 생길 때). 화면은 알림 응답의 fanAuto 를 보여 주기만 함
  */
 export const FAN_AUTO_PERCENT = Object.freeze({ WARN: 75, ALARM: 100 })
 export const FAN_MAX_RPM = 1800
-/** 배기팬 평소 회전수 (40 Hz × 30) — 알림이 끝나면 이 값으로 돌아옴 */
-export const FAN_NORMAL_RPM = 1200
+/** 배기팬 평소 회전수 (30 Hz × 30) — 알림이 끝나면 이 값으로 돌아옴 */
+export const FAN_NORMAL_RPM = 900
+
+/**
+ * 배기팬 속도 직접 조절 범위 (2026-11-20 재원님 요청: 가스 주의일 때 20 ~ 60 Hz 만)
+ * - 서버도 같은 범위만 받음 (EquipmentActionService.fanCommand: 20 ~ 60 Hz 밖이면 400 HZ_OUT_OF_RANGE)
+ * - 회전수 = Hz × 30 → 600 ~ 1,800 rpm
+ */
+export const FAN_HZ = Object.freeze({ MIN: 20, MAX: 60 })
+export const RPM_PER_HZ = 30

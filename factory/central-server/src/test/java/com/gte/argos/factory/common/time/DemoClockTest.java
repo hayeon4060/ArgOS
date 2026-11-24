@@ -14,27 +14,28 @@ class DemoClockTest {
     private static final Instant SIM_START = Instant.parse("2026-11-16T00:00:00Z"); // 09:00 KST
 
     @Test
-    void 켜진_순간이_시연_시작_시각이고_실제로_흐른_만큼_간다() {
-        MutableClock real = new MutableClock(Instant.parse("2026-11-24T05:00:00Z"));
+    void 지금은_실제_서버_시각이다() {
+        MutableClock real = new MutableClock(Instant.parse("2026-11-20T11:00:00Z")); // 20:00 KST
         DemoClock clock = new DemoClock(SIM_START, ZoneId.of("Asia/Seoul"), real);
 
-        assertThat(clock.now()).isEqualTo(SIM_START);
+        assertThat(clock.now()).isEqualTo(real.instant());
 
         real.advance(Duration.ofMinutes(3));
-        assertThat(clock.now()).isEqualTo(SIM_START.plus(Duration.ofMinutes(3)));
-        assertThat(clock.nowOffset().getHour()).isEqualTo(9);
+        assertThat(clock.now()).isEqualTo(Instant.parse("2026-11-20T11:03:00Z"));
+        assertThat(clock.nowOffset().getHour()).isEqualTo(20);
         assertThat(clock.nowOffset().getMinute()).isEqualTo(3);
     }
 
     @Test
-    void 다시_시작하면_시연_시작_시각으로_돌아간다() {
-        MutableClock real = new MutableClock(Instant.parse("2026-11-24T05:00:00Z"));
+    void 리셋해도_실제_시각_그대로이고_더미_경계는_유지된다() {
+        MutableClock real = new MutableClock(Instant.parse("2026-11-20T11:00:00Z"));
         DemoClock clock = new DemoClock(SIM_START, ZoneId.of("Asia/Seoul"), real);
         real.advance(Duration.ofMinutes(10));
 
         clock.restart();
 
-        assertThat(clock.now()).isEqualTo(SIM_START);
+        assertThat(clock.now()).isEqualTo(Instant.parse("2026-11-20T11:10:00Z"));
+        assertThat(clock.simStart()).isEqualTo(SIM_START);
     }
 
     private static final class MutableClock extends Clock {

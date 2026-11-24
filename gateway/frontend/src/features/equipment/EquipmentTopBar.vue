@@ -1,7 +1,7 @@
 <!--
   설비 상세 제목 줄 (설계안 vEquip() 의 .topbar, 카드 밖 한 줄)
   - 왼쪽: 경로 '울산공장 › 5공장 › 도장 공정 › 상도 건조로' + 상태 배지(크게) + 체크리스트 진행 배지(누르면 진행 현황 창)
-  - 오른쪽: '설비 기준값 관리' 버튼(누르면 thresholds → 화면이 기준값 관리 창을 이 화면 위에 엶, 2026-11-19) + '설비 배치도' 돌아가기 버튼
+  - 오른쪽: '설비 배치도' 돌아가기 버튼 ('설비 기준값 관리' 버튼은 2026-11-22 재원님 요청으로 삭제 — 기준값은 공장 관리에서)
     (추이 범위 1시간 / 6시간 / 오늘 은 2026-11-19 센서 추이 카드 제목줄로 옮김 → TrendCard)
 -->
 <script setup>
@@ -24,8 +24,6 @@ defineProps({
   /** 돌아갈 공정 배치도 라우트 */
   backTo: { type: Object, required: true },
 })
-
-const emit = defineEmits(['thresholds'])
 </script>
 
 <template>
@@ -41,7 +39,6 @@ const emit = defineEmits(['thresholds'])
 
     <div class="right">
       <ChecklistBadge v-if="checklist && !emergency" :checklist="checklist" @click="alert.open('checklist', { checklistId: checklist.id })" />
-      <button type="button" class="btn" @click="emit('thresholds')"><AppIcon name="slider" :size="16" />설비 기준값 관리</button>
       <RouterLink :to="backTo" class="btn back"><AppIcon name="cl" :size="16" />설비 배치도</RouterLink>
     </div>
   </div>

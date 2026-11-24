@@ -38,9 +38,12 @@ public class ThresholdAdminService {
     private final CurrentUser currentUser;
     private final ChecklistRepository users;
     private final ActivityLogger activity;
+    private final com.gte.argos.gateway.stream.StreamHub hub;
 
     public ThresholdAdminService(CentralClient central, MasterCache masterCache, CurrentUser currentUser,
-                                 ChecklistRepository users, ActivityLogger activity) {
+                                 ChecklistRepository users, ActivityLogger activity,
+                                 com.gte.argos.gateway.stream.StreamHub hub) {
+        this.hub = hub;
         this.central = central;
         this.masterCache = masterCache;
         this.currentUser = currentUser;
@@ -111,14 +114,61 @@ public class ThresholdAdminService {
             row.put("seasons", seasons);
             row.put("legal", s.get("legal"));
             row.put("basis", basis);
+            row.put("max", bandMax(seasons.get(String.valueOf(raw.get("activeSeason"))) != null
+                    ? seasons.get(String.valueOf(raw.get("activeSeason"))) : seasons.get("ALL"), values.get(sensorId)));
             sensors.add(row);
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("equipmentId", equipmentId);
         out.put("equipmentName", eq.name());
+        out.put("equipmentType", eq.type());
         out.put("activeSeason", raw.get("activeSeason"));
         out.put("version", raw.get("version"));
         out.put("sensors", sensors);
+        out.put("active", eq.active());
+        out.put("fanAuto", eq.fanAuto());
+        return out;
+    }
+
+    /**
+     * PATCH /equipment/{id}/settings { active?, fanAuto? } — 바로 저장 (배치 판 번호는 올리지 않음).
+     * 배기팬이 없는 설비에 fanAuto 가 오면 400 NO_FAN. 이용 로그 LAYOUT, SSE equipment.updated
+     */
+    public Map<String, Object> saveSettings(long equipmentId, SettingsRequest r) {
+        Equipment eq = visibleEquipment(equipmentId, true);
+        UserScope scope = currentUser.scope();
+        if (r == null || (r.active() == null && r.fanAuto() == null)) {
+            throw new IllegalArgumentException("active 또는 fanAuto");
+        }
+        if (r.fanAuto() != null && eq.fanAuto() == null) {
+            throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "NO_FAN", "배기팬이 없는 설비입니다.");
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (r.active() != null) {
+            body.put("active", r.active());
+        }
+        if (r.fanAuto() != null) {
+            body.put("fanAuto", r.fanAuto());
+        }
+        Map<String, Object> res = central.equipmentSettings(equipmentId, body);
+        masterCache.invalidate();
+        List<String> changes = new ArrayList<>();
+        if (r.active() != null && r.active() != eq.active()) {
+            changes.add(r.active() ? "사용 상태 사용" : "사용 상태 사용 안 함");
+        }
+        if (r.fanAuto() != null && !r.fanAuto().equals(eq.fanAuto())) {
+            changes.add(r.fanAuto() ? "배기팬 자동" : "배기팬 수동");
+        }
+        if (!changes.isEmpty()) {
+            activity.log(scope.userId(), "LAYOUT", plantOf(eq), eq.processId(), "equipment", equipmentId,
+                    eq.name() + " " + String.join(" · ", changes));
+        }
+        hub.publish("equipment.updated", Map.of("equipmentId", equipmentId, "processId", eq.processId()),
+                s -> s.scope().canProcess(eq.processId(), masterCache.get()));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("equipmentId", equipmentId);
+        out.put("active", res.get("active"));
+        out.put("fanAuto", res.get("fanAuto"));
         return out;
     }
 
@@ -315,6 +365,24 @@ public class ThresholdAdminService {
         return f == null ? null : m.plantOfFactory(f);
     }
 
+    /** 기준 띠 끝 = (경보 · 주의 · 지금 값 중 가장 큰 값) × 1.25, 소수 첫째 자리. 셋 다 없으면 null */
+    @SuppressWarnings("unchecked")
+    static Double bandMax(Object season, Double current) {
+        double top = current == null ? Double.NaN : current;
+        if (season instanceof Map<?, ?> m) {
+            for (String k : List.of("alarm", "warn")) {
+                Object v = ((Map<String, Object>) m).get(k);
+                if (v instanceof Number n && (Double.isNaN(top) || n.doubleValue() > top)) {
+                    top = n.doubleValue();
+                }
+            }
+        }
+        if (Double.isNaN(top) || top <= 0) {
+            return null;
+        }
+        return Math.round(top * 1.25 * 10) / 10.0;
+    }
+
     private static Map<String, Object> seasonView(Map<String, Object> r, int sampleSec) {
         Map<String, Object> v = new LinkedHashMap<>();
         v.put("warn", r.get("warn"));
@@ -324,6 +392,8 @@ public class ThresholdAdminService {
         v.put("warnHoldSec", ((Number) r.get("warnSamples")).intValue() * sampleSec);
         v.put("alarmHoldSec", ((Number) r.get("alarmSamples")).intValue() * sampleSec);
         v.put("validFrom", r.get("validFrom"));
+        // 그 계절 줄이 없어서 ALL 값을 보여 주는 중이면 true (저장하면 그 계절 줄이 새로 생긴다)
+        v.put("inherited", Boolean.TRUE.equals(r.get("inherited")));
         return v;
     }
 
@@ -357,6 +427,9 @@ public class ThresholdAdminService {
      * @param season  ALL | SPRING_FALL | SUMMER | WINTER
      * @param version 조회 때 받은 version (다른 사람이 먼저 바꿨으면 409 THRESHOLD_CONFLICT)
      */
+    public record SettingsRequest(Boolean active, Boolean fanAuto) {
+    }
+
     public record SaveRequest(String season, Long version, String reason, List<SensorThreshold> sensors) {
     }
 

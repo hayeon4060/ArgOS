@@ -21,6 +21,17 @@ npm run build          # 배포용 빌드 (dist/)
 
 비밀번호는 둘 다 `argos1234` 입니다. 예시 데이터는 **5공장 도장 공정 전류 센서 1개가 '주의'** 인 상황입니다(다른 상황은 `src/api/mock/data.js` 의 5공장 줄 주석 참고). 실제 백엔드에 붙일 때는 `.env` 에 `VITE_USE_MOCK=false` 를 넣으면 `/api` 요청이 `http://localhost:8080` 으로 갑니다.
 
+### 다른 PC의 서버에 붙기
+
+백엔드가 다른 PC에서 돌 때는 `gateway/frontend/.env.local` 파일을 만들어 아래 두 줄을 넣고 `npm run dev` 를 다시 실행하세요. `.env.local` 은 커밋되지 않으므로 PC마다 자기 값을 써도 됩니다.
+
+```dotenv
+VITE_USE_MOCK=false
+VITE_PROXY_TARGET=http://<서버 PC IP>:8080
+```
+
+`VITE_API_BASE_URL` 에 다른 PC 주소를 직접 넣으면 CORS 에 막히므로, 주소는 프록시 대상(`VITE_PROXY_TARGET`)으로만 바꿉니다.
+
 ### 로그인 유지 시간
 
 로그인하면 **13시간** 유지되고, 상단 바의 남은 시간 옆 **'연장'** 을 누르면 1시간 늘어납니다. 만료 10분 전에 안내 문구가 뜨고, 시간이 다 되면 자동으로 로그아웃됩니다. 값은 `src/features/session/sessionConfig.js` 한 곳에 있습니다.

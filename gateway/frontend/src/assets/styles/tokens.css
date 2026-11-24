@@ -47,6 +47,14 @@
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
 
+  /*
+   * 화면 배율 (utils/screenScale.js 가 창 폭에 맞춰 <html> 에 넣음: FHD 1, QHD 1.333)
+   * - 배율(zoom)이 걸리면 100vh · 100vw 도 같이 커져 화면을 넘치므로, 화면 높이·폭은 아래 두 값을 씀
+   */
+  --screen-scale: 1;
+  --screen-h: calc(100vh / var(--screen-scale));
+  --screen-w: calc(100vw / var(--screen-scale));
+
   /* 상단 바 높이 */
   --topbar-height: 64px;
 
@@ -70,5 +78,17 @@
   --m-rise: 460ms cubic-bezier(0.2, 0.8, 0.2, 1); /* 카드 아래에서 올라오며 나타남 */
   --m-stagger: 42ms; /* 카드마다 늦게 나타나는 간격 */
   --m-pulse-warn: 1.6s; /* 주의 테두리 빛번짐 반복 */
-  --m-pulse-alarm: 0.8s; /* 경보·화재 테두리 빛번짐 반복 */
+  --m-pulse-alarm: 0.8s; /* 경보 테두리 빛번짐 반복 */
+  --m-pulse-fire: 0.6s; /* 화재 테두리 빛번짐 반복 (1초에 1.7번 — 광과민 기준 1초 3번 이하) */
+
+  /*
+   * 뼈대 화면(불러오는 중) — components/skeleton/
+   * - 회색 칸 위로 밝은 띠가 왼쪽 → 오른쪽으로 지나감 (회색만 사용, 주황·빨강 금지)
+   * - 0.2초 안에 끝나는 불러오기는 뼈대를 아예 보이지 않음 (깜빡임 방지)
+   * - 나타날 때는 --m-pop-in(160ms ease-out) 으로 살짝 나타남
+   */
+  --color-skeleton: #e6eaf0; /* 뼈대 칸 */
+  --color-skeleton-shine: #f4f6f9; /* 뼈대 위를 지나가는 밝은 띠 */
+  --m-skeleton-shine: 1.4s; /* 밝은 띠가 한 번 지나가는 시간 (반복) */
+  --m-skeleton-delay: 200ms; /* 이 시간보다 오래 걸릴 때만 뼈대를 보임 */
 }

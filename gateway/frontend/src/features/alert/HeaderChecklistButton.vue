@@ -17,7 +17,8 @@ const first = computed(() => (emergency.value ? null : (alert.checklists[0] ?? n
 const badge = computed(() => {
   const c = first.value
   if (!c) return null
-  return { doneCount: c.items.filter((i) => i.doneAt).length, totalCount: c.items.length, assignee: c.assignee.name }
+  // 서버 목록 줄은 항목(items) 없이 doneCount · totalCount 만 줌
+  return { doneCount: c.doneCount, totalCount: c.totalCount, assignee: c.assignee.name }
 })
 // 칸 옆 공정 이름 ('도장 공정') — 체크리스트의 알림 위치에서
 const processName = computed(() => (first.value ? alert.processNameOf(first.value.alarmId) : ''))

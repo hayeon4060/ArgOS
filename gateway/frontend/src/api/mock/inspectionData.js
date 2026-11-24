@@ -371,6 +371,12 @@ export function ocr(id) {
 }
 
 /** GET /inspections/{id}/file → 원본 그림 주소 (예시는 F01 그림 하나) */
+/** 예시 모드 전용: 서류 한 장의 이름 · 양식 · 인식 값 (검수 완료 뒤 점검 건에 잇는 데 씀) */
+export function docInfo(id) {
+  const d = find(id)
+  return d ? { inspectionId: d.id, fileName: d.fileName, formType: d.formType, fields: d.fields.map((f) => ({ key: f.key, value: f.value })) } : null
+}
+
 export function fileUrl(id) {
   return find(id)?.formType === 'F01' ? f01Scan : null
 }
@@ -398,11 +404,9 @@ export function save(id, { status, fields }, by) {
   if (status === 'DONE') {
     doc.reviewedBy = by
     doc.reviewedAt = iso(new Date())
-    // 이번 달 현황: 완료 하나 늘고 예정 하나 줄어듦 (연결된 점검 일정이 완료로)
-    SUMMARY.done += 1
-    SUMMARY.planned = Math.max(0, SUMMARY.planned - 1)
+    // 이은 점검 건을 완료 · 수기로 바꾸는 일은 api/inspections.js 가 inspectionSchedule.linkScan 으로 이어서 함
   }
-  return { data: { id: doc.id, status: doc.status, reviewedBy: doc.reviewedBy, reviewedAt: doc.reviewedAt, scheduleId: 640 } }
+  return { data: { id: doc.id, status: doc.status, reviewedBy: doc.reviewedBy, reviewedAt: doc.reviewedAt } }
 }
 
 /** POST /inspections/{id}/ocr (다시 인식: 고친 값을 지우고 처음부터) */
@@ -415,51 +419,4 @@ export function reocr(id) {
   doc.ocrMs = 8000
   doc.fields = f01Fields(doc.uploadedAt.slice(0, 10))
   return { data: { id: doc.id, status: doc.status } }
-}
-
-/* ───────── 이번 달 현황 (GET /inspections/summary) ───────── */
-const SUMMARY = { done: 32, planned: 7, delayed: 2 }
-// 서류별 저장·전체 (설계안 DL: 저장 / 검수 대기 / 미제출)
-const BY_FORM_BASE = { F01: [18, 1], F02: [24, 0], F03: [10, 2], F04: [6, 1], F05: [4, 0] } // [저장, 미제출]
-
-/** 점검 일정 점 (설계안 ev: 날짜 → 완료 g · 예정 b · 지연 r). 이번 달 날짜에 맞춤 */
-const EVENTS = { 2: 'g', 3: 'gg', 4: 'g', 5: 'g', 6: 'gr', 9: 'g', 10: 'gg', 11: 'gr', 12: 'gb', 13: 'b', 16: 'b', 17: 'bb', 19: 'b', 20: 'b', 23: 'b', 26: 'b', 30: 'b' }
-
-export function summary(month) {
-  DOCS.forEach(advance)
-  const [y, m] = (month || ymd(new Date()).slice(0, 7)).split('-').map(Number)
-  const review = (t) => DOCS.filter((d) => d.formType === t && d.status === 'REVIEW').length
-  const savedToday = (t) => DOCS.filter((d) => d.formType === t && d.status === 'DONE' && d.reviewedAt?.slice(0, 10) === ymd(new Date())).length
-  const byForm = FORMS.map((f) => {
-    const [saved, missing] = BY_FORM_BASE[f.formType]
-    const done = saved + savedToday(f.formType)
-    const r = review(f.formType)
-    return { formType: f.formType, name: f.name, done, review: r, total: done + r + missing }
-  })
-  const total = SUMMARY.done + SUMMARY.planned + SUMMARY.delayed
-  const last = new Date(y, m, 0).getDate()
-  const calendar = Object.entries(EVENTS)
-    .filter(([d]) => Number(d) <= last)
-    .map(([d, ev]) => ({
-      date: `${y}-${pad(m)}-${pad(Number(d))}`,
-      done: [...ev].filter((c) => c === 'g').length,
-      planned: [...ev].filter((c) => c === 'b').length,
-      delayed: [...ev].filter((c) => c === 'r').length,
-    }))
-  return { month: `${y}-${pad(m)}`, rate: Math.round((SUMMARY.done / total) * 100), ...SUMMARY, byForm, calendar }
-}
-
-/** 그날 점검 목록 (명세서에 없음 — 달력 날짜를 누를 때 보여 줄 목록, 추가 요청) */
-const SCHEDULE_NAMES = ['환기·배기설비 점검', '수변전설비 점검', '밀폐공간 작업 전 점검', '안전보건교육']
-export function daySchedule(date) {
-  const cell = summary(date.slice(0, 7)).calendar.find((c) => c.date === date)
-  if (!cell) return []
-  const d = Number(date.slice(8, 10))
-  const states = [...Array(cell.done).fill('DONE'), ...Array(cell.planned).fill('PLANNED'), ...Array(cell.delayed).fill('DELAYED')]
-  return states.map((status, i) => ({
-    scheduleId: 600 + d * 3 + i,
-    title: SCHEDULE_NAMES[(d + i) % 4],
-    processName: `5공장 ${PROC[(d + i) % 4]}`,
-    status,
-  }))
 }

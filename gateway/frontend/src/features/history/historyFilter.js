@@ -11,13 +11,13 @@ export const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.g
 
 /** 기간 빠른 선택 */
 export const PERIODS = [
-  { value: 'today', label: '오늘' },
+  { value: 'today', label: '금일' },
   { value: '7d', label: '7일' },
   { value: '30d', label: '30일' },
   { value: 'custom', label: '직접 선택' },
 ]
 /** 카드 설명에 쓰는 기간 이름 */
-export const PERIOD_LABEL = { today: '오늘', '7d': '최근 7일', '30d': '최근 30일', custom: '선택한 기간' }
+export const PERIOD_LABEL = { today: '금일', '7d': '최근 7일', '30d': '최근 30일', custom: '선택한 기간' }
 
 /** 센서 종류 (백엔드 sensorType 값) */
 export const SENSOR_TYPES = [
@@ -37,7 +37,16 @@ export const HAZARDS = [
   { value: 'FIRE', label: '화재' },
   { value: 'GAS', label: '가스' },
 ]
-export const HAZARD_META = { FIRE: { label: '화재', icon: 'flame' }, GAS: { label: '가스', icon: 'wind' } }
+/*
+ * 유형 칩의 글자·아이콘·아이콘 색 (2026-11-20 재원님 요청으로 바꿈)
+ * - 화재: 불꽃, 빨강 (전에는 보라)
+ * - 가스: 가스 구름, 연두 (전에는 바람 모양 · 청록). 정상(초록 #16a34a)보다 노란 쪽이라 구분됨
+ * 색을 바꾸려면 여기 color 만 고치면 됨 (알림 이력 표 · 상세 패널이 같이 씀)
+ */
+export const HAZARD_META = {
+  FIRE: { label: '화재', icon: 'flame', color: '#dc2626' },
+  GAS: { label: '가스', icon: 'gas', color: '#65a30d' },
+}
 export const hazardOf = (row) => row.hazard ?? (row.sensorType === 'CO' ? 'GAS' : 'FIRE')
 
 /** 등급 (백엔드 level 값) */

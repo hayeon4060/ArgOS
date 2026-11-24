@@ -69,7 +69,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | M2 | `PATCH /checklists/{id}/items/{itemId}` | 공정 | |
 | M2 | `POST /checklists/{id}/report` | 공정 | 409 `ITEMS_NOT_DONE` |
 | M1 | `POST /me/push-token` · `DELETE /me/push-token` | 로그인 | |
-| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` | 공장 | 202, 결과는 SSE `command.result` |
+| B3 | `POST /equipment/{id}/fan` `{ power }` 또는 `{ rpm }` 또는 `{ hz }` | 공장 | 202, 결과는 SSE `command.result`. 중앙 명령(테이블 명세서 v5): 끄기 `FAN_STOP`, 켜기 `FAN_HZ` 40, `rpm`(600~1,800) → `FAN_HZ` rpm÷30, `hz`(20~60) 그대로. 같은 명령 처리 중이면 409 `COMMAND_PENDING`, 범위 밖 400 `RPM_OUT_OF_RANGE`·`HZ_OUT_OF_RANGE`. SSE `command.result` 의 `command` 값도 `FAN_HZ`·`FAN_STOP`, `status` 에 `EXPIRED`·`CANCELLED` 추가 |
 | C4 | `POST /equipment/{id}/shutdown` `{ alarmId, reason }` | 공장 | 202 |
 | C4 | `POST /processes/{id}/shutdown` `{ alarmId, equipmentIds, reason }` | 공장 | 202, 이미 정지된 설비는 건너뜀 |
 | C4 | `POST /processes/{id}/call-workers` `{ alarmId }` | 공장 | |
@@ -108,7 +108,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 
 권한: 본사·공장 관리자. 모든 API 가 같은 조건을 받습니다:
 `from`·`to`(필수, `2026-11-10` 형식, 끝 날짜 포함) · `factoryId` · `processId` · `sensorType`(CURRENT·TEMP·CO·IR) · `level`(WARN·ALARM) · `shift`(DAY 07~19시 · NIGHT).
-센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 1년.
+센서 종류는 경보의 대표 센서 기준, 근무조는 발생 시각 기준. 한 번에 최대 30일 (2026-11-19 변경, 넘으면 400 `RANGE_TOO_LARGE` "한 번에 30일까지 조회할 수 있습니다.").
 
 | API | 비고 |
 | --- | --- |
@@ -202,7 +202,7 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 | `POST /fires/{fireId}/approve-unlock` | 본사 관리자 | 실패 횟수 0으로. SSE `fire.updated` |
 
 - **화재 판정 (가정)**: 위험 종류 화재(FIRE) 경보가 3단계이고 근거에 열화상(IR) 센서 이벤트가 있으면 화재. 중앙 경보 피드를 보다가 그 순간 `fire_incident` 를 만들고 SSE `fire.started` 를 보냄. 판정 기준이 바뀌면 `FireService.isFire` 한 곳만 고치면 됨
-- 경고 방송은 방송 시스템 API 가 정해지기 전까지 로그만 남김 (`BroadcastSender`). 조치 이력에는 `BROADCAST` 로 남음
+- 경고 방송: 화재 판정 때 **자동으로** 방송 시스템(외부 기존 시스템) REST API 를 부름 (`BroadcastSender`). 해제(비밀번호 · 자동) 때 방송 종료를 부름. 조치 이력에는 `BROADCAST`(OK · FAIL) 로 남음. 아래 "방송 시스템 연동" 참고
 - 열화상 `min`·`avg` 와 대피 확인(EVACUATED) 입력 API 는 아직 없음. 대피 수는 조치 이력의 `EVACUATED` 를 셈
 - 테이블: `V4__gateway_chat_fire.sql` (`chat_message`, `chat_read`, `fire_incident`, 테이블 명세서 v5 기준)
 
@@ -233,6 +233,11 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 
 - 글자 인식: `CLOVA_OCR_URL`·`CLOVA_OCR_SECRET` 가 있으면 CLOVA OCR, **없으면 시연용 인식기가 그럴듯한 값을 채움**(실제로 읽지 않음, 숫자 칸 하나를 확인 필요로 표시)
 - CLOVA 템플릿 OCR 의 필드 이름을 양식 칸 key(`workDate`, `co` …)와 같게 만들면 칸이 채워짐. 신뢰도 90% 미만·숫자 아님·기준 초과면 확인 필요
+- CLOVA 는 템플릿이 있는 양식만 씀: `CLOVA_OCR_FORMS`(기본 `F02` 환기·배기설비 점검일지). 나머지 양식은 시연용 인식기. 응답 `engine` 도 양식에 따라 `CLOVA`·`SAMPLE`
+- CLOVA 로 읽은 값은 칸 종류에 맞게 바꿈: 날짜 `26 . 11 . 27` → `2026-11-27`, 일시 `2026 . 11 . 20 09 : 10` → `2026-11-20 09:10`, 시각 `9 : 05` → `09:05`, 숫자는 공백·쉼표 제거. 못 바꾸면 읽은 글자 그대로 + 확인 필요(`날짜 형식 확인` 등)
+- 체크 칸(choice · check, 예: `item01` 양호/불량/해당 없음, `inspType`, `verdict`)은 글자 인식을 믿을 수 없어 **값을 비우고 확인 필요**(`체크 칸은 원본을 보고 직접 선택`). 사람이 원본을 보고 고름. 글자 칸이라도 인쇄된 체크 상자(□ ☑)가 같이 읽히면(공장 · 구역) 똑같이 비우고 확인 필요. 빈 칸(신뢰도 0)은 확인 필요로 보지 않음
+- `PUT /inspections/{id}`: `checked: true` 이거나 **값을 인식 값과 다르게 고친 칸**은 확인 필요가 풀림 (화면 기준과 같음). 선택 칸은 띄어쓰기를 무시하고 선택지로 바꿔 저장 (`해당없음` → `해당 없음`, `정상운전` → `정상 운전`)
+- 검수 완료로 새 점검 건을 만들 때 서류에 공정(`processId`)이 없으면, 로그인한 사람의 담당 공정 중 설비번호(`EF-03` → 3번째 설비)가 있는 공정이 하나면 그 공정 · 설비로, 아니면 담당 공정이 하나뿐일 때 그 공정으로 넣음. 공정이 비면 점검 이력(`GET /inspections/schedule?factoryId=`)에 안 보임
 
 ### 공장 관리 · 설비 재배치 (H1)
 
@@ -258,14 +263,42 @@ API 명세서 기준으로 구현한 것과, 명세서와 다르게 한 점입�
 - 안전 등급: 점수 = 100 − 경보 5점×건수 − 주의 1점×건수 − 점검 지연 2점×건수, A ≥ 90 · B ≥ 70 · C. `safety_grade` 에 저장
 - 한글 글꼴: `ARGOS_REPORT_FONT`(.ttf) → 없으면 맑은 고딕(Windows) · 나눔고딕 · Noto CJK 순서. 다 없으면 500 `REPORT_FONT_MISSING`
 
+### 방송 시스템 연동 (중앙 서버 → 방송 시스템, 화재 때 자동)
+
+아키텍처 그림의 "경고 방송 REST API". 화면이 부르는 API 가 아니고, 중앙 서버가 외부 방송 시스템을 부른다.
+`BROADCAST_API_URL` 이 비어 있으면 부르지 않고 로그만 남기며 성공으로 본다 (시연 PC).
+
+| 언제 | 호출 | 본문 |
+| --- | --- | --- |
+| 화재 판정 (`fire.started` 직전) | `POST {url}/start` | `{ requestId: "fire-{fireId}", type: "FIRE", plantId, factoryId, processId, equipmentId, location, message, repeat: true, detectedAt }` |
+| 비밀번호 해제 `POST /fires/{id}/clear` | `POST {url}/stop` | `{ requestId: "fire-{fireId}", reason: "CLEARED" }` |
+| 값이 정상으로 돌아와 자동 해제 | `POST {url}/stop` | `{ requestId: "fire-{fireId}", reason: "AUTO_CLEARED" }` |
+
+- 헤더: `Content-Type: application/json`, `X-API-Key`(설정했을 때만)
+- 응답: 2xx 면 성공 (본문은 보지 않음. 기대 모양 start `{ broadcastId, status: "ON", startedAt }` · stop `{ status: "OFF", endedAt }`)
+- 같은 `requestId` 는 같은 방송으로 봐 달라고 가정 (재시도 때문에)
+- 시작 실패(연결 실패 · 시간 초과 · 2xx 아님)는 **한 번 더 시도**. 그래도 실패하면 `fire_incident.broadcast_started_at` 은 비우고 조치 이력 `BROADCAST` 를 `FAIL` 로 남김 → `GET /fires/{id}` 의 `broadcast.on = false`, 화재 처리는 계속 진행
+- 종료 실패는 로그만 남김 (화재 해제는 그대로 진행)
+- `message` 예: "도장 공정에서 화재가 발생했습니다. 작업자는 즉시 대피하십시오." · `location` 예: "5공장 · 도장 공정 · 상도 건조로 버너실"
+
 ### 외부 연동 설정 (비우면 로그만)
 
 | 환경 변수 | 하는 일 |
 | --- | --- |
 | `FCM_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON. 있으면 FCM HTTP v1 로 실제 푸시 |
-| `BROADCAST_API_URL` | 방송 시스템. `POST {url}/start`, `POST {url}/stop` (방송 시스템 API 가 정해지면 경로만 맞추면 됨) |
+| `BROADCAST_API_URL` | 방송 시스템 주소. `POST {url}/start`, `POST {url}/stop` (아래 "방송 시스템 연동") |
+| `BROADCAST_API_KEY` | 방송 시스템이 키를 요구하면 `X-API-Key` 헤더로 보냄. 비우면 헤더 없음 |
+| `BROADCAST_TIMEOUT_MS` | 연결 · 응답 대기 시간 (기본 3000) |
 | `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` | CLOVA OCR |
 | `ARGOS_FILES_DIR` | 올린 파일 저장 위치 (기본 `./data/files`) |
+
+### ERD V6 반영 (`V6__erd_v6.sql`, 기본값·허용 값은 v5 DDL)
+
+- `chat_read`: `last_msg_id` → `last_read_msg_id`, `read_at` → `updated_at`
+- `chat_message.body`: TEXT (길이는 API 에서 1,000자)
+- `file_asset`: 종류에 `THERMAL`, `sensor_id`·`captured_at` 추가 (V6: 영상은 저장하지 않음)
+- 로그인 쪽 V1 테이블(`login_history.user_id` NULL 허용, `activity_log.summary` TEXT 등)은 그대로
+- 중앙 서버 쪽 변경(경보 종료 사유, 이벤트 규칙 `HI`/`LO`, 설비 명령 `FAN_HZ` 등)은 `factory/central-server/README.md` 참고
 
 ## 아직 없는 것
 
@@ -283,3 +316,201 @@ Kafka(엣지 → 수집 서버)·Redis(수집 서버 → 중앙 서버) 연동 (
 - 응답 본문 스키마는 대부분 `Map` 이라 필드 목록이 자세히 나오지 않는다. 필드 설명은 이 문서를 기준으로 본다.
 - Postman 컬렉션: `docs/postman/ArgOS-gateway.postman_collection.json` (로그인하면 토큰 자동 저장)
 - 환경 변수 `ARGOS_API_DOCS=false` 면 두 주소 모두 꺼진다.
+
+## 2026-11-19 배기팬 자동 제어 · 설비 설정 · 통계·이력 개편
+
+프론트 문서 `gateway/frontend/docs/fan-auto-api.md`, `equipment-settings-api.md`, `stats-history-api.md` 기준.
+
+### 배기팬 자동 제어 (서버가 함, 새 주소 없음)
+
+- 가스(GAS) 알림이 주의로 생기면 그 관제 단위 배기팬 **45Hz(75%, 1,350rpm)**, 경보로 생기거나 올라가면 **60Hz(100%, 1,800rpm)**. 중앙 서버가 `equipment_command` 에 `source = AUTO`, `alarm_id` 로 남김
+- `fan_auto = false`(수동)면 명령 없음. 이미 그 회전수 이상이면 보내지 않음. 화재(FIRE)는 대상 아님
+- 알림이 끝나면(사람이 종료) 그 알림 때 바꾼 팬을 **40Hz 로 되돌림** (`source = RECOVERY`). 프론트 문서는 '그대로 둠' 가정이었는데 DB 설계(RECOVERY)를 따름
+- 이용 로그 `FAN` (요청자 없음): `상도 건조로 배기팬 45Hz · 1350rpm (가스 주의 자동)`
+- 명령 결과가 바뀌면 SSE `command.result` 와 함께 `alarm.updated`(`fanAuto` 포함)
+
+### 알림 응답 `fanAuto`
+
+`GET /alarms` 의 `items[]`, `GET /alarms/{id}/detail`, `GET /alarms/{id}/response`, `GET /stats/alarms/{id}`.
+가스 알림이 아니거나 배기팬이 없으면 `null`.
+
+```json
+{ "equipmentId": 41, "fanEquipmentId": 42, "fanName": "상도 건조로 배기팬", "mode": "AUTO", "percent": 75,
+  "rpm": 1350, "beforeRpm": 1200, "status": "APPLIED", "at": "2026-11-16T09:02:59+09:00" }
+```
+
+- `status`: SENT(보냄) · APPLIED(반영) · FAILED(실패·만료·취소) · SKIPPED(명령 없음)
+- `mode`: 자동 명령이 있으면 AUTO, 없으면 지금 스위치 값 (수동이면 MANUAL + SKIPPED)
+- `fanEquipmentId` 추가 (배기팬 설비 행). `equipmentId` 는 배기팬이 달린 화면 설비(건조로)
+
+### 설비 설정 `PATCH /equipment/{equipmentId}/settings`
+
+- 요청 `{ "active": false }` 또는 `{ "fanAuto": true }` (바꾼 값만). 응답 `{ equipmentId, active, fanAuto }`
+- 건조로처럼 배기팬이 달린 설비에 `fanAuto` 를 보내면 그 배기팬들의 `fan_auto` 를 바꿈. 배기팬이 없으면 400 `NO_FAN`
+- 배치 판 번호(version)는 올리지 않음. 이용 로그 `LAYOUT` (`상도 건조로 배기팬 수동`), SSE `equipment.updated { equipmentId, processId }`
+- 권한: 기준값 저장과 같음
+- `GET /equipment/{id}/thresholds` 에 `active`, `fanAuto` 추가
+- `PUT /processes/{id}/layout` 의 `equipment.update[].fanAuto` 도 받음 (웹은 이제 안 보냄)
+
+### 통계·이력
+
+| API | 변경 |
+| --- | --- |
+| `GET /stats/alarms` | 조건 `hazard`(FIRE·GAS), `status`(ACTIVE = 해제 전 전부 · CLOSED · OPEN · ACKED · ACTING), `siteId` 추가 |
+| `GET /stats/alarms/{alarmId}` | **신규** 알림 상세 패널. 범위 밖·없는 알림은 404 `ALARM_NOT_FOUND` |
+| `GET /stats/export` | 조건 `hazard`·`status`·`siteId` 추가. CSV 열을 문서 순서로 바꿈 (알림 번호 … 조치 시간(분)) |
+| `GET /stats/heatmap` | 화면에서 안 씀. 지우지 않고 둠 |
+
+`GET /stats/alarms/{alarmId}` 응답: `id, level, status, hazard, location, factoryId, processId, equipmentId, raisedAt, closedAt,
+actionMinutes, sensorTag, sensorType, value, unit, threshold, ackedBy, fanAuto, series, thermal, timeline, checklist, shutdown`
+
+- `series`: `from`(원인 센서가 처음 기준을 넘은 시각) ~ `to`(해제 시각, 열려 있으면 지금). 30분 이하 `intervalSec: 5`(알림 동안 저장한 5초 값),
+  넘으면 60(1분 평균). `sensors[]` = 관제 단위 센서 전부(IR 제외) `{ sensorId, tag, type, unit, warn, alarm, lowWarn, lowAlarm, trigger, points: [[시각, 값]] }`.
+  `warn·alarm` 은 알림이 났을 때 적용 중이던 기준값
+- `thermal`: `{ imageUrl, capturedAt, max, avg, maxPoint, cameraTag }`. 아직 사진이 없어 `imageUrl: null` (VMS 연동 후 채움)
+- `timeline[]`: `{ at, step, by, text }`, step = RAISED · ACK · CHECKLIST · REPORTED · SHUTDOWN · CLOSED (그 밖의 조치는 그 이름 그대로)
+- `checklist`: 주의일 때 `{ assignee, doneCount, totalCount, items: [{ seq, content, doneAt, result, memo }] }`, 경보면 null
+- `shutdown`: 경보일 때 `{ steps: [{ label, at }] }`, 주의면 null
+
+### ERD V6 · 조회 기간 30일 (2026-11-19)
+
+- 열화상 VMS 실시간 영상 주소 `streamUrl` (중앙 `sensor.stream_url`): `GET /thermal/{cameraId}/latest`, 알림 상세·경보 창의 `thermal`, `GET /fires/{id}` 의 `thermal` (`cameraTag` 도 같이). 값이 없으면 null
+  - 주소 넣기: 중앙 `PUT /api/v1/internal/sensors/{sensorId}` `{ "streamUrl": "http://..." }` (빈 글자면 지움)
+- 영상 파일은 저장하지 않음 (`sensor_event.video_file_id` 없음, `file_asset` 종류에 VIDEO 없음)
+- `/stats/*` 조회 기간 최대 30일
+
+### 화면 추가 필드 (backend-notes 10 · 11 · 13 · 14 · 17장, 2026-11-19)
+
+| API | 추가 |
+| --- | --- |
+| `GET /fires/{id}` | `values { thermalMax, temp, co }` (열화상 최고 · 그 관제 단위 온도 · CO, 원인 이벤트 최고값 반영), `actions[].text` · `running`(송출 중 · 대피 확인 중), `serverTime`, `thermal.imageUrl`(VMS 사진) |
+| `GET /equipment/{id}/thresholds` | `equipmentType`, `sensors[].max`(기준 띠 끝 = 경보·주의·지금 값 중 큰 값 × 1.25) |
+| `POST /thresholds/simulate` | `peaks [{ at, value }]` (알림마다 그래프에 찍을 점, `hits` 와 같은 순서) |
+| `GET /inspections/summary` | `month` (`2026-11`) |
+| `GET /doc-forms` | 칸 정의를 프론트 양식과 같게 (`V7__doc_forms_v2.sql`): `group` · `options` · `row` · F01 `time` · `note`. 칸 종류 text · number · date · datetime · time · choice · check · sign. 저장할 때 choice 는 보기 중 하나, time 은 `HH:MM` 이어야 함 (아니면 400 + `fields`) |
+| `GET /inspections/schedule?date=YYYY-MM-DD&factoryId=` | **신규** 그날 점검 목록 `[{ scheduleId, date, time, title, formType, formName, processId, processName, equipmentId, equipmentName, assignee, status(DONE·PLANNED·DELAYED), doneAt, doneBy }]` |
+| `GET /me` | `scopeText` (모든 사업장 / 5공장 전체 / 5공장 · 도장 공정) |
+| 채팅 글의 `alarm` | `level`, `hazard`, `sensorTag`, `value`, `unit` |
+| `GET /thermal/images/{fileId}` | **신규** VMS 열화상 사진 (로그인 필요). 알림 상세·경보 창·통계 상세·화재 상세 `thermal.imageUrl` 이 이 주소 |
+
+- 시연용 인식기: F01 은 예시 원본(f01_filled.jpg) 값·위치 그대로, 나머지 양식은 칸 종류대로 값을 채움
+
+### 주의 상세 추이 그래프 2개 (`docs/api/warn-detail-trends.md`, 2026-11-19)
+
+- `GET /alarms/{id}/detail` 에 `trends[]` 추가: 같은 관제 단위 센서 3종(전류 → 온도 → CO 순, 열화상 제외)
+  `{ sensorId, tag, type(CURRENT·TEMP·CO), unit, warn, alarm, points: [[시각, 값]] }`. 기간·간격은 `trend` 와 같음 (발생 30분 전 ~ 지금, 1분)
+- `trend` 는 그대로 (알림이 난 센서)
+
+### 최종 ERD 대조 요청 반영 (`docs/api/erd-final-frontend-check.md`, 2026-11-19)
+
+**배기팬 수동 승인 (4장 1번)**
+
+- 수동(`fanAuto: false`) 설비에 가스 알림이 나면 명령을 바로 보내지 않고 **승인 대기**로 남김 → 알림 응답
+  `fanAuto { mode: "MANUAL", status: "AWAITING", percent, rpm, beforeRpm, commandId }`. 경보로 올라가면 같은 명령의 목표가 60 Hz 로 바뀜
+- `POST /fan-commands/{commandId}/approve` — 승인 → 실행 (`SENT` → `APPLIED`)
+- `POST /fan-commands/{commandId}/deny` — 거절 → `DENIED`
+  - 둘 다 공장 담당자만 (본사 관리자 403), 승인 대기가 아니면 409 `COMMAND_NOT_AWAITING`. 응답 `{ commandId, equipmentId, status, hz, rpm }`
+  - 이용 로그 `FAN` (`중도 건조로 배기팬 60Hz · 1800rpm 승인 (가스 알림 수동)`), SSE `command.result` + `alarm.updated`
+- 승인 대기 중에 알림이 종료되면 명령은 취소 (`fanAuto.status` `FAILED`)
+- `fanAuto` 에 `commandId` 추가 (명령이 없으면 null). 상태 대응은 문서 4장 표와 같음 + `AWAITING` · `DENIED`
+
+**그 밖**
+
+| 요청 | 반영 |
+| --- | --- |
+| 3장 5번 설비 `seq` (공정 흐름 순서) | `GET /processes/{id}/layout` 의 `equipment[].seq`. DB 순서 칸이 없어 관제 단위 대표 설비를 단위 순서로 1~5 (전처리 탱크 · 전착 탱크 · 전착 · 중도 · 상도 건조로), 나머지 null. `equipment[].fanAuto` 도 같이 |
+| 4장 4번 `closeReason` | `GET /alarms` items, `GET /stats/alarms` 줄, `GET /stats/alarms/{id}` 에 `closeReason` (AUTO_RECOVERED · ACTION_DONE · MANUAL) |
+| 1장 1번 하한 기준 | 저장 · 미리보기 모두 `lowWarn` · `lowAlarm` 을 그대로 받음 (백엔드 변경 없음) |
+| 3장 7 · 8 · 9 · 10번 | 지금 서버 DB 로 이미 처리됨: 기준값 판 번호 `version`, 변경 사유 → 이력, 조치 확인 `result`·`memo` 와 경보 종료 `result`·`followUp` → `alarm_action.detail`, 타임라인 단계 REPORT · CONFIRM · CLOSE · CALL · FAN |
+| 3장 11번 `onDuty` | 근무조와 사람을 잇는 표가 없어 그대로 `true` |
+
+실제 서버 설비 코드 (5장 7번, 공정 12): `PT-TANK` 전처리 탱크 · `PT-PUMP` · `ED-TANK` · `ED-PUMP` · `ED-OVEN` · `ED-FAN` · `ED-BURNER` ·
+`PR-OVEN` 중도 건조로 · `PR-FAN` · `PR-BURNER` · `TC-OVEN` 상도 건조로 · `TC-FAN` · `TC-BURNER` · `IR-CAM-01`
+
+## Redis 연동 (2026-11-20 아키텍처, A단계)
+
+`docs/아키텍쳐.png` 기준 이름: **이 서버 = 중앙 서버**, `factory/central-server` = **데이터 수집 서버**.
+`ARGOS_REDIS_ENABLED=true` (두 서버 같은 값)면:
+
+- 실시간 변화: 1초 HTTP 폴링(`/internal/feed`) 대신 Redis 스트림 `argos:feed` 를 전용 스레드가 기다려 읽는다. SSE 이벤트 종류·모양은 그대로
+- 제어 명령: 배기팬 명령(`POST /equipment/{id}/fan`), 설비 정지(`/shutdown`), 수동 배기팬 승인·거절(`/fan-commands/{id}/approve|deny`) 이 Redis `argos:cmd` 로 간다. 응답 모양·오류 코드는 그대로, 수집 서버가 10초 안에 답하지 않으면 504 `UPSTREAM_TIMEOUT`
+- 조회와 그 밖의 저장은 아직 HTTP
+
+Redis 키 규격은 `factory/central-server/README.md` 의 "Redis 연동" 절.
+
+## 2026-11-20 프론트 요청 반영 (`docs/api/` 11-20 문서)
+
+| 요청 | 반영 |
+| --- | --- |
+| `hourly-alarm-one-day.md` | `GET /alarms/hourly` 범위를 **date 00:00 ~ date+1 00:00** 으로. 응답 맨 위에 `alarmCount` · `actionCount` · `hours[]` (00~23시, 알림 있는 시간만). `day` · `night` 는 호환용으로 남김 (같은 날의 07~19시 / 19~24시+00~07시) |
+| `frontend-api-audit-1120.md` 2장 | 알림 `fireId`: `GET /alarms` 줄, `GET /alarms/{id}/response`, SSE `alarm.updated` 에 넣음 (화재 아니면 null). `alarm.created` 직후 화재로 판정되면 `fireId` 를 실은 `alarm.updated` 를 한 번 더 보냄 |
+| 3장 | `GET /checklists` 줄에 `processId` · `equipmentId` (`GET /checklists/{id}` 와 같은 값) |
+| 4장 | `GET /stats/summary` · `/stats/trend` · `/stats/by-process` · `/stats/heatmap` 도 `siteId` 받음 |
+| 5장 | 31일짜리 달 월간 보고서 400 수정: 기간이 **달 하나 전체(1일~말일)** 면 30일 제한을 넘어도 됨 (`/stats/*` 도 같음) |
+| 6장 | `GET /inspections` 줄에 `needCheckCount` · `progress` · `reviewedAt` |
+| 9장 | 배치 저장 `equipment.update[]` 의 `type` · `shape` 저장 |
+| `scope-add.md` 1 | `POST /sites` · `/factories` · `/processes` 에서 `code` 를 비우면 서버가 만듦: 사업장 `SITE-n`, 공장 `Fn`(사업장 안), 공정 `PRn`(공장 안). 설비 `EQ-{공정}-{n}` 도 지운 번호와 겹치지 않게 |
+| `paint-equipment-edit.md` 4-2 | 배치 저장 응답에 `kept: [id…]` (지우려 했지만 센서·이력이 있어 '사용 안 함'으로만 바꾼 설비) |
+
+확인 질문 답:
+- `equipment-add.md` 3-1 · `paint-equipment-edit.md` 4-4: 중앙 DB `equipment.equipment_type` 은 비어도 됨 (null 저장됨). 코드를 정하면 그대로 넣으면 된다.
+- `paint-equipment-edit.md` 4-1: `GET /processes/{id}/layout` 의 `shape` 는 저장한 값 그대로 온다 (마스터 캐시 `Equipment.shape` 포함, 실제 저장 → 조회로 확인).
+- 4-3 (그림만 있는 도장 설비 시드): 서버 시드는 그대로 둔다. 공장 관리에서 추가하면 된다.
+
+## 2026-11-20 점검 관리 개편 A안 (`docs/api/inspection-redesign-api.md`)
+
+DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `source`(PAPER · DIGITAL) · `result`(OK · NG) · `form_values`(JSONB) 추가,
+`equipment_id` 비어도 됨 (스캔본 '연결 안 함'인데 설비번호를 못 찾을 때). 새 테이블 없음.
+
+| API | 내용 |
+| --- | --- |
+| `GET /inspections/schedule` (확장) | `date` · `month=YYYY-MM` · `from&to`(62일까지) 중 하나, `factoryId` · `formType` 선택. 줄에 `equipmentNo` · `assigneeId` · `source` · `result` · `inspectionId` · `scanName` 추가. 날짜 · 시각순 |
+| `GET /inspections/schedule/options?factoryId=` (새로) | `equipments[{id, name, code: EF-nn, formType: F02, processId, processName}]`, `inspectors[{id, name}]` (그 공장 담당 공장 담당자 · 작업자). 공장 담당자는 factoryId 생략 가능 |
+| `POST /inspections/schedule` (새로) | `{date, time, formType(기본 F02), equipmentId, assigneeId, repeat: ONCE·DAILY·WEEKLY·MONTHLY, count(1~31)}` → 201, 만든 건 목록. 제목은 양식 이름 |
+| `GET /inspections/schedule/{id}/form` (새로) | `{scheduleId, formType, source, values, result}`. 수기는 검수 완료 OCR 값, 전자는 저장 값, 예정 · 누락은 `values: null` |
+| `PUT /inspections/schedule/{id}/form` (새로) | `{values, result?}` → 완료 · 전자. `result` 를 비우면 값에 '불량'이 있으면 NG. 이미 완료면 409 `ALREADY_DONE` |
+| `POST /inspections/records` (새로) | `{formType, equipmentId, date, time, values, result?}` → 201, 완료 · 전자 건 |
+| `GET /doc-forms/{formType}/template` (새로) | 빈 양식 PDF (`ARG-F02_환기·배기설비 점검일지.pdf`). 팀 양식 파일이 저장소에 없어 `doc_form.field_schema` 로 그림 |
+| `GET /inspections/{id}/ocr` | `scheduleId` 추가: 이어진 건, 없으면 추천(같은 양식 · 오늘 포함 7일의 예정 · 누락 건, 설비번호 같음 2 + 날짜 같음 1, 같으면 늦은 날짜, 0점이면 null) |
+| `PUT /inspections/{id}` | 몸통에 `scheduleId`: 숫자면 그 건을 완료 · 수기로(이미 다른 스캔으로 완료면 409 `ALREADY_DONE`), `null` 이면 인식 값(설비번호 · 점검 일시 · 점검자)으로 새 완료 · 수기 건, 안 보내면 올릴 때 고른 건 그대로. 결과는 인식 값에 '불량'이 있으면 NG |
+
+- 권한: 보기는 본사 관리자 · 공장 담당자, 추가 · 작성은 공장 담당자 (본사 관리자 403)
+- 설비번호 `EF-nn`: 공정 안 설비(카메라 제외)를 설비 id 순으로 센 번호. 양식 '설비번호' 칸의 숫자로 설비를 찾는다
+- 상태 `DELAYED`(누락) 판정은 그대로 (예정 시각이 지났는데 안 함)
+- 시드의 예전 완료 건(스캔 · 전자 값 없음)은 `source` · `result` 가 null
+
+## 2026-11-20 남은 요청 정리
+
+| 항목 | 반영 |
+| --- | --- |
+| `GET /notifications/summary` | `unreadChatCount`: 볼 수 있는 대화방의 안 읽은 글 합계 (작업자는 0). `activeFire`: 내 범위의 진행 중 화재 `{id, location}` (없으면 null) |
+| `GET /doc-forms/{formType}/template` | 팀 양식 원본(`docs/ArgOS_서류양식.pdf`, 서버에는 `resources/forms/argos-doc-forms.pdf`)에서 그 양식 쪽(`ARG-F0n`)만 잘라 준다. 원본에 없는 양식만 서버가 그림 |
+| `GET /processes/{id}/status` | `units[{id, name, equipmentId, level, equipmentIds}]` 와 설비 줄의 `unitLevel`(속한 관제 단위 중 가장 높은 단계) 추가 (backend-feedback-1120 5장 3번) |
+| 수집 서버 `V5__co_immediate.sql` | CO(AT) 현재 기준값의 `immediate_value` 가 비어 있으면 200 ppm (DAS 즉시 3단계 판정) |
+
+## 2026-11-20 배기팬 기준 주파수 변경
+
+정상 **30Hz** (900rpm) · 주의 45Hz (1,350rpm) · 경보 60Hz (1,800rpm). 위 문서에서 '평상시 40Hz · 1,200rpm' 이라고 적힌 곳은 이 값으로 읽는다.
+- 경보 종료 때 복귀(RECOVERY), `POST /equipment/{id}/fan {power: ON}`, 시연 리셋의 배기팬 회전수가 30Hz(900rpm)
+- 수집 서버 `V6__fan_normal_30hz.sql`: 1200rpm 으로 돌던 배기팬을 900rpm 으로
+
+## 2026-11-20 값이 정상으로 돌아오면 경보 · 화재 자동 해제
+
+- 수집 서버: 경보에 묶인 센서 이벤트가 모두 끝나면(엣지 복귀 20회 · VMS 정상) 경보를 바로 종료 (`close_reason = AUTO_RECOVERED`).
+  사람이 종료할 때처럼 승인 대기 배기팬 명령을 취소하고, 경보 중 올린 배기팬을 30Hz 로 되돌린다
+- 중앙 서버: 피드 `ALARM_CLEARED`(자동 종료)를 받으면 SSE `alarm.updated`(`status: CLOSED`, `closeReason: AUTO_RECOVERED`),
+  조치 기록 `CLOSE` "값이 정상으로 돌아와 자동 종료", 화재 경보면 **화재도 자동 해제** (비밀번호 없이, 방송 중지 · 작업자 푸시 `FIRE_CLEARED`,
+  SSE `fire.cleared` 의 `clearedBy: "자동 해제"`, 이용 로그 `FIRE_CLEAR` 사용자 없음)
+- 수집 서버를 다시 켤 때 이미 값이 정상인데 열려 있던 경보(겹친 예전 경보 포함)도 자동 종료. 중앙 서버는 수집 서버 재시작을 알아채면
+  경보가 닫혔는데 진행 중인 화재를 찾아 자동 해제
+- 사람이 먼저 종료 · 화재 해제하는 것도 그대로 된다
+
+## 경보 유형 표시 `hazardLabel` (2026-11-24)
+
+| 위치 | 내용 |
+| --- | --- |
+| `GET /alarms` 줄, `GET /alarms/{id}/detail`, `GET /alarms/{id}/response`, `GET /stats/alarms/{id}` | `hazardLabel` 추가: `화재` · `가스` · `화재 또는 가스` · `''` |
+| SSE `alarm.updated` | `hazardLabel` 추가. 중앙 피드 `ALARM_DETAILS_CHANGED` 를 받으면 `{ id, hazardLabel }` 만 보냄 |
+
+- 연결된 이벤트가 전류(IT)뿐이면 `화재 또는 가스` (과전류·전류 저하만으로는 원인을 단정할 수 없음). 필터·조치는 기존 `hazard` 그대로
+- 경보 창 제목도 이 문구를 씀: '상도 건조로에서 화재 또는 가스 경보가 발생했습니다'

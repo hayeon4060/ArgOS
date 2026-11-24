@@ -40,12 +40,19 @@ public final class CentralDto {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Equipment(long id, long processId, String code, String name, String type, String shape,
                             Double posX, Double posY, Double posZ, Double sizeW, Double sizeD, Double sizeH,
-                            boolean active, String runState, Integer fanRpm) {
+                            boolean active, String runState, Integer fanRpm, Boolean fanAuto) {
+        // fanAuto: 배기팬 자동 제어 (배기팬 · 배기팬이 달린 건조로만, 나머지 null)
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    /** streamUrl: VMS 실시간 영상 주소 (열화상만) */
     public record Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
-                         int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+                         int sampleSec, Double setpoint, boolean active, Threshold threshold, String streamUrl) {
+
+        public Sensor(long id, String tag, long equipmentId, String type, String unit, String connection,
+                      int sampleSec, Double setpoint, boolean active, Threshold threshold) {
+            this(id, tag, equipmentId, type, unit, connection, sampleSec, setpoint, active, threshold, null);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -125,7 +132,26 @@ public final class CentralDto {
                         long factoryId, long plantId, int stage, String hazard, String status,
                         OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
                         Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
-                        boolean valueStillOver, List<Event> events) {
+                        boolean valueStillOver, List<Event> events, FanAuto fanAuto, String closeReason) {
+
+        /** closeReason: 종료 사유 AUTO_RECOVERED | ACTION_DONE | MANUAL (열려 있으면 null) */
+        public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                     long factoryId, long plantId, int stage, String hazard, String status,
+                     OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                     Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                     boolean valueStillOver, List<Event> events, FanAuto fanAuto) {
+            this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, fanAuto, null);
+        }
+
+        public Alarm(long alarmId, long unitId, String unitName, long processId, Long equipmentId,
+                     long factoryId, long plantId, int stage, String hazard, String status,
+                     OffsetDateTime raisedAt, Long ackedBy, OffsetDateTime ackedAt,
+                     Long closedBy, OffsetDateTime closedAt, Long thermalFileId,
+                     boolean valueStillOver, List<Event> events) {
+            this(alarmId, unitId, unitName, processId, equipmentId, factoryId, plantId, stage, hazard, status,
+                    raisedAt, ackedBy, ackedAt, closedBy, closedAt, thermalFileId, valueStillOver, events, null, null);
+        }
 
         /** 화면에 대표로 보여줄 이벤트: 단계가 가장 높고, 같으면 먼저 시작한 것 */
         public Event mainEvent() {
@@ -140,6 +166,27 @@ public final class CentralDto {
             }
             return best;
         }
+    }
+
+    /** 가스 알림의 배기팬 자동 제어 결과. status SENT | APPLIED | FAILED | SKIPPED | AWAITING | DENIED */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                          Integer rpm, Integer beforeRpm, String status, OffsetDateTime at, Long commandId) {
+
+        public FanAuto(Long equipmentId, long fanEquipmentId, String fanName, String mode, Integer percent,
+                       Integer rpm, Integer beforeRpm, String status, OffsetDateTime at) {
+            this(equipmentId, fanEquipmentId, fanName, mode, percent, rpm, beforeRpm, status, at, null);
+        }
+    }
+
+    /** 알림 상세 그래프 (중앙 /internal/alarms/{id}/series) */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AlarmSeries(OffsetDateTime from, OffsetDateTime to, int intervalSec, List<AlarmSensorSeries> sensors) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AlarmSensorSeries(long sensorId, String tag, String type, String unit, Double warn, Double alarm,
+                                    Double lowWarn, Double lowAlarm, boolean trigger, List<List<Object>> points) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -158,7 +205,7 @@ public final class CentralDto {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CommandResult(long commandId, long equipmentId, String command, String status, String runState,
-                                Integer fanRpm) {
+                                Integer fanRpm, Double value, String source) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

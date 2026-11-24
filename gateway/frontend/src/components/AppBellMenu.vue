@@ -80,7 +80,7 @@ function goHistory() {
 
 <template>
   <div class="bell-menu" role="dialog" aria-label="알림 목록">
-    <div class="head">알림<span>오늘</span></div>
+    <div class="head">알림<span>금일</span></div>
 
     <p v-if="rows === null" class="noval">불러오는 중</p>
     <div v-else-if="failed && !items.length" class="noval">

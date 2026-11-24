@@ -48,6 +48,14 @@ public class MasterAdminController {
         return ApiResponse.ok(service.saveLayout(processId, body));
     }
 
+    /** 설비 설정 바로 저장 { active?, fanAuto? }. 연계 서버 HTTP 클라이언트가 PATCH 를 못 보내 POST 도 받는다 */
+    @org.springframework.web.bind.annotation.RequestMapping(value = "/equipment/{equipmentId}/settings",
+            method = {org.springframework.web.bind.annotation.RequestMethod.PATCH,
+                      org.springframework.web.bind.annotation.RequestMethod.POST})
+    public ApiResponse<Map<String, Object>> settings(@PathVariable long equipmentId, @RequestBody Map<String, Object> b) {
+        return ApiResponse.ok(service.saveSettings(equipmentId, (Boolean) b.get("active"), (Boolean) b.get("fanAuto")));
+    }
+
     @PutMapping("/processes/{processId}/floorplan")
     public ApiResponse<Map<String, Object>> floorplan(@PathVariable long processId, @RequestBody Map<String, Object> b) {
         return ApiResponse.ok(service.setFloorplan(processId, s(b, "url"), d(b, "widthM"), d(b, "depthM")));

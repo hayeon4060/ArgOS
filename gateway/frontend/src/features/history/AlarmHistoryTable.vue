@@ -7,6 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue'
+import { serverNow } from '@/api/clock'
 import { HAZARDS, HAZARD_META, actionText, hazardOf, isActive, minutesOf, placeOf, shortTime } from './historyFilter'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
@@ -54,7 +55,8 @@ const to = computed(() => Math.min(props.total, page.value * props.perPage))
 
 const view = computed(() => {
   // 조치 중인 건의 '경과' 분 (다시 불러올 때마다 새로 셈, 서버 시각이 있으면 그걸로)
-  const now = props.serverTime ? new Date(props.serverTime).getTime() : Date.now()
+  // 서버(GET /stats/alarms)는 serverTime 을 주지 않음 → 로그인 때 맞춘 시연 시계로 셈 (PC 시계면 날짜가 달라 분이 크게 틀림)
+  const now = props.serverTime ? new Date(props.serverTime).getTime() : serverNow().getTime()
   return (props.rows ?? []).map((r) => {
     const place = placeOf(r.location)
     const active = isActive(r)
@@ -83,7 +85,7 @@ const view = computed(() => {
       <SegButtons v-model="tab" :options="TABS" small @update:model-value="page = 1" />
     </template>
 
-    <div class="body" :class="{ busy }">
+    <div class="body" :class="{ busy }" :style="{ '--rows': perPage }">
       <table v-if="view.length" class="tb">
         <colgroup>
           <col class="c-time" /><col class="c-hz" /><col /><col class="c-lv" /><col class="c-act" /><col class="c-dur" /><col class="c-state" /><col class="c-more" />
@@ -110,7 +112,7 @@ const view = computed(() => {
           >
             <td class="mono t-time">{{ v.time }}</td>
             <td>
-              <span class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" />{{ v.hazard.label }}</span>
+              <span class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" :style="{ color: v.hazard.color }" />{{ v.hazard.label }}</span>
             </td>
             <td class="t-place"><b>{{ v.equipment }}</b> <span class="sub">{{ v.process }}</span></td>
             <td><LevelBadge :level="v.row.level" /></td>
@@ -163,7 +165,14 @@ const view = computed(() => {
 
 .body {
   flex: 1;
-  min-height: 684px; /* 14행 + 머리줄 — 쪽마다 높이가 흔들리지 않게 */
+  /*
+   * 표 높이는 카드에 남은 높이를 그대로 씀 (페이지가 화면 높이에 맞춰 카드 높이를 정함)
+   * - container-type: size → 아래 td 가 이 칸 높이(100cqh)를 기준으로 줄 높이를 계산할 수 있게
+   * - 화면이 아주 낮아 14행이 안 들어가면 이 칸 안에서만 스크롤
+   */
+  min-height: 0;
+  overflow-y: auto;
+  container-type: size;
   transition: opacity 150ms;
 }
 
@@ -200,7 +209,12 @@ th {
 }
 
 td {
-  height: 46px;
+  /*
+   * 줄 높이 = (표 칸 높이 − 머리줄 41px) ÷ 한 쪽 행 수(--rows, 14) — 화면 높이에 맞춰 14행이 딱 들어가게
+   * 32px 보다 낮아지지 않고(글자·단추가 눌리지 않게) 46px(설계 값)보다 높아지지 않음
+   * 마지막 쪽처럼 행이 적어도 줄 높이는 같음
+   */
+  height: clamp(32px, calc((100cqh - 41px) / var(--rows, 14)), 46px);
   padding: 0 12px;
   border-bottom: 1px solid #f1f5f9;
   white-space: nowrap;
@@ -240,7 +254,7 @@ td:first-child {
   box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
-/* 유형 칩: 등급(주황·빨강)과 헷갈리지 않게 회색 바탕 + 아이콘 */
+/* 유형 칩: 회색 바탕 + 아이콘 (아이콘 색은 historyFilter.js HAZARD_META) */
 .hz {
   display: inline-flex;
   align-items: center;
@@ -252,14 +266,6 @@ td:first-child {
   color: #334155;
   font-size: 12.5px;
   font-weight: 600;
-}
-
-.hz.FIRE svg {
-  color: #7c3aed;
-}
-
-.hz.GAS svg {
-  color: #0d9488;
 }
 
 /* 상세 단추 */

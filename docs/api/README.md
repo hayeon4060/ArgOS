@@ -5,7 +5,19 @@
 | `ArgOS_API명세서.html` | 화면별로 부르는 API, 요청·응답 예시, 권한, 쓰는 DB 테이블, 에러, SSE 이벤트, 푸시 종류 |
 | `ArgOS_API구성도.png` | 화면 · 연계 서버 · DB · 중앙 서버 · 푸시 사이의 API 흐름 그림 |
 | `stats-history-30days.md` | (2026-11-19 요청) 통계·이력 조회 기간 1년 → 최대 30일, 백엔드 할 일 |
+| `alarm-modal-hazard.md` | (2026-11-19 요청) 주의·경보 창 유형 문구, 경보 대응 `title` 에 유형 넣기 |
+| `warn-detail-trends.md` | (2026-11-19 요청) 주의 상세 창 추이 그래프 2개 — `GET /alarms/{id}/detail` 에 `trends[]` 추가 |
 | `erd-final-frontend-check.md` | (2026-11-19) 최종 ERD ↔ 프론트 대조: 프론트에서 고친 것, ERD에 없는데 화면이 쓰는 값(확인 요청), 아직 화면에 없는 ERD 기능 |
+| `hourly-alarm-one-day.md` | (2026-11-20 요청) 전일 시간대별 알림 주간/야간 → 하루 00~24시 한 줄 — `GET /alarms/hourly` 범위를 `date 00~24시` 로, `hours[]` 추가 |
+| `backend-feedback-1120.md` | (2026-11-20) 백엔드 피드백 4건 프론트 반영: 그날 점검 목록 API, 열화상 사진 blob, 배기팬 수동 승인 · 거절 버튼, 실제 설비 코드 |
+| `frontend-api-audit-1120.md` | (2026-11-20) 프론트 ↔ 백엔드 API 전수 비교: 프론트에서 고친 17건, 백엔드 요청(알림 `fireId`, 체크리스트 목록 `equipmentId`, 통계 `siteId`, 점검 목록 값, 배치 저장 설비 종류), 월별 보고서 31일 달 400 |
+| `inspection-redesign-api.md` | (2026-11-20 요청) 점검 관리 개편 A안: 점검 건 목록 `GET /inspections/schedule` 에 `month` · `from&to` 와 구분 · 결과 칸, 스케줄 추가, 전자 서류 양식 보기 · 저장, 빈 양식 PDF, 스캔본 ↔ 점검 건 연결(`PUT /inspections/{id}` 의 `scheduleId`). 점검 관리는 F02 만 (변전소 F03 제외) |
+| `scope-add.md` | (2026-11-20 요청) 사업장 · 공장 · 공정 추가 화면 연결 (`POST /sites · /factories · /processes`), 요청: `code` 비우면 서버가 만들기, 위경도 없는 사업장 |
+| `equipment-add.md` | (2026-11-20 요청) 새 공정에 설비 추가: 지금 있는 설비 15종에서 골라 빈 배치판에 놓고 `PUT /processes/{id}/layout` 의 `equipment.create` 로 저장 (새 API · ERD 없음), 확인: `equipment_type` null 허용 |
+| `paint-equipment-edit.md` | (2026-11-20 요청) 공장 관리 설비 추가 · 삭제를 도장 공정에도, 설비는 기존 배치도 그림 그대로: `PUT /processes/{id}/layout` 의 `equipment.delete` · `create[].shape` 사용 (새 API 없음), `equipment.shape` 에 넣는 그림 이름 표, 확인 4건 |
+| `fan-speed-control.md` | (2026-11-20 요청) 가스 주의 때 배기팬 속도 직접 조절 20 ~ 60 Hz: 이미 있는 `POST /equipment/{id}/fan` 의 `{ hz }` 사용 (새 API 없음), 요청: 알림 `fanAuto.manualHz`, 명령에 `alarmId`, 경보 승격 · 승인 대기 · 복귀 규칙 확인 |
+| `alarm-sensor-scope.md` | (2026-11-20) 경보 창 '센서 데이터'에 공정 센서가 전부 나오던 문제: `GET /alarms/{id}/response` 의 `sensors` 를 관제 단위 센서만으로 (프론트는 `detail` 로 먼저 걸러 둠) |
+| `caution-dedupe-same-equipment.md` | (2026-11-22 요청) 체크리스트 보낸 뒤 '주의' 단추 → 주의 상세, 같은 설비 경보 중 주의 2중 알림 숨김: 새 API 없음, 확인: 같은 설비에 경보 · 주의가 따로 열리는 경우, 요청: 알림 줄 `coveredBy` · 푸시 · 건수 제외, 경보 열릴 때 기존 주의 처리 규칙 |
 
 ## 이 문서의 성격
 

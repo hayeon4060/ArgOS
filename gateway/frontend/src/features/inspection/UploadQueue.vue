@@ -60,7 +60,9 @@ function desc(r) {
   if (r.status === 'RECOGNIZING') return '문자 인식 중'
   if (r.status === 'FAILED') return '인식 실패'
   if (r.status === 'DONE') return `${shortTime(r.reviewedAt || r.uploadedAt)} 저장`
-  return `5공장 ${r.processName} · ${r.needCheckCount ? `확인 필요 ${r.needCheckCount}개` : '확인 필요 없음'}`
+  // 서버 목록 줄에는 needCheckCount 가 없음 → 없으면 '검수 대기'만 (TODO(백엔드): docs/api/frontend-api-audit-1120.md 6장)
+  const check = r.needCheckCount == null ? '검수 대기' : r.needCheckCount ? `확인 필요 ${r.needCheckCount}개` : '확인 필요 없음'
+  return `${r.processName ?? '공정 미지정'} · ${check}`
 }
 </script>
 
@@ -107,8 +109,8 @@ function desc(r) {
         <span class="code mono">{{ r.formType || '–' }}</span>
         <span class="tx">
           <b>{{ r.fileName }}</b>
-          <small>{{ desc(r) }}<span v-if="r.status === 'RECOGNIZING'" class="mono"> {{ r.progress }}%</span></small>
-          <span v-if="r.status === 'RECOGNIZING' || r.status === 'UPLOADING'" class="bar"><u :style="{ width: `${r.progress}%` }" /></span>
+          <small>{{ desc(r) }}<span v-if="r.status === 'RECOGNIZING'" class="mono"> {{ r.progress ?? 0 }}%</span></small>
+          <span v-if="r.status === 'RECOGNIZING' || r.status === 'UPLOADING'" class="bar"><u :style="{ width: `${r.progress ?? 0}%` }" /></span>
         </span>
         <span class="m-chip" :class="statusChip(r.status, r.id === currentId).cls">{{ statusChip(r.status, r.id === currentId).label }}</span>
       </button>

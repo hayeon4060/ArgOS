@@ -3,17 +3,21 @@
   - 2026-11-19 재원님 요청: '센서 데이터 · 열화상 확인' 창을 이 창에 합침 (따로 여는 단추·창 삭제, 겹치던 추이 그래프는 하나만)
     제목에 유형을 붙임: CO 가 높으면 '가스 주의 상세', 전류·온도가 높으면 '화재 주의 상세'
   - 왼쪽: 발생 원인(문장·기준 띠) / 배기팬 자동 가동 줄(가스 주의만, detail.fanAuto) / 예상 원인 / 센서 데이터(센서 3종 값·기준·단계)
-  - 가운데: 열화상 이미지(주의 발생 시점 1장) + 최고 온도 위치 · 최고/평균 · 평소 같은 위치 / 센서 추이(최근 40분, 알림이 난 센서)
+  - 가운데: 열화상 이미지(주의 발생 시점 1장) + 최고 온도 위치 · 최고/평균 · 평소 같은 위치
+  - 아래(왼쪽·가운데 밑): 센서 추이 2개 (최근 40분) — 2026-11-19 재원님 요청
+    화재 주의 = 온도 · 전류 / 가스 주의 = CO · 전류. 응답에 trends 가 없으면 알림 센서 추이 하나만
   - 오른쪽: 조치 체크리스트(빼기·추가) / 전송 대상(공정 담당자) / 닫기 · 공정 담당자 앱으로 전송
-  - 화면 너비 1500px 이하: 두 칸 (왼쪽·가운데가 한 칸에 위아래로)
+  - 화면 너비 1500px 이하: 두 칸 (왼쪽·가운데·추이가 한 칸에 위아래로)
   - 데이터: GET /alarms/{id}/detail, GET /checklist-templates, GET /processes/{id}/workers
   - 전송: POST /checklists → '보내는 중' → 알림 띠 → 창 닫힘 (상단 바에 체크리스트 진행이 나타남)
   - 이미 보낸 알림이면 항목을 고칠 수 없고 단추는 '전송 완료'
+    (2026-11-22) 보낸 뒤 상단 바 '주의' 를 눌러도 이 창이 열림 → 보낸 체크리스트의 항목·받는 사람을 GET /checklists/{id} 로 채움
 -->
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { placeOf, sensorTypeOfDetail, trendInfo } from './alarmPlace'
+import { placeOf, sensorTypeOfDetail, trendsOf } from './alarmPlace'
 import { hazardLabelOf } from './alarmView'
+import { hazardOf } from '@/features/history/historyFilter'
 import ChecklistEditor from './ChecklistEditor.vue'
 import FanAutoNotice from './FanAutoNotice.vue'
 import MiniTrend from './MiniTrend.vue'
@@ -21,12 +25,13 @@ import WarnCause from './WarnCause.vue'
 import WarnSensorRows from './WarnSensorRows.vue'
 import WorkerPicker from './WorkerPicker.vue'
 import { getAlarmDetail } from '@/api/alarms'
-import { getChecklistTemplate, getProcessWorkers, sendChecklist } from '@/api/checklists'
+import { getChecklist, getChecklistTemplate, getProcessWorkers, sendChecklist } from '@/api/checklists'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import ThermalImage from '@/features/equipment/ThermalImage.vue'
 import { useAlertStore } from '@/stores/alert'
 import { useAuthStore } from '@/stores/auth'
+import { toLayoutPx } from '@/utils/screenScale'
 import { toast } from '@/utils/toast'
 
 const props = defineProps({
@@ -46,24 +51,34 @@ const errorMessage = ref('')
 onMounted(async () => {
   try {
     const d = await getAlarmDetail(props.alarmId)
-    const [template, list] = await Promise.all([
+    // 이미 보낸 알림: 보낸 체크리스트 번호 (알림 목록 줄의 checklist.id)
+    const sentId = d.status === 'ACTING' ? alert.activeAlarms.find((a) => a.id === props.alarmId)?.checklist?.id : null
+    const [template, list, sentList] = await Promise.all([
       // 센서 종류: 백엔드 detail 에는 sensorType 이 없어 알림 센서에서 찾음 (전류로 고정하지 않음)
       getChecklistTemplate({ equipmentType: d.equipmentType, sensorType: sensorTypeOfDetail(d) }),
       getProcessWorkers(d.processId),
+      sentId ? getChecklist(sentId).catch(() => null) : null, // 못 받으면 기본 항목으로 보여 줌
     ])
     detail.value = d
-    items.value = [...template.items]
+    items.value = sentList?.items?.length ? sentList.items.map((i) => i.content) : [...template.items]
     templateId.value = template.templateId
     workers.value = list
     // 기본 선택: 근무 중인 첫 번째 담당자 (화면설계서: 근무 중이고 진행 건이 가장 적은 사람 → 진행 건 수는 API 에 없음)
-    assigneeId.value = list.find((w) => w.onDuty)?.id ?? list[0]?.id ?? null
+    // 이미 보냈으면 그 체크리스트를 받은 사람
+    assigneeId.value = sentList?.assignee?.id ?? list.find((w) => w.onDuty)?.id ?? list[0]?.id ?? null
   } catch (error) {
     errorMessage.value = error.message
   }
 })
 
-/** 추이 제목 '전류 추이' · '온도 추이' · 'CO 추이' (알림이 난 센서 종류) */
-const trend = computed(() => trendInfo(detail.value))
+/** 유형 'FIRE' · 'GAS' (응답의 hazard, 없으면 알림 센서 종류로) */
+const hazard = computed(() => {
+  const row = { hazard: detail.value?.hazard, sensorType: sensorTypeOfDetail(detail.value) }
+  return row.hazard || row.sensorType ? hazardOf(row) : null
+})
+
+/** 아래 추이 그래프 (화재: 온도·전류 / 가스: CO·전류) */
+const trends = computed(() => trendsOf(detail.value, hazard.value))
 
 /** 유형 문구 '가스 주의' · '화재 주의' (응답의 hazard, 없으면 알림 센서 종류로) */
 const kind = computed(() => {
@@ -76,7 +91,7 @@ const time = computed(() => detail.value?.raisedAt.slice(11, 19) ?? '')
 const zoneName = computed(() => [detail.value?.thermal?.cameraTag, placeOf(detail.value).processName].filter(Boolean).join(' · '))
 
 // 창 너비: 세 칸이 들어가게 넓게, 화면이 좁으면 화면에 맞춤
-const modalWidth = Math.min(1640, window.innerWidth - 48)
+const modalWidth = Math.min(1640, toLayoutPx(window.innerWidth) - 48) // 배율이 걸린 화면에서는 화면 폭도 배율로 나눠서
 
 /** 이미 보낸 알림 (조치 중) */
 const sent = () => detail.value?.status === 'ACTING'
@@ -123,8 +138,8 @@ async function send() {
         <section class="left">
           <div class="m-sect"><AppIcon name="info" :size="15" />발생 원인</div>
           <WarnCause :detail="detail" class="gap" />
-          <!-- 가스 주의: 배기팬 자동 제어 결과 -->
-          <FanAutoNotice v-if="detail.fanAuto" :fan="detail.fanAuto" tone="warn" class="gap-s" />
+          <!-- 가스 주의: 배기팬 자동 제어 결과 + 속도 직접 조절 20 ~ 60 Hz -->
+          <FanAutoNotice v-if="detail.fanAuto" :fan="detail.fanAuto" tone="warn" adjustable class="gap-s" />
 
           <div class="m-sect top"><AppIcon name="gear" :size="15" />예상 원인</div>
           <div class="causes">
@@ -156,7 +171,19 @@ async function send() {
               <div class="m-box"><small>평소 같은 위치</small><b class="mono">{{ detail.thermal.usualAtMax.toFixed(1) }} ℃</b></div>
             </div>
           </template>
-          <MiniTrend v-if="detail.trend" :trend="detail.trend" :title="trend.title" :dec="trend.dec" :sub="`${trend.tag} · 최근 40분`" :height="190" class="gap-s" />
+        </section>
+
+        <!-- 아래: 센서 추이 2개 (화재 = 온도·전류, 가스 = CO·전류) -->
+        <section v-if="trends.length" class="trends">
+          <MiniTrend
+            v-for="t in trends"
+            :key="t.tag"
+            :trend="t.trend"
+            :title="t.title"
+            :dec="t.dec"
+            :sub="`${t.tag} · 최근 40분`"
+            :height="180"
+          />
         </section>
 
         <!-- 오른쪽: 체크리스트 · 받는 사람 · 전송 -->
@@ -165,7 +192,7 @@ async function send() {
           <ChecklistEditor v-model="items" :readonly="sent()" class="gap" />
 
           <div class="m-sect top"><AppIcon name="phone" :size="15" />전송 대상</div>
-          <WorkerPicker v-model="assigneeId" :workers="workers" :process-name="placeOf(detail).processName" class="gap" />
+          <WorkerPicker v-model="assigneeId" :workers="workers" :process-name="placeOf(detail).processName" :disabled="sent()" class="gap" />
 
           <p class="note">
             체크리스트와 센서 값, 열화상 이미지가 함께 전송됩니다.<br />
@@ -197,12 +224,14 @@ async function send() {
   color: var(--color-text-sub);
 }
 
-/* 세 칸: 왼쪽(원인·센서) | 가운데(열화상·추이) | 오른쪽(체크리스트·전송) */
+/* 세 칸: 왼쪽(원인·센서) | 가운데(열화상) | 오른쪽(체크리스트·전송), 왼쪽·가운데 밑에 추이 2개 */
 .cols {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: 'left mid right';
-  gap: 28px;
+  grid-template-areas:
+    'left mid right'
+    'trends trends right';
+  gap: 16px 28px;
   padding: 20px 28px 28px;
 }
 
@@ -218,13 +247,28 @@ async function send() {
   grid-area: right;
 }
 
-/* 좁은 화면: 두 칸 (왼쪽 아래에 열화상·추이) */
+/* 추이 2개: 왼쪽·가운데 칸 밑에 하나씩 나란히 (칸 간격과 같은 28px) */
+.trends {
+  grid-area: trends;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+
+/* 좁은 화면: 두 칸 (왼쪽 아래에 열화상·추이, 추이는 위아래로) */
 @media (max-width: 1500px) {
   .cols {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       'left right'
-      'mid right';
+      'mid right'
+      'trends right';
+  }
+
+  .trends {
+    grid-auto-flow: row;
+    gap: 12px;
   }
 }
 

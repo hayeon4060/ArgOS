@@ -3,6 +3,7 @@
   - GET /processes/{id}/workers 목록: 이름, '도장 공정 담당자 · 모바일 앱', 근무 중 / 근무 외
   - 한 명만 고름. 근무 중이 아닌 사람도 고를 수 있음 (화면설계서: 확인 창을 거침 → 지금은 주황 안내 글자만)
   - except: 담당자 변경 때 지금 담당자는 빼고 보여 줌
+  - disabled: 이미 보낸 체크리스트 (주의 상세에서 받은 사람만 보여 주고 못 바꿈)
 -->
 <script setup>
 import { computed } from 'vue'
@@ -14,6 +15,7 @@ const props = defineProps({
   /** 공정 이름 ('도장 공정') — 알림 위치에서 꺼내 넘겨 줌 */
   processName: { type: String, default: '' },
   except: { type: Number, default: null },
+  disabled: { type: Boolean, default: false },
 })
 
 const selected = defineModel({ type: Number, default: null })
@@ -25,8 +27,8 @@ const offDutyPicked = computed(() => list.value.find((w) => w.id === selected.va
 <template>
   <div>
     <div class="m-box options" role="radiogroup">
-      <label v-for="w in list" :key="w.id" class="who" :class="{ on: selected === w.id }">
-        <input v-model="selected" type="radio" :value="w.id" name="worker" />
+      <label v-for="w in list" :key="w.id" class="who" :class="{ on: selected === w.id, locked: disabled }">
+        <input v-model="selected" type="radio" :value="w.id" name="worker" :disabled="disabled" />
         <span class="av"><AppIcon name="user" :size="18" /></span>
         <span class="name">
           <b>{{ w.name }}</b>
@@ -57,6 +59,11 @@ const offDutyPicked = computed(() => list.value.find((w) => w.id === selected.va
 
 .who:last-child {
   border-bottom: none;
+}
+
+/* 이미 보낸 체크리스트: 누를 수 없음 */
+.who.locked {
+  cursor: default;
 }
 
 .who:hover {

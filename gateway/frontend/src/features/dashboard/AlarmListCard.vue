@@ -45,9 +45,9 @@ watch(
   { immediate: true },
 )
 
-/** 진행 중 알림 → 알맞은 창 (본사 관리자가 조치 전 알림을 누르면 안내만) */
+/** 진행 중 알림 → 알맞은 창 (조치 중 주의는 단추 이름대로 체크리스트 진행 창, 본사 관리자가 조치 전 알림을 누르면 안내만) */
 function onAct(alarm) {
-  if (!alert.openFor(alarm)) toast('주의 확인과 조치는 공장 담당자 화면에서 합니다.', { type: 'info' })
+  if (!alert.openFor(alarm, { checklist: true })) toast('주의 확인과 조치는 공장 담당자 화면에서 합니다.', { type: 'info' })
 }
 
 /**
@@ -68,7 +68,7 @@ function onHistory(alarm) {
 </script>
 
 <template>
-  <BaseCard title="오늘 알림 내역">
+  <BaseCard title="금일 알림 내역">
     <!-- 제목 옆: 과거 알림 단추 -->
     <template #sub>
       <button type="button" class="past" @click="goHistory">
@@ -93,7 +93,7 @@ function onHistory(alarm) {
         @act="onAct"
         @history="onHistory"
       />
-      <p v-if="alarms.length === 0" class="empty">오늘 알림이 없습니다.</p>
+      <p v-if="alarms.length === 0" class="empty">금일 알림이 없습니다.</p>
     </div>
   </BaseCard>
 </template>

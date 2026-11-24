@@ -42,6 +42,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- 엣지(DAS) Kafka: 배기팬 명령 argos.edge.cmd · 결과 argos.edge.cmd.result (ARGOS_KAFKA_ENABLED=true 일 때만 연결) -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
         <!-- DB 스키마·시드: src/main/resources/db/migration -->
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -51,7 +56,11 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
-        <!-- 센서값 실시간 입력은 Redis 로 바뀜 (DAS 담당 설계 후 spring-boot-starter-data-redis 추가 예정) -->
+        <!-- 데이터 수집 서버 ↔ 중앙 서버 Redis (ARGOS_REDIS_ENABLED=true 일 때만 연결) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

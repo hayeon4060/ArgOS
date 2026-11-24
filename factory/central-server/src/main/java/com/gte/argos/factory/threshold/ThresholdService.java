@@ -91,6 +91,11 @@ public class ThresholdService {
                 seasons.put(rs.getString("season"), row(rs));
             }
         }, equipmentId);
+        for (Map<String, Object> s : sensors) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> seasons = (Map<String, Object>) s.get("seasons");
+            fillSeasons(seasons);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("equipmentId", equipmentId);
         out.put("activeSeason", Seasons.current(clock));
@@ -214,9 +219,13 @@ public class ThresholdService {
             jdbc.update("""
                     INSERT INTO sensor_threshold
                         (sensor_id, warn_value, alarm_value, low_warn, low_alarm, warn_samples, alarm_samples,
+                         release_samples, release_margin, alarm_avg_sec, immediate_value,
                          basis, note, valid_from, changed_by, season)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, GREATEST(?, ?), ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, GREATEST(?, ?), ?, ?)
                     """, t.sensorId(), t.warn(), t.alarm(), t.lowWarn(), t.lowAlarm(), warnSamples, alarmSamples,
+                    // 복귀 횟수·여유·평균 시간·즉시값은 화면에서 고치지 않으므로 이전 기준을 그대로 잇는다 (없으면 v5 기본값)
+                    intOr(base, "releaseSamples", 6), base == null ? 0.05 : ((Number) base.get("releaseMargin")).doubleValue(),
+                    base == null ? null : base.get("alarmAvgSec"), base == null ? null : base.get("immediate"),
                     reason, now, before == null ? now : ((OffsetDateTime) before.get("validFrom")).plusNanos(1_000_000),
                     userId, season);
             Map<String, Object> change = new LinkedHashMap<>();
@@ -247,6 +256,10 @@ public class ThresholdService {
     /** 수집 주기 · 사용 여부 */
     @Transactional
     public Map<String, Object> updateSensor(long sensorId, Integer sampleSec, Boolean active) {
+        return updateSensor(sensorId, sampleSec, active, null);
+    }
+
+    public Map<String, Object> updateSensor(long sensorId, Integer sampleSec, Boolean active, String streamUrl) {
         if (sampleSec != null && (sampleSec < 1 || sampleSec > 3600)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "수집 주기는 1 ~ 3600초입니다.");
         }
@@ -257,13 +270,20 @@ public class ThresholdService {
         if (n == 0) {
             throw ApiException.notFound("SENSOR_NOT_FOUND", "없는 센서입니다.");
         }
+        if (streamUrl != null) {
+            jdbc.update("UPDATE sensor SET stream_url = ? WHERE sensor_id = ?", streamUrl.isBlank() ? null : streamUrl.trim(),
+                    sensorId);
+            // 연계 서버 마스터 캐시를 바로 비우게 한다
+            feed.append("MASTER_CHANGED", clock.nowOffset(), Map.of("what", "SENSOR", "id", sensorId));
+        }
         live.reloadDefinitions();
-        return jdbc.queryForObject("SELECT sensor_id, sample_sec, is_active FROM sensor WHERE sensor_id = ?",
+        return jdbc.queryForObject("SELECT sensor_id, sample_sec, is_active, stream_url FROM sensor WHERE sensor_id = ?",
                 (rs, i) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", rs.getLong("sensor_id"));
                     m.put("sampleSec", rs.getInt("sample_sec"));
                     m.put("active", rs.getBoolean("is_active"));
+                    m.put("streamUrl", rs.getString("stream_url"));
                     return m;
                 }, sensorId);
     }
@@ -298,6 +318,7 @@ public class ThresholdService {
         out.put("proposed", Map.of("warnCount", p.warn(), "alarmCount", p.alarm()));
         out.put("diff", (p.warn() + p.alarm()) - (c.warn() + c.alarm()));
         out.put("hits", p.hits());
+        out.put("peaks", p.peaks());
         out.put("days", Math.max(1, Math.min(31, days)));
         return out;
     }
@@ -308,6 +329,10 @@ public class ThresholdService {
         int warnCount = 0;
         int alarmCount = 0;
         List<OffsetDateTime> hits = new ArrayList<>();
+        List<Map<String, Object>> peaks = new ArrayList<>();
+        OffsetDateTime peakAt = null;
+        double peakValue = 0;
+        int peakStage = 0;
         int run = 0;
         int alarmRun = 0;
         int bestAlarmRun = 0;
@@ -322,10 +347,14 @@ public class ThresholdService {
                     if (bestAlarmRun >= alarmMin) {
                         alarmCount++;
                         hits.add(runStart);
+                        peaks.add(peak(peakAt, peakValue));
                     } else if (run >= warnMin) {
                         warnCount++;
                         hits.add(runStart);
+                        peaks.add(peak(peakAt, peakValue));
                     }
+                    peakAt = null;
+                    peakStage = 0;
                 }
                 run = 0;
                 alarmRun = 0;
@@ -337,6 +366,14 @@ public class ThresholdService {
                     runStart = m.ts();
                 }
                 run++;
+                // 그래프에 찍을 점: 이 구간에서 단계가 가장 높은 분의 기준을 넘은 쪽 값 (같으면 더 벗어난 값)
+                boolean high = rule.classify(m.max()) != Stage.NORMAL;
+                double v = high ? m.max() : m.min();
+                if (stage.code() > peakStage || (stage.code() == peakStage && (high ? v > peakValue : v < peakValue))) {
+                    peakStage = stage.code();
+                    peakValue = v;
+                    peakAt = m.ts();
+                }
                 alarmRun = stage == Stage.ALARM ? alarmRun + 1 : 0;
                 bestAlarmRun = Math.max(bestAlarmRun, alarmRun);
             }
@@ -344,7 +381,14 @@ public class ThresholdService {
                 prev = m.ts();
             }
         }
-        return new Count(warnCount, alarmCount, hits);
+        return new Count(warnCount, alarmCount, hits, peaks);
+    }
+
+    private static Map<String, Object> peak(OffsetDateTime at, double value) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("at", at);
+        m.put("value", Math.round(value * 100) / 100.0);
+        return m;
     }
 
     // ---------------------------------------------------------------
@@ -391,6 +435,25 @@ public class ThresholdService {
         return n != null && n > 0;
     }
 
+    /**
+     * 계절 줄(SPRING_FALL · SUMMER · WINTER)이 없으면 ALL 줄 값을 복사해 채운다 (inherited = true).
+     * 판정 규칙(지금 계절 줄이 먼저, 없으면 ALL)과 같은 값을 화면에 보여 주기 위해서. ALL 도 없으면 채우지 않는다.
+     */
+    static void fillSeasons(Map<String, Object> seasons) {
+        Object all = seasons.get(Seasons.ALL);
+        if (!(all instanceof Map<?, ?> allRow)) {
+            return;
+        }
+        for (String season : Seasons.SEASONS) {
+            if (!seasons.containsKey(season)) {
+                Map<String, Object> copy = new LinkedHashMap<>();
+                allRow.forEach((k, v) -> copy.put(String.valueOf(k), v));
+                copy.put("inherited", true);
+                seasons.put(season, copy);
+            }
+        }
+    }
+
     private Map<String, Object> row(ResultSet rs) throws SQLException {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("thresholdId", rs.getLong("threshold_id"));
@@ -400,6 +463,10 @@ public class ThresholdService {
         m.put("lowAlarm", rs.getObject("low_alarm", Double.class));
         m.put("warnSamples", rs.getInt("warn_samples"));
         m.put("alarmSamples", rs.getInt("alarm_samples"));
+        m.put("releaseSamples", rs.getInt("release_samples"));
+        m.put("releaseMargin", rs.getDouble("release_margin"));
+        m.put("alarmAvgSec", rs.getObject("alarm_avg_sec", Integer.class));
+        m.put("immediate", rs.getObject("immediate_value", Double.class));
         m.put("basis", rs.getString("basis"));
         m.put("note", rs.getString("note"));
         m.put("validFrom", odt(rs, "valid_from"));
@@ -433,6 +500,10 @@ public class ThresholdService {
     record Minute(OffsetDateTime ts, double min, double max) {
     }
 
-    record Count(int warn, int alarm, List<OffsetDateTime> hits) {
+    /** peaks: 알림 하나마다 그래프에 찍을 점 { at, value } (hits 와 같은 순서) */
+    record Count(int warn, int alarm, List<OffsetDateTime> hits, List<Map<String, Object>> peaks) {
+        Count(int warn, int alarm, List<OffsetDateTime> hits) {
+            this(warn, alarm, hits, List.of());
+        }
     }
 }

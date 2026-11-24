@@ -20,9 +20,17 @@ import java.time.OffsetDateTime;
  * @param sensorType CURRENT | TEMP | CO | IR (대표 이벤트의 센서)
  * @param level      WARN | ALARM (정확히 그 단계)
  * @param shift      DAY(07~19시) | NIGHT(19~07시), 발생 시각 기준
+ * @param hazard     FIRE | GAS (alarm.hazard). 비우면 전체 (2026-11-19 통계·이력 개편)
+ * @param status     ACTIVE(해제 전 전부) | CLOSED | OPEN · ACKED · ACTING. 비우면 전체
+ * @param siteId     사업장
  */
 public record AlarmCriteria(LocalDate from, LocalDate to, Long factoryId, Long processId, String sensorType,
-                            String level, String shift) {
+                            String level, String shift, String hazard, String status, Long siteId) {
+
+    public AlarmCriteria(LocalDate from, LocalDate to, Long factoryId, Long processId, String sensorType,
+                         String level, String shift) {
+        this(from, to, factoryId, processId, sensorType, level, shift, null, null, null);
+    }
 
     public AlarmCriteria {
         if (from == null || to == null || to.isBefore(from)) {
@@ -45,7 +53,8 @@ public record AlarmCriteria(LocalDate from, LocalDate to, Long factoryId, Long p
     /** 바로 앞의 같은 길이 기간 (직전 기간 대비 변화용) */
     public AlarmCriteria previous() {
         long d = days();
-        return new AlarmCriteria(from.minusDays(d), from.minusDays(1), factoryId, processId, sensorType, level, shift);
+        return new AlarmCriteria(from.minusDays(d), from.minusDays(1), factoryId, processId, sensorType, level, shift,
+                hazard, status, siteId);
     }
 
     public boolean matches(Alarm a, UserScope scope, MasterCache.Snapshot m) {
@@ -56,6 +65,15 @@ public record AlarmCriteria(LocalDate from, LocalDate to, Long factoryId, Long p
             return false;
         }
         if (processId != null && a.processId() != processId) {
+            return false;
+        }
+        if (siteId != null && a.plantId() != siteId) {
+            return false;
+        }
+        if (hazard != null && !hazard.isBlank() && !hazard.equals(a.hazard())) {
+            return false;
+        }
+        if (status != null && !status.isBlank() && !statusMatches(status, a.status())) {
             return false;
         }
         if (level != null && !level.isBlank()) {
@@ -77,6 +95,14 @@ public record AlarmCriteria(LocalDate from, LocalDate to, Long factoryId, Long p
             }
         }
         return true;
+    }
+
+    /** ACTIVE = 해제 전(OPEN·ACKED·ACTING), 그 밖은 같은 값 */
+    static boolean statusMatches(String want, String actual) {
+        if ("ACTIVE".equals(want)) {
+            return !"CLOSED".equals(actual);
+        }
+        return want.equals(actual);
     }
 
     /** 주간 07:00~18:59, 나머지는 야간 */

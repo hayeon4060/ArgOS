@@ -19,10 +19,10 @@ class HourlyRangeTest {
     }
 
     @Test
-    void 집계는_그날_07시부터_다음날_07시까지() {
+    void 집계는_그날_00시부터_다음날_00시까지() {
         OffsetDateTime[] r = AlarmService.hourlyRange(LocalDate.of(2026, 11, 15));
 
-        assertThat(r[0]).isEqualTo(OffsetDateTime.parse("2026-11-15T07:00:00+09:00"));
-        assertThat(r[1]).isEqualTo(OffsetDateTime.parse("2026-11-16T07:00:00+09:00"));
+        assertThat(r[0]).isEqualTo(OffsetDateTime.parse("2026-11-15T00:00:00+09:00"));
+        assertThat(r[1]).isEqualTo(OffsetDateTime.parse("2026-11-16T00:00:00+09:00"));
     }
 }

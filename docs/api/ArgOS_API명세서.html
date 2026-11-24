@@ -413,6 +413,22 @@ details[open] summary .chev{transform:rotate(180deg)}
     <p class="cap">알림 제목과 글은 앱이 type 을 보고 직접 만듭니다. 푸시 토큰은 <a href="#M1-1">POST /me/push-token</a> 으로 등록합니다.</p></div>
   </div>
 
+  <h2 style="margin-top:48px">경고 방송 (방송 시스템) <span class="pill push">서버 → 외부</span></h2>
+  <p class="lead">화면이 부르는 API가 아닙니다. 화재로 판정되면 중앙 서버가 <b>자동으로</b> 공장의 기존 방송 시스템 REST API를 불러 경고 방송을 켜고, 화재가 해제되면 끕니다. 방송 상태는 <a href="#C4F-1">GET /fires/{fireId}</a> 의 <code>broadcast</code> 와 SSE <code>fire.started</code> · <code>fire.cleared</code> 로 화면에 보입니다.</p>
+  <div class="grid2" style="margin-top:14px;align-items:start">
+    <div><div class="tw"><table class="t">
+      <tr><th>언제</th><th>호출</th><th>reason</th></tr>
+      <tr><td>화재 판정 (fire.started 직전)</td><td><code>POST {BROADCAST_API_URL}/start</code></td><td>-</td></tr>
+      <tr><td>화재 해제 (비밀번호 다시 입력)</td><td><code>POST {BROADCAST_API_URL}/stop</code></td><td><code>CLEARED</code></td></tr>
+      <tr><td>값이 정상으로 돌아와 자동 해제</td><td><code>POST {BROADCAST_API_URL}/stop</code></td><td><code>AUTO_CLEARED</code></td></tr>
+    </table></div>
+    <p class="cap">헤더 <code>Content-Type: application/json</code>, 방송 시스템이 키를 요구하면 <code>X-API-Key</code>. 대기 시간 3초.<br>
+    2xx 면 성공입니다. 시작이 실패하면 한 번 더 시도하고, 그래도 실패하면 조치 이력 <code>BROADCAST</code> 가 <code>FAIL</code>, <code>broadcast.on = false</code> 로 남고 화재 처리는 계속됩니다.<br>
+    같은 <code>requestId</code>(<code>fire-{fireId}</code>)는 같은 방송으로 봐야 합니다(재시도). 주소를 비워 두면 부르지 않고 서버 로그만 남깁니다.</p></div>
+    <div><div class="codeh">방송 시작 <span>POST /start</span></div><pre id="ex-bc-start"></pre>
+    <div class="codeh" style="margin-top:12px">방송 종료 <span>POST /stop</span></div><pre id="ex-bc-stop"></pre></div>
+  </div>
+
   <h2 style="margin-top:48px">흐름 그림</h2>
   <p class="lead">세 통로가 함께 움직이는 장면 네 가지입니다. 위에서 아래로 시간 순서입니다.</p>
   <div class="legend" style="margin-top:12px">
@@ -1798,7 +1814,7 @@ steps:[
 ['api','web','alarm.updated (CLOSED) · level.changed (NORMAL)','sse','주의 해제'],
 ]},
 {id:'seq-alarm', title:'경보 · 화재: 셧다운과 비밀번호 해제', desc:'설비를 멈추는 명령은 바로 끝나지 않습니다. 접수(202)와 결과(SSE)가 따로 옵니다.',
-actors:[['web','웹 (Vue)','공장 담당자'],['api','API 서버','연계 PC'],['core','중앙 서버','공장 제어망 · PLC'],['app','앱 · 본사','공정 담당자 · 본사 관리자']],
+actors:[['web','웹 (Vue)','공장 담당자'],['api','API 서버','연계 PC'],['core','중앙 서버','공장 제어망 · PLC'],['app','앱 · 본사','공정 담당자 · 본사 관리자'],['bc','방송 시스템','외부 · 기존 시스템']],
 steps:[
 ['api','web','alarm.created (ALARM)','sse','빨간 경보 창'],
 ['web','api','GET /alarms/1051/response','req','열화상 · 센서 · 설비 목록'],
@@ -1807,11 +1823,13 @@ steps:[
 ['api','core','허용된 명령만 전달 (셧다운)','in'],
 ['core','api','정지 완료','in'],
 ['api','web','command.result (DONE, STOPPED)','sse','"정지됨"'],
-['core','api','열화상 150 ℃ 초과 3초 → 화재 판정 · 경고 방송 시작','in'],
+['core','api','열화상 150 ℃ 초과 3초 → 화재 판정','in'],
+['api','bc','POST /start  { requestId: fire-3 }','push','공장 경고 방송 자동 시작'],
 ['api','web','fire.started','sse','화재 창 · 방송 띠'],
 ['api','app','fire.started (본사 웹) · FIRE 푸시 (앱)','push','본사 지도에 위치, 앱은 대피 안내'],
 ['web','api','POST /fires/3/clear  { password }','req','비밀번호 다시 입력'],
 ['api','web','401 FIRE_PASSWORD_MISMATCH (남은 4회)','res','틀리면 · 5회면 423 잠김 → 본사 승인'],
+['api','bc','POST /stop  { reason: CLEARED }','push','경고 방송 종료'],
 ['api','web','fire.cleared','sse','방송 중지, 모든 화면에서 해제'],
 ]},
 {id:'seq-ocr', title:'수기 서류: 올리기 → 글자 인식 → 사람이 확인 → 저장', desc:'글자 인식은 백엔드가 합니다. 프론트는 올리고, 기다리고, 고치고, 저장합니다.',
@@ -1964,6 +1982,22 @@ $('#ex-push').innerHTML = hl(`{
   "level": "WARN",
   "sentAt": "2026-11-12T16:38:34+09:00"
 }`);
+$('#ex-bc-start').innerHTML = hl(`// 요청
+{
+  "requestId": "fire-3",
+  "type": "FIRE",
+  "plantId": 1, "factoryId": 5, "processId": 12, "equipmentId": 31,
+  "location": "5공장 · 도장 공정 · 상도 건조로 버너실",
+  "message": "도장 공정에서 화재가 발생했습니다. 작업자는 즉시 대피하십시오.",
+  "repeat": true,
+  "detectedAt": "2026-11-12T16:58:04+09:00"
+}
+// 응답 (2xx 면 성공, 본문은 참고)
+{ "broadcastId": "B-20261112-0007", "status": "ON", "startedAt": "2026-11-12T16:58:05+09:00" }`);
+$('#ex-bc-stop').innerHTML = hl(`// 요청
+{ "requestId": "fire-3", "reason": "CLEARED" }     // CLEARED | AUTO_CLEARED
+// 응답
+{ "status": "OFF", "endedAt": "2026-11-12T17:31:20+09:00" }`);
 $('#errs').innerHTML = `<tr><th>상태</th><th>코드</th><th>언제</th><th>화면에서는</th></tr>` + COMMON_ERRORS.map(e=>`<tr><td>${stc(e[0])}</td><td><code>${e[1]}</code></td><td>${esc(e[2])}</td><td>${esc(e[3])}</td></tr>`).join('');
 
 /* SSE · 푸시 */

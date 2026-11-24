@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,8 +22,17 @@ public class LiveState {
     private static final Duration KEEP = Duration.ofHours(1);
 
     private final Map<Long, Deque<Point>> recent = new ConcurrentHashMap<>();
+    private final List<Sink> sinks = new CopyOnWriteArrayList<>();
+
+    /** 값이 들어올 때마다 불린다 (Redis 로 내보내기) */
+    public void addSink(Sink sink) {
+        sinks.add(sink);
+    }
 
     public void record(long sensorId, Instant ts, double value) {
+        for (Sink sink : sinks) {
+            sink.onValue(sensorId, ts, value);
+        }
         Deque<Point> q = recent.computeIfAbsent(sensorId, k -> new ArrayDeque<>());
         synchronized (q) {
             q.addLast(new Point(ts, value));
@@ -66,5 +76,10 @@ public class LiveState {
     }
 
     public record Point(Instant ts, double value) {
+    }
+
+    @FunctionalInterface
+    public interface Sink {
+        void onValue(long sensorId, Instant ts, double value);
     }
 }

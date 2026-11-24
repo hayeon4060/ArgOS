@@ -434,6 +434,9 @@ public class ChecklistService {
         row.put("alarmId", c.alarmId());
         row.put("status", c.status());
         row.put("level", Codes.level(a.stage()));
+        // 목록 줄에도 설비 · 공정 번호 (GET /checklists/{id} 와 같은 값, docs/api/frontend-api-audit-1120.md 3장)
+        row.put("processId", a.processId());
+        row.put("equipmentId", eq == null ? null : eq.id());
         row.put("equipmentName", eq == null ? null : eq.name());
         row.put("sensorTag", e == null ? null : e.tag());
         row.put("assignee", Map.of("id", c.assigneeId(), "name", c.assigneeName()));

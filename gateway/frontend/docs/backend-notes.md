@@ -124,7 +124,7 @@
 
 | 번호 | 내용 |
 | --- | --- |
-| 1 | 지도 핀 위치는 지도 그림 좌표라 프론트에 사업장 코드(`ULS-01` 등)별로 적어 둠. 사업장이 늘면 프론트 수정 필요 |
+| 1 | 지도 핀 위치는 지도 그림 좌표라 프론트에 사업장 코드(`USN` 등, 서버 plant.code)별로 적어 둠. 사업장이 늘면 프론트 수정 필요 |
 | 2 | 이번 범위에서 들어갈 수 있는 곳은 울산공장 5공장(`factoryId 5`)뿐이라 프론트에 고정. 나머지는 '준비 중' 안내. 백엔드 공장 overview 의 `accessible` · `hasFloorplan` 으로 바꿀 수 있음 (재원님 결정 대기) |
 
 ---
@@ -229,7 +229,7 @@
 | --- | --- |
 | `name` | 경로·카드 제목 ('도장 공정') |
 | `equipment[].id`, `name` | 설비 줄, 말풍선, 설비 상세로 이동 |
-| `equipment[].code` | **그림 속 설비와 짝 맞춤** (`PNT-TOP-OVEN` → 그림의 상도 건조로). 모든 설비에 code 필요, 값 합의 필요 (프론트 가정: `PNT-PRETREAT`, `PNT-ED-TANK`, `PNT-ED-OVEN`, `PNT-SEALING`, `PNT-PRIMER-BOOTH`, `PNT-PRIMER-OVEN`, `PNT-TOP-BOOTH`, `PNT-TOP-OVEN`, `PNT-AHU`, `PNT-PAINT-MIX`, `PNT-INCINERATOR`) |
+| `equipment[].code` | **그림 속 설비와 짝 맞춤** (`PNT-TOP-OVEN` → 그림의 상도 건조로). 모든 설비에 code 필요, 값 합의 필요 (프론트 가정: `PNT-PRETREAT`, `PNT-ED-TANK`, `PNT-ED-OVEN`, `PNT-SEALING`, `PNT-PRIMER-BOOTH`, `PNT-PRIMER-OVEN`, `PNT-TOP-BOOTH`, `PNT-TOP-OVEN`, `PNT-AHU`, `PNT-PAINT-MIX`, `PNT-INCINERATOR`) → **2026-11-20 실제 코드로 바꿈** (24장) |
 | **`equipment[].seq`** | 공정 흐름 순서 번호(1~8) — 그림과 아래 설비 줄의 파란 번호. **명세서에 없음 → 추가 필요** (공장 관리 화면에서 정하는 값으로 보임) |
 | `sensors[].id`, `tag`, `type`, `unit`, `equipmentId` | 설비별 센서 묶기 (`equipmentId` 가 null 이면 예비 센서: 개수에는 넣고 그림에는 안 나옴) |
 
@@ -480,7 +480,7 @@
 | `PUT /inspections/{id}` | 임시 저장(REVIEW) · 검수 완료(DONE) | 없음. 확인 필요가 남으면 409 `NEED_CHECK_REMAINS` 를 가정. 값을 고치거나 `checked: true` 면 확인 필요가 풀림 |
 | `POST /inspections/{id}/ocr` | 다시 인식 | 없음 |
 | `GET /inspections?from=&to=&formType=&status=&page=&size=` | 오른쪽 등록 목록(최근 7건), 날짜별 전체 보기 창 | 줄마다 `needCheckCount`(확인 필요 n개), `progress`(인식 중 %), `reviewedAt` 추가 필요 |
-| (없음) 그날 점검 목록 | 달력 날짜를 눌렀을 때 작은 창 | **명세서에 없음** — `GET /inspections/schedule?date=` 같은 API 추가 필요 (예시 데이터만) |
+| (없음) 그날 점검 목록 | 달력 날짜를 눌렀을 때 작은 창 | **명세서에 없음** — 백엔드가 `GET /inspections/schedule?date=&factoryId=` 추가 → 2026-11-20 프론트 연결 (24장) |
 
 ### 서류 양식 F01 ~ F05 칸 (ArgOS 시연용 가상 양식, `api/mock/inspectionData.js` 의 `/doc-forms`)
 
@@ -694,6 +694,7 @@
 ### 정할 점
 
 1. **전일 야간 범위**: 화면은 '주간 07~19시 · 야간 19~07시'. 지금 `AlarmService.hourly` 는 `date` 하루(00~24시) 알림만 모아서 야간 칸에 **같은 날 00~06시**를 넣습니다. '전일' 이면 `date 07:00 ~ 다음 날 07:00` 범위로 모으는 게 맞아 보입니다 (예: 11-17 주간 07~19시, 야간 11-17 19시 ~ 11-18 07시).
+   - **2026-11-20 바뀜**: 화면이 주간/야간 구분 없이 하루(00~24시) 한 줄이 되어 범위를 다시 `date 00:00 ~ 다음 날 00:00` 으로 요청합니다 → [`docs/api/hourly-alarm-one-day.md`](../../../docs/api/hourly-alarm-one-day.md)
 2. **낮을수록 위험한 기준(미달)**: 이벤트에 `lowSide`(미달)가 있는데, 기준값 근접 센서는 '값 ÷ 주의 기준(높을수록 위험)' 으로만 셉니다. 하한 기준 센서가 실제로 있다면 `status.sensors[]` 에 하한 여부를 알려 주세요 (그 센서는 '주의 기준 ÷ 값' 으로 세도록 프론트를 고침).
 
 ## 19. 오늘 알림 내역 (2026-11-19, 재원님 요청)
@@ -725,3 +726,48 @@
 - '센서 데이터 · 열화상 확인' 창을 주의 상세 창에 합침 (`GET /alarms/{id}/detail` 한 번으로 그림). 새 API·DB 없음.
 - 요청 1개: `GET /alarms/{id}/response` 의 `title` 에 유형 넣기. 자세한 내용: 저장소 **`docs/api/alarm-modal-hazard.md`**.
 
+## 23. 주의 상세 창 추이 그래프 2개 · 공장 말풍선 위치 (2026-11-19, 재원님 요청)
+
+- 주의 상세 창 아래 추이 그래프 2개: 화재 주의 = 온도·전류, 가스 주의 = CO·전류.
+- 요청 1개: `GET /alarms/{id}/detail` 에 센서별 추이 `trends[]` 추가 (지금은 알림 센서 하나의 `trend` 만). 없으면 화면은 `trend` 하나만 그림. 자세한 내용: 저장소 **`docs/api/warn-detail-trends.md`**.
+- 사업장 지도에서 공장을 누르면 뜨는 공정 목록 말풍선을 공장 오른쪽에 띄움 (화면만 바뀜, API 없음).
+
+## 24. 백엔드 피드백 4건 반영 (2026-11-20)
+
+- 그날 점검 목록: 예시 데이터만 쓰던 것을 `GET /inspections/schedule?date=&factoryId=` 로 바꿈. 작은 창에 시각 · 공정 · 담당자 같이 표시.
+- 열화상 사진: `thermal.imageUrl`(`/api/v1/thermal/images/{fileId}`)은 로그인이 필요해 axios 로 blob 을 받아 띄움 (`useThermalSrc`).
+- 배기팬 수동 승인: `fanAuto.status = AWAITING` 이고 `commandId` 가 있으면 알림 창에 '승인' · '거절' 버튼 (공장 담당자만) → `POST /fan-commands/{commandId}/approve · deny`.
+- 실제 설비 코드: 배치도 그림 짝 맞춤을 `PT-TANK` · `ED-OVEN` · `TC-OVEN` … 기준으로 바꿈. 배기팬 · 버너실 · 펌프 · 열화상 카메라는 같은 그림에 묶음.
+- 자세한 내용: 저장소 **`docs/api/backend-feedback-1120.md`**.
+
+## 25. 사업장 · 공장 · 공정 추가 (2026-11-20, 재원님 요청)
+
+- 사업장 선택 '사업장 추가' → 이름만 입력('창원' → '창원공장') → `POST /sites` → 그 사업장 공장 관리로 이동. 공장이 없는 사업장은 상단 메뉴에 '관리'만.
+- 공장 관리 공장 · 공정 드롭다운 맨 아래 '공장 추가' · '공정 추가' → `POST /factories` · `POST /processes`. 새 공정은 설비 없는 빈 배치도.
+- `code` 는 프론트가 자동으로 만들어 보냄 (서버가 비워도 만들어 주면 지움). 자세한 내용: 저장소 **`docs/api/scope-add.md`**.
+
+## 26. 새 공정에 설비 추가 (2026-11-20, 재원님 요청)
+
+- 도장 공정 그림이 없는 공정(새로 추가한 공정)은 빈 배치판 + 설비 목록 '설비 추가' → 지금 있는 설비 15종에서 골라 놓기.
+- 저장은 이미 있는 `PUT /processes/{id}/layout` 의 `equipment.create` (code 는 비워서 서버가 만듦). 새 API · ERD 변경 없음.
+- 확인 요청: 부스 · 실링 등 `equipment_type` 이 null 인 설비 저장 가능 여부. 자세한 내용: 저장소 **`docs/api/equipment-add.md`**.
+
+## 27. 공장 관리 설비 추가 · 삭제, 설비 그림 그대로 (2026-11-20, 재원님 요청)
+
+- 도장 공정에서도 '설비 추가' · '설비 삭제'. 추가한 설비는 도장 공정 그림의 그 설비 그림을 복사해서 놓음 (새 공정도 같은 배치도 바닥).
+- 새 API 없음: `PUT /processes/{id}/layout` 의 `equipment.delete`, `create[].shape`(그림 이름 → DB `equipment.shape`).
+- 삭제는 서버 규칙 그대로: 센서가 붙은 설비는 지우지 않고 사용 안 함.
+- 확인 요청 4건(`shape` 응답, 삭제 결과, 시드에 없는 그림 설비, `equipment_type` null): 저장소 **`docs/api/paint-equipment-edit.md`**.
+
+
+## 28. 공장 담당자 공장 관리 화면이 비던 문제 (2026-11-20, 재원님 제보)
+
+- 원인: `GET /sites/{siteId}/tree` 가 본사 관리자 전용(`DashboardService.siteTree` → `require(HQ_ADMIN)`)이라 실서버에서 공장 담당자는 403 → 공장 관리 · 통계·이력 · 이용 로그 · 사용자 관리의 공장 · 공정 고르는 칸이 빔.
+- 프론트 처리: 공장 담당자는 `GET /factories?siteId=` → 공장마다 `GET /processes?factoryId=` 로 목록을 만듦 (`api/sites.js getScopeTree`). 서버가 담당 범위 밖 공장은 빼고 주므로 화면에서 다시 거르지 않음 (사업장 전체를 맡은 공장 담당자는 `scope.factoryIds` 가 `[]`).
+- 요청(선택): `/tree` 를 공장 담당자에게도 열어 주면(담당 공장만, `canFactory`) 요청 한 번으로 바꾸고 위 분기는 지웁니다.
+
+## 29. 경보 창 '센서 데이터'에 공정 센서가 전부 나오던 문제 (2026-11-20, 재원님 제보)
+
+- 원인: `GET /alarms/{id}/response` 의 `sensors` 가 공정 전체(`AlarmService.response()` 가 `central.status(processId).sensors()` 를 거르지 않음). `detail()` · `FireService` 는 관제 단위 센서로 거름.
+- 프론트 처리: 경보 창을 열 때 `GET /alarms/{id}/detail` 을 한 번 불러 그 `sensors` 태그만 남김 (`features/alert/alarmSensors.js`). 전류 → 온도 → CO 순서, 단계는 PR #91 규칙(`utils/sensorLevel.js`). 화재 창 감지 근거 센서 이름도 같은 목록에서.
+- 요청: `response()` 의 `sensors` 를 관제 단위 구성 센서만으로 (`equipment` 는 공정 전체 그대로). 자세히는 `docs/api/alarm-sensor-scope.md`.

@@ -9,7 +9,7 @@ import BaseCard from '@/components/BaseCard.vue'
 import { LEVEL_META, LEVEL } from '@/types/codes'
 
 // 범례: 칸에 나오는 색은 주의·경보 두 가지 (정상은 체크 아이콘)
-const LEGEND = [LEVEL_META[LEVEL.WARN], LEVEL_META[LEVEL.ALARM]]
+const LEGEND = [LEVEL_META[LEVEL.NORMAL], LEVEL_META[LEVEL.WARN], LEVEL_META[LEVEL.ALARM]]
 
 defineProps({
   factories: { type: Array, required: true },
@@ -19,7 +19,7 @@ const emit = defineEmits(['select'])
 </script>
 
 <template>
-  <BaseCard title="전체 공장 상태" sub="공장별 알림 센서 수 · 전류 · 온도 · CO">
+  <BaseCard title="전체 공장 상태">
     <template #actions>
       <span v-for="l in LEGEND" :key="l.key" class="legend">
         <i :style="{ background: l.color }" />{{ l.label }}

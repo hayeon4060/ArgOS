@@ -1,8 +1,9 @@
 <!--
   사업장 목록 카드 (사업장 → 공장 → 공정 → 센서)
   - 제목줄 오른쪽: 전체 / 주의 이상 필터
-  - 사업장을 펼치면 그때 공장 목록을 불러옴 (useSiteTrees)
-  - 이벤트: enter(사업장 ID), enter-factory(공장)
+  - 처음부터 모든 사업장을 펼쳐 두고 공장 목록을 불러옴 (접었다 다시 펼칠 때는 저장된 값 사용, useSiteTrees)
+  - 이벤트: enter(사업장 ID), enter-factory(공장), add(사업장 추가 단추)
+  - 2026-11-20 재원님 요청: 제목줄 오른쪽에 '사업장 추가' 단추 (이 화면은 본사 관리자 전용이라 누구나 보임)
 -->
 <script setup>
 import { computed, onMounted, ref } from 'vue'
@@ -14,18 +15,18 @@ import { LEVEL } from '@/types/codes'
 
 const props = defineProps({
   sites: { type: Array, required: true },
-  /** 강조하고 처음부터 펼쳐 둘 사업장 ID */
+  /** 강조할 사업장 ID (파란 테두리 · '이동' 버튼 강조) */
   currentSiteId: { type: Number, default: null },
   /** 누를 수 있는 공장 ID */
   linkFactoryId: { type: Number, default: null },
 })
 
-const emit = defineEmits(['enter', 'enter-factory'])
+const emit = defineEmits(['enter', 'enter-factory', 'add'])
 
 const { trees, loadTree } = useSiteTrees()
 
-// 펼친 사업장 (처음에는 강조 사업장만 펼침)
-const openIds = ref(new Set(props.currentSiteId ? [props.currentSiteId] : []))
+// 펼친 사업장: 화면을 처음 열 때 모든 사업장을 펼쳐 둠 (2026-11-20 재원님 요청, 전에는 강조 사업장만)
+const openIds = ref(new Set(props.sites.map((s) => s.id)))
 onMounted(() => openIds.value.forEach(loadTree))
 
 function toggle(siteId) {
@@ -49,6 +50,7 @@ const visibleSites = computed(() =>
 <template>
   <BaseCard title="사업장 목록" :sub="`${sites.length}곳 · 사업장 → 공장 → 공정 → 센서`">
     <template #actions>
+      <button type="button" class="btn add" @click="emit('add')"><AppIcon name="plus" :size="16" />사업장 추가</button>
       <span class="seg">
         <button type="button" :class="{ on: !onlyAbnormal }" @click="onlyAbnormal = false">전체</button>
         <button type="button" :class="{ on: onlyAbnormal }" @click="onlyAbnormal = true">주의 이상</button>
@@ -81,6 +83,13 @@ const visibleSites = computed(() =>
 <style scoped>
 .list {
   padding: 16px 20px;
+}
+
+.add {
+  height: 32px;
+  margin-right: 8px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 /* 구분 버튼 (전체 / 주의 이상) */

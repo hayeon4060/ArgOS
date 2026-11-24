@@ -11,7 +11,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { serverNow } from '@/api/clock'
 import { exportLogs, getLogs } from '@/api/logs'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import LogFilterBar from '@/features/log/LogFilterBar.vue'
 import LogHourCard from '@/features/log/LogHourCard.vue'
@@ -52,6 +53,9 @@ const busy = ref(false)
 const loadKey = ref(0)
 let seq = 0
 
+/** 처음 로그를 받았는지 — 받기 전에는 화면 대신 뼈대 (실패해도 받은 것으로) */
+const ready = ref(false)
+
 async function load() {
   const my = ++seq
   busy.value = true
@@ -63,7 +67,10 @@ async function load() {
   } catch (error) {
     if (my === seq) toast(error.message, { type: 'err' })
   } finally {
-    if (my === seq) busy.value = false
+    if (my === seq) {
+      busy.value = false
+      ready.value = true
+    }
   }
 }
 
@@ -135,9 +142,9 @@ const tab = computed({
 /* ───────── 처음 ───────── */
 onMounted(async () => {
   try {
-    const tree = await getSiteTree(route.params.siteId || 1)
-    const mine = auth.user?.scope?.factoryIds ?? []
-    factories.value = (isHq.value ? tree.factories : tree.factories.filter((f) => mine.includes(f.id))).map((f) => ({
+    // 공장 담당자는 담당 공장만 옴 (getScopeTree — 실서버 /tree 는 본사 관리자 전용)
+    const tree = await getScopeTree(route.params.siteId || 1)
+    factories.value = tree.factories.map((f) => ({
       id: f.id,
       name: f.name,
       processes: f.processes.map((p) => ({ id: p.id, name: p.name })),
@@ -155,11 +162,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="log-page">
+  <!-- 처음 들어올 때만 뼈대 (다시 조회할 때는 표 카드가 스스로 표시) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="logs" />
+
+  <div v-else class="log-page">
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />
-      <span class="desc">누가 언제 무엇을 했는지 기록</span>
     </div>
 
     <LogFilterBar
@@ -202,11 +211,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.desc {
-  font-size: 13px;
-  color: var(--color-text-weak);
 }
 
 .grid {

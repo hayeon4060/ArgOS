@@ -9,6 +9,7 @@
 <script setup>
 import BaseCard from '@/components/BaseCard.vue'
 import { LEVEL, sensorTypeOf } from '@/types/codes'
+import { blinkClass } from '@/utils/blink'
 
 defineProps({
   /** features/process/nearThreshold.js nearThresholdRows() 결과 */
@@ -28,7 +29,7 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
 </script>
 
 <template>
-  <BaseCard title="기준값 근접 센서" sub="주의 기준에 가까운 순">
+  <BaseCard title="기준값 근접 센서">
     <template #actions>
       <span class="legend"><i class="ok" />정상</span>
       <span class="legend"><i class="warn" />주의</span>
@@ -41,7 +42,7 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
         :key="r.id"
         type="button"
         class="row"
-        :class="levelClass(r.level)"
+        :class="[levelClass(r.level), blinkClass(r.level)]"
         :title="`${r.equipmentName} 설비 상세로 이동`"
         @click="emit('select', r)"
       >
@@ -129,7 +130,8 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
 /*
  * 주의·경보 줄: 줄 바탕이 단계 색(옅은 색)으로 천천히 밝아졌다 사라지기를 반복
  * - 바탕 층(::before)을 따로 두고 투명도만 바꿈 → 마우스 올림 바탕·글자는 그대로
- * - 경보는 주의보다 조금 빠르게 (주의 2.4초, 경보 1.6초 한 번)
+ * - 2026-11-20: 다른 점멸과 같은 박자로 (주의 1.6초 · 경보 0.8초 · 화재 0.6초, blink.css blink-fade)
+ *   한 화면에서 3D 설비와 같이 깜빡이므로 세기는 그대로(약하게) 두고 박자만 맞춤
  */
 .row.warn,
 .row.alarm {
@@ -146,7 +148,7 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
   border-radius: var(--radius-xs);
   background: var(--soft);
   box-shadow: inset 3px 0 0 var(--c); /* 왼쪽 단계 색 띠 */
-  animation: near-blink 2.4s ease-in-out infinite;
+  animation: blink-fade var(--blink-t) ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -154,20 +156,6 @@ const fmt = (row) => row.value.toFixed(sensorTypeOf(row.type)?.dec ?? 1)
 .row.warn,
 .row.alarm {
   --soft: color-mix(in srgb, var(--c) 20%, #fff);
-}
-
-.row.alarm::before {
-  animation-duration: 1.6s;
-}
-
-@keyframes near-blink {
-  0%,
-  100% {
-    opacity: 0.1;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .rank {

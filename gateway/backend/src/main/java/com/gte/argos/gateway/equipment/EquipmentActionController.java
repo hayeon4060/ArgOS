@@ -25,7 +25,19 @@ public class EquipmentActionController {
     @PostMapping("/equipment/{equipmentId}/fan")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, Object>> fan(@PathVariable long equipmentId, @RequestBody FanRequest body) {
-        return ApiResponse.ok(service.fan(equipmentId, body.power(), body.rpm()));
+        return ApiResponse.ok(service.fan(equipmentId, body.power(), body.rpm(), body.hz()));
+    }
+
+    /** 수동 배기팬: 가스 알림 때 승인 대기(fanAuto.status = AWAITING)인 명령 승인 */
+    @PostMapping("/fan-commands/{commandId}/approve")
+    public ApiResponse<Map<String, Object>> approveFan(@PathVariable long commandId) {
+        return ApiResponse.ok(service.decideFan(commandId, true));
+    }
+
+    /** 승인 대기 명령 거절 (fanAuto.status = DENIED) */
+    @PostMapping("/fan-commands/{commandId}/deny")
+    public ApiResponse<Map<String, Object>> denyFan(@PathVariable long commandId) {
+        return ApiResponse.ok(service.decideFan(commandId, false));
     }
 
     @PostMapping("/equipment/{equipmentId}/shutdown")
@@ -51,7 +63,8 @@ public class EquipmentActionController {
     }
 
     /** @param power ON | OFF, @param rpm 600 ~ 1800 (둘 중 하나) */
-    public record FanRequest(String power, Integer rpm) {
+    /** power(ON·OFF), rpm(600~1800), hz(20~60) 중 하나 */
+    public record FanRequest(String power, Integer rpm, Integer hz) {
     }
 
     public record ShutdownRequest(Long alarmId, String reason) {

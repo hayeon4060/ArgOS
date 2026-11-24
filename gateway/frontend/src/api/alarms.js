@@ -12,6 +12,7 @@ import { LEVEL } from '@/types/codes'
 import { alarmDetail, alarmTimeline } from './mock/alertData'
 import { mockAlarms } from './mock/data'
 import { ackAlarm as mockAck } from './mock/scenario'
+import { getActiveFires } from './emergency'
 
 const ACTIVE = ['OPEN', 'ACKED', 'ACTING']
 const notFound = () => mockFail({ code: 'ALARM_NOT_FOUND', message: '없는 알림입니다.', status: 404 })
@@ -30,7 +31,20 @@ export async function getActiveAlarms({ siteId, factoryId } = {}) {
   }
   const params = { status: ACTIVE.join(','), date: 'today', size: 50, ...(factoryId ? { factoryId } : siteId ? { siteId } : {}) }
   const page = await http.get('/alarms', { params })
-  return page.items
+  return markFires(page.items)
+}
+
+/**
+ * 화재로 판정된 알림의 단계를 FIRE 로 바꿈 (화재 창 · 빨간 테두리 · 본사 화재 알림 띠가 이 단계를 봄)
+ * - 서버 알림 단계는 NORMAL · WARN · ALARM 뿐이고, 화재는 따로 기록됨 (fire_incident, GET /fires/{id} 의 alarmId)
+ * - 화재 유형(hazard FIRE) 경보가 있을 때만 화재 목록을 받아 짝을 찾음 → 평소에는 요청이 늘지 않음
+ * - TODO(백엔드): 알림 줄에 fireId(또는 level FIRE)를 주면 이 함수를 뺄 수 있음 → docs/api/frontend-api-audit-1120.md 2장
+ */
+async function markFires(items) {
+  if (!items.some((a) => a.hazard === 'FIRE' && a.level === LEVEL.ALARM)) return items
+  const fires = await getActiveFires().catch(() => []) // 화재 목록을 못 받아도 알림 목록은 그대로 보여 줌
+  const fireAlarmIds = new Set(fires.map((f) => f.alarmId))
+  return items.map((a) => (fireAlarmIds.has(a.id) ? { ...a, level: LEVEL.FIRE } : a))
 }
 
 /** 조치 내역: { id, status, title, timeline: [{ step, at, by, text }], checklist } */
@@ -63,7 +77,7 @@ export async function getAlarmDetail(alarmId) {
  */
 export function ackAlarm(alarmId, userName) {
   if (USE_MOCK) {
-    if (!mockAck(userName)) return mockFail({ code: 'ALREADY_ACKED', message: '이미 다른 사람이 확인한 알림입니다.', status: 409 })
+    if (!mockAck(userName, alarmId)) return mockFail({ code: 'ALARM_ALREADY_ACKED', message: '다른 담당자가 먼저 확인했습니다.', status: 409 }) // 서버와 같은 코드 · 문구
     return mockOk({ id: Number(alarmId), status: 'ACKED' })
   }
   return http.post(`/alarms/${alarmId}/ack`)

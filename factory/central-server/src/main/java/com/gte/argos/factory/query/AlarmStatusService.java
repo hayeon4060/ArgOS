@@ -1,5 +1,6 @@
 package com.gte.argos.factory.query;
 
+import com.gte.argos.factory.command.EquipmentCommandService;
 import com.gte.argos.factory.common.api.ApiException;
 import com.gte.argos.factory.common.time.DemoClock;
 import com.gte.argos.factory.ingest.LiveJudgementService;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * OPEN → ACKED → ACTING → CLOSED
  * - 종료는 경보에 묶인 이벤트가 모두 끝났을 때만 된다 (값이 기준 아래로 30초 유지). 아니면 409 VALUE_STILL_OVER
  * - 종료하면 판정 엔진에도 알려, 그 관제 단위의 다음 이상은 새 경보가 된다
+ * - 종료 사유(close_reason): 조치 중(ACTING)에 닫으면 ACTION_DONE, 아니면 MANUAL
+ * - 종료하면 경보 중 주파수를 바꾼 배기팬을 평상시 30Hz 로 되돌린다 (명령 source RECOVERY)
  * </pre>
  */
 @Service
@@ -31,10 +34,12 @@ public class AlarmStatusService {
     private final LiveJudgementService live;
     private final LiveFeed feed;
     private final DemoClock clock;
+    private final EquipmentCommandService commands;
 
     public AlarmStatusService(JdbcTemplate jdbc, InternalQueryRepository repo, LiveJudgementService live,
-                              LiveFeed feed, DemoClock clock) {
+                              LiveFeed feed, DemoClock clock, EquipmentCommandService commands) {
         this.jdbc = jdbc;
+        this.commands = commands;
         this.repo = repo;
         this.live = live;
         this.feed = feed;
@@ -100,10 +105,21 @@ public class AlarmStatusService {
                     "아직 기준을 넘은 센서가 있어 종료할 수 없습니다.", Map.of("sensors", sensors));
         }
         OffsetDateTime now = clock.nowOffset();
-        jdbc.update("UPDATE alarm SET status = 'CLOSED', closed_by = ?, closed_at = ? WHERE alarm_id = ?",
-                userId, now, alarmId);
+        jdbc.update("UPDATE alarm SET status = 'CLOSED', closed_by = ?, closed_at = ?, close_reason = ? WHERE alarm_id = ?",
+                userId, now, closeReason(alarm.status()), alarmId);
         live.closeAlarm(alarm.unitId());
+        commands.cancelAwaiting(alarmId);
+        commands.recoverFans(alarmId);
         return changed(alarmId, "CLOSED", userId, now);
+    }
+
+    /**
+     * 종료 사유 (alarm.close_reason). 사람이 닫는 경우만 여기로 온다.
+     * 조치(체크리스트·셧다운 등)에 들어간 뒤 닫으면 ACTION_DONE, 조치 없이 닫으면 MANUAL.
+     * AUTO_RECOVERED 는 과거 데이터에서 값이 스스로 돌아와 닫힌 경보.
+     */
+    static String closeReason(String status) {
+        return "ACTING".equals(status) ? "ACTION_DONE" : "MANUAL";
     }
 
     private Alarm find(long alarmId) {

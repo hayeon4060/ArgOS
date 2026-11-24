@@ -1,7 +1,7 @@
 # ArgOS 백엔드 가이드
 
 서버 실행 → API 명세 보기 → 작업 현황(체크리스트)을 한 곳에 정리한 문서.
-최종 정리: 2026-11-19
+최종 정리: 2026-11-19 (배기팬 자동 제어 · 통계·이력 개편 반영)
 
 ---
 
@@ -12,6 +12,14 @@
   - DB: `argos_factory` (중앙), `argos_gateway` (연계)
 - JDK 17 이상. 시스템 기본이 JDK 11 이라 아래 명령에서 `JAVA_HOME` 을 직접 지정한다.
 - Maven 은 IntelliJ 에 들어 있는 것을 쓴다 (PATH 에 mvn 없음).
+
+### 서버 이름 (2026-11-20 아키텍처, `docs/아키텍쳐.png`)
+| 아키텍처 이름 | 폴더 | 포트 | 이 문서의 옛 이름 |
+| --- | --- | --- | --- |
+| 데이터 수집 서버 | `factory/central-server` | 8081 | 중앙 서버 |
+| 중앙 서버 | `gateway/backend` | 8080 | 연계 서버 |
+
+두 서버 사이는 Redis (켜기는 아래 "Redis 로 주고받기"). 아래 실행 방법의 "중앙 · 연계"는 옛 이름 그대로 둔다.
 
 ### 실행 순서
 **① 중앙 서버(8081) → ② 연계 서버(8080) → ③ 프론트(5173)**
@@ -51,6 +59,15 @@ cd C:\Users\hayeon\workspace\ArgOS\gateway\frontend
 npm run dev
 ```
 
+#### (선택) Redis 로 주고받기
+기본은 HTTP. Redis 로 바꾸려면 Redis 를 먼저 켜고, **①·② 두 서버 모두** 같은 환경변수를 추가한다.
+```powershell
+docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine   # 처음 한 번. 다음부터는 docker start argos-redis
+$env:ARGOS_REDIS_ENABLED="true"
+```
+- 켜졌는지: 수집 서버 로그 `Redis 내보내기 켜짐`, 중앙 서버 로그 `수집 서버 피드를 Redis(argos:feed)로 받습니다`
+- 키 규격: `factory/central-server/README.md` 의 "Redis 연동"
+
 ### 켜졌는지 확인
 | 확인 | 주소 |
 | --- | --- |
@@ -64,6 +81,32 @@ npm run dev
 | `admin` | 본사 관리자 (HQ_ADMIN) | 웹 |
 | `plant5` | 공장 관리자 (PLANT_ADMIN), 5공장 | 웹 |
 | `worker12` | 작업자 (WORKER), 공정 12 | 앱 로그인만 |
+
+(2026-11-20 추가) 로그인 화면 종류: `admin`·`plant5` 는 `client: "WEB"` 만, `worker12` 는 `client: "APP"` 만 된다
+(다른 쪽으로 로그인하면 403 `CLIENT_NOT_ALLOWED`).
+
+30일치 데이터(친구 전달본)에 들어 있는 아래 계정은 **로그인할 수 없다** (비밀번호 해시가 자리표시 `CHANGE_ME`).
+이력·조치 기록에 이름을 보여 주는 용도.
+
+| 아이디 | 이름 | 권한 |
+| --- | --- | --- |
+| `sysadmin` | 시스템관리자 | HQ_ADMIN |
+| `manager01` | 안전관리자 | PLANT_ADMIN |
+| `worker_day` · `worker_eve` · `worker_night` | 주간 · 야간 · 심야 작업자 | WORKER |
+
+### 통합 시험 접속 정보 (2026-11-20, 팀 Wi-Fi `smartfactory_5G`)
+| 역할 | IP | 포트 |
+| --- | --- | --- |
+| DAS (Node-RED · Kafka · MQTT) | 192.168.0.14 | Kafka 9092, MQTT 1883 |
+| 봇 · VMS | 192.168.0.16 | VMS 9000 (영상 `/stream/IR-301`) |
+| 데이터 수집 서버 · 중앙 서버 · Redis · DB | 192.168.0.31 | 8081 · 8080 · 6379 · 5432 |
+
+- 수집 서버: `ARGOS_KAFKA_ENABLED=true`, `ARGOS_KAFKA_BOOTSTRAP=192.168.0.14:9092`, `ARGOS_REDIS_ENABLED=true`
+- 중앙 서버: `ARGOS_REDIS_ENABLED=true` (수집 서버와 같은 PC 라 `CENTRAL_SERVER_BASE_URL` · `REDIS_HOST` 는 기본값)
+- VMS: `vms_server.py --main-url http://192.168.0.31:8081/api/v1/vms/ir`
+- 웹(다른 PC): `vite.config.js` proxy 를 `http://192.168.0.31:8080` 으로 (로컬에서만 바꾸고 커밋하지 않음)
+- IR-301 `sensor.stream_url` = `http://192.168.0.16:9000/stream/IR-301` (DB 에서 바꿈)
+- 받는 PC 는 방화벽 인바운드를 연다: 192.168.0.31 은 TCP 8080·8081, 192.168.0.16 은 TCP 9000
 
 ### 끄기 · 다시 켜기
 - 끄기: 해당 터미널에서 `Ctrl + C`
@@ -136,8 +179,7 @@ python make_collection.py
 ### 머지 대기 (PR 만들어서 머지 필요)
 | 상태 | 브랜치 | 내용 |
 | --- | --- | --- |
-| 🔀 | `feature/erd-v5` | 테이블 명세서 v5 반영 (중앙·연계), FcmClientTest 수정 |
-| 🔀 | `feature/api-docs` | Swagger UI · Postman 컬렉션 |
+| 🔀 | `feature/screen-gaps` | 화면 추가 필드 (화재 · 기준값 · 점검 · 내 정보 · 채팅), VMS 열화상 받기 |
 
 ### 중앙 서버 (8081)
 | 상태 | 항목 |
@@ -146,37 +188,44 @@ python make_collection.py
 | ✅ | 7일치 더미 데이터 가져오기, 시연 시계 (2026-11-16 09:00 시작, 리셋 API) |
 | ✅ | 실시간 피드, internal API (master · status · series · events · alarms · feed) |
 | ✅ | 설비 명령 시뮬레이션, 기준값 관리 internal API |
-| 🔀 | ERD v5: 즉시 경보 · 회복 여유값 · 일 집계(`sensor_daily`) · 이벤트 키 · 명령 상태 확장 (`feature/erd-v5`) |
-| ❌ | 보존 정책 변경: 정상 1분 집계 7일 / 이상 구간(앞뒤 여유 포함) 1년 / 이벤트 · 알림 · 명령 1년 |
+| ✅ | ERD v5: 즉시 경보 · 회복 여유값 · 일 집계(`sensor_daily`) · 이벤트 키 · 명령 상태 확장 (`feature/erd-v5`) |
+| ✅ | 배기팬 자동 제어 (가스 주의 45Hz · 경보 60Hz, 종료 때 40Hz 복귀), 설비 설정 저장 |
+| ✅ | 보관 기간: 1분 추이 · 샘플 31일 (조회 30일 기준). 이벤트 · 알림 · 명령은 지우지 않음 |
+| 🔀 | Redis 연동 A단계: 실시간 변화 `argos:feed` · 지금 값 `argos:live` · 1초 값 `argos:raw:*` 내보내기, 제어 명령 `argos:cmd` 받기 (`ARGOS_REDIS_ENABLED`) |
+| ⏸ | Redis 연동 B단계: DB 쓰기를 중앙 서버로 (수집 서버는 Redis 로만 보냄), DB 하나로 합치기 |
+| ⏸ | Redis 연동 C단계: 조회 API 를 중앙 서버로 |
+| ⏸ | Kafka (`argos.edge.raw` · `stage` · `cmd` · `cmd.result` · `argos.config.threshold`) |
+| 🔀 | VMS 열화상 IR-301 받는 API (`POST /api/v1/vms/ir`, 시험용 · 인증 없음) |
 
 ### 연계 서버 (8080) — 화면별
 | 상태 | 화면 | 항목 |
 | --- | --- | --- |
 | ✅ | A1 로그인 · 내 정보 | 로그인 13시간, 연장 1시간(새 토큰), 쿠키 제거, 내 정보 수정 |
-| ❌ | A1 내 정보 | `GET /me` 에 `scopeText` (담당 범위 문구) |
+| 🔀 | A1 내 정보 | `GET /me` 에 `scopeText` |
 | ✅ | 대시보드 · 공정 현황 | 현황, 배치도, 센서 시계열, `limitType` |
 | ✅ | 알림 | 목록 · 상세 · 확인 · 종료 · 대응, 전일 시간대별(야간 19시~07시) |
 | ✅ | 설비 명령 | 팬 · 설비 정지 · 공정 정지 · 작업자 호출 |
+| ✅ | 배기팬 자동 제어 | 알림 응답 `fanAuto`, `PATCH /equipment/{id}/settings`, 기준값 조회 `active`·`fanAuto` |
 | ✅ | 체크리스트 | 템플릿 · 배정 · 확인 · 리마인드 · 보고 |
 | ✅ | C4F · C5 · M2 화재 | 화재 목록 · 상세 · 해제 · 잠금 해제 승인 · 대피 확인 |
-| ❌ | C4F 화재 상세 | `thermal.cameraTag`, `values{thermalMax,temp,co}`, `actions[].running`, `serverTime` |
+| 🔀 | C4F 화재 상세 | `thermal.cameraTag`·`imageUrl`, `values`, `actions[].running`, `serverTime` |
 | ❌ | 화재 시나리오 | 상도 CSV 로 화재 판정 점검(A), 화재 영상 `화재3단계.mp4` 연결(B) |
 | ✅ | F1/D2 기준값 관리 | 설비 트리 · 기준값 조회/저장 · 시뮬레이션 · 이력 |
-| ❌ | F1 기준값 관리 | `equipmentCount`, `equipmentType`, `sensors[].max`, simulate `peaks` |
+| 🔀 | F1 기준값 관리 | `equipmentType`, `sensors[].max`, simulate `peaks` (`equipmentCount` 는 트리가 없어져 안 씀) |
 | ⏸ | F1 기준값 관리 | 여러 설비 한 번에 저장 (있으면 좋음, 중앙도 수정 필요) |
 | ✅ | D1 통계 · 이력 | 요약 · 추이 · 공정별 · 히트맵 · 알림 목록, CSV · xlsx, 월간 보고서 PDF |
-| ⏸ | D1 통계 · 이력 | 화면 변경 예정 → 확정되면 반영 (`status`·`siteId` 필터, `actionType` 등) |
+| ✅ | D1 통계 · 이력 | 개편 반영: 조건 `hazard`·`status`·`siteId`, 알림 상세 `GET /stats/alarms/{id}`, CSV 새 열 |
 | ✅ | E1 점검 · OCR | 업로드 → 인식 → 검토 → 완료, 오늘 점검 |
-| ❌ | E1 점검 관리 | summary `month`, doc-forms `group`·`options`·`row`, `GET /inspections/schedule?date=` |
+| 🔀 | E1 점검 관리 | summary `month`, doc-forms `group`·`options`·`row`, `GET /inspections/schedule?date=` |
 | 🔧 | E1 OCR | 지금은 시연용 인식기. 실제 인식은 `CLOVA_OCR_URL`·`CLOVA_OCR_SECRET` 설정 |
 | ✅ | G1 사용자 관리 | 목록 · 등록 · 수정 · 상태 · 비밀번호 초기화 |
 | ✅ | G2 이용 로그 | 목록 · 내보내기 |
 | ✅ | H1 공장 관리 | 사업장 · 공장 · 공정, 배치도 · 도면 업로드 |
 | ✅ | I2 채팅 | 방 · 메시지 · 읽음 |
-| ❌ | I2 채팅 | 첨부 알림에 `level`, `sensorTag`, `value`, `unit` |
+| 🔀 | I2 채팅 | 첨부 알림에 `level`, `sensorTag`, `value`, `unit` |
 | ✅ | 실시간 | SSE `/stream` |
 | 🔧 | 푸시 · 방송 | FCM `FCM_CREDENTIALS_PATH`, 방송 `BROADCAST_API_URL` 설정 (비우면 로그만) |
-| ✅ | API 명세 | Swagger UI · Postman (`feature/api-docs` 머지 대기) |
+| ✅ | API 명세 | Swagger UI · Postman |
 
 ### 범위 밖 · 나중
 | 상태 | 항목 |
@@ -186,7 +235,6 @@ python make_collection.py
 | ⏸ | 시연 데이터 · 봇 시나리오 |
 
 ### 다음에 할 순서 (제안)
-1. `feature/erd-v5`, `feature/api-docs` 머지
-2. ❌ 화면 필드 보완 (기준값 · 점검 · 화재 상세 · 채팅 · 내 정보)
-3. ❌ 보존 정책 변경
-4. ❌ 화재 시나리오 점검 · 영상 연결
+1. `feature/screen-gaps` 머지
+2. IR-301 `stream_url` 실제 주소 넣기 (VMS 담당에게 받기)
+3. ❌ 화재 시나리오 점검 (상도 CSV)

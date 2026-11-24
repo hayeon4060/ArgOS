@@ -17,18 +17,19 @@ export const NAV_TABS = [
 /** '관리' 펼침 메뉴 */
 export const NAV_ADMIN = [
   { nav: 'admin', name: 'user', label: '사용자 관리', sub: '권한 부여·변경', icon: 'users' },
-  { nav: 'admin', name: 'factory', label: '공장 관리', sub: '설비 재배치 · 기준값', icon: 'factory' },
-  { nav: 'admin', name: 'logs', label: '이용 로그', sub: '누가 언제 무엇을', icon: 'clock' },
+  { nav: 'admin', name: 'factory', label: '공장 관리', sub: '설비 재배치 · 기준값 설정', icon: 'factory' },
+  { nav: 'admin', name: 'logs', label: '이용 로그', icon: 'clock' },
 ]
 
 /**
  * 사업장 아래 메뉴 화면들 (/sites/:siteId/...)
  * - 대시보드 화면(사업장 현황, 공장 대시보드)은 router/index.js 에 따로 있음
+ * - skeleton: 불러오는 동안 보일 뼈대 모양 (메뉴 화면은 모두 조건 줄 + 표·차트 → 'table')
  */
 export const MENU_ROUTES = [
-  { name: 'history', path: 'history', nav: 'history', title: '통계·이력 관리', component: () => import('@/pages/history/HistoryPage.vue') },
-  { name: 'inspection', path: 'inspections', nav: 'inspection', title: '점검 관리', component: () => import('@/pages/inspection/InspectionPage.vue') },
-  { name: 'user', path: 'users', nav: 'admin', title: '사용자 관리', component: () => import('@/pages/user/UserPage.vue') },
-  { name: 'factory', path: 'settings', nav: 'admin', title: '공장 관리', component: () => import('@/pages/factory/FactoryPage.vue') },
-  { name: 'logs', path: 'logs', nav: 'admin', title: '이용 로그', component: () => import('@/pages/log/LogPage.vue') },
+  { name: 'history', path: 'history', nav: 'history', title: '통계·이력 관리', skeleton: 'table', component: () => import('@/pages/history/HistoryPage.vue') },
+  { name: 'inspection', path: 'inspections', nav: 'inspection', title: '점검 관리', skeleton: 'table', component: () => import('@/pages/inspection/InspectionPage.vue') },
+  { name: 'user', path: 'users', nav: 'admin', title: '사용자 관리', skeleton: 'table', component: () => import('@/pages/user/UserPage.vue') },
+  { name: 'factory', path: 'settings', nav: 'admin', title: '공장 관리', skeleton: 'table', component: () => import('@/pages/factory/FactoryPage.vue') },
+  { name: 'logs', path: 'logs', nav: 'admin', title: '이용 로그', skeleton: 'table', component: () => import('@/pages/log/LogPage.vue') },
 ]

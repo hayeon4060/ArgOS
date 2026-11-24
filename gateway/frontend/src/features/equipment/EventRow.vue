@@ -1,11 +1,10 @@
 <!--
   이벤트 이력 한 줄 (설계안 css/base.css .tlg .e: 세로 선 위의 점 + 시각 + 제목·설명 + 오른쪽 배지)
-  - 기준값 조정 줄은 '기준값 관리에서 보기'가 붙어, 누르면 threshold → 설비 상세 화면 위에 기준값 관리 창이 열림 (2026-11-19, 다른 화면으로 이동 안 함)
+  - 기준값 조정 줄의 '기준값 관리에서 보기' 링크는 2026-11-22 재원님 요청으로 삭제 (기준값은 공장 관리에서)
 -->
 <script setup>
 import { computed } from 'vue'
 import { chipOf, dotColor, timeOf } from './eventTypes'
-import AppIcon from '@/components/AppIcon.vue'
 
 const props = defineProps({
   /** { at, type, level, text, detail, by, status } */
@@ -13,8 +12,6 @@ const props = defineProps({
   /** 몇 번째 줄인지 (차례로 나타나는 지연) */
   index: { type: Number, default: 0 },
 })
-
-const emit = defineEmits(['threshold'])
 
 const chip = computed(() => chipOf(props.event))
 </script>
@@ -26,9 +23,6 @@ const chip = computed(() => chipOf(props.event))
     <div class="tx">
       {{ event.text }}
       <small>{{ event.detail }}</small>
-      <button v-if="event.type === 'THRESHOLD'" type="button" class="link" @click="emit('threshold')">
-        기준값 관리에서 보기<AppIcon name="cr" :size="12" />
-      </button>
     </div>
     <span class="chip" :class="chip.cls">{{ chip.label }}</span>
   </div>
@@ -92,26 +86,6 @@ const chip = computed(() => chipOf(props.event))
   display: block;
   font-size: 12px;
   color: var(--color-text-sub);
-}
-
-.link {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--color-primary);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 /* 배지 (설계안 .chip) */

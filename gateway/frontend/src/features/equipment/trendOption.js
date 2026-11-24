@@ -5,13 +5,16 @@
  * - 전날 선: 회색 점선 (어제 같은 시각 값을 오늘 시각으로 옮겨 겹쳐 그림)
  * - 마우스 휠 확대·축소, 끌어서 이동 (dataZoom inside). 세 그래프는 TrendCard 에서 한 묶음으로 같이 움직임
  */
-import { CHART_COLORS } from '@/utils/chartColors'
+import { CHART_COLORS, LEVEL_CHART_COLOR } from '@/utils/chartColors'
 import { chartMotion } from '@/utils/echarts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** 선 색 (설계안: 정상 파랑, 주의 진한 주황, 경보 빨강) */
-const LINE = { NORMAL: '#2563eb', WARN: '#ea580c', ALARM: '#dc2626', FIRE: '#dc2626' }
+/**
+ * 선 색: 정상 파랑, 주의 주황 #F97316, 경보·화재 빨강 #DC2626
+ * (설계안은 주의 선이 진한 주황 #EA580C — 2026-11-20 게이지·배지와 같은 단계 색으로 맞춤)
+ */
+const LINE = { ...LEVEL_CHART_COLOR, NORMAL: CHART_COLORS.action }
 
 /** 세로축 끝: 경보 기준보다 15% 넉넉하게, 보기 좋은 숫자로 올림 (예: 27 A → 35, 180 ℃ → 210) */
 export function niceMax(alarm, dataMax = 0) {
@@ -83,7 +86,7 @@ export function trendOption({ series, level, dec, liveValue, showPrev, wholeDay,
     },
     series: [
       {
-        name: '오늘',
+        name: '금일',
         type: 'line',
         data,
         smooth: 0.3,
@@ -135,7 +138,7 @@ export function trendOption({ series, level, dec, liveValue, showPrev, wholeDay,
           : undefined,
       },
       {
-        name: '전날',
+        name: '전일',
         type: 'line',
         data: showPrev ? prev : [],
         smooth: 0.3,

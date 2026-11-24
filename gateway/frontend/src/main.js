@@ -17,15 +17,25 @@ import '@/assets/styles/base.css'
 import '@/assets/styles/motion.css'
 // 알림 대응 창 공통 모양 (주의 상세·체크리스트 진행 등)
 import '@/assets/styles/alert.css'
+// 주의·경보·화재 점멸 (지도·카드·목록 줄·알림 띠 공통)
+import '@/assets/styles/blink.css'
 
 import App from './App.vue'
 import router from './router'
 import VChart from '@/utils/echarts'
+import { INIT_OPTIONS_KEY } from 'vue-echarts'
+import { chartPixelRatio, initScreenScale } from '@/utils/screenScale'
+import { startBlinkSync } from '@/utils/blink'
 import { setAuthHandlers } from '@/api/http'
 import { syncServerClock } from '@/api/clock'
 import { startLive, stopLive } from '@/api/live'
 import { USE_MOCK } from '@/api/mock'
 import { useAuthStore } from '@/stores/auth'
+
+// 화면 배율 자동 맞춤 (FHD 1배, QHD 1.333배) — 화면을 그리기 전에 먼저 적용
+initScreenScale()
+// 주의·경보 점멸 박자 맞추기 (늦게 나타난 카드·말풍선도 같은 순간에 깜빡이게)
+startBlinkSync()
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -35,6 +45,8 @@ app.use(router)
 
 // 차트 컴포넌트 전역 등록: 어느 화면에서든 <VChart :option="option" /> 로 사용
 app.component('VChart', VChart)
+// 배율이 걸려도 그래프가 흐려지지 않게, 그릴 때의 픽셀 비율을 배율만큼 올림
+app.provide(INIT_OPTIONS_KEY, () => ({ devicePixelRatio: chartPixelRatio() }))
 
 // Axios 에 토큰 조회 방법과 401(인증 만료) 처리 방법 등록
 const auth = useAuthStore(pinia)

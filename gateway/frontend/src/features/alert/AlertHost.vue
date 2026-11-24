@@ -5,10 +5,12 @@
   - 하는 일
     · 처음 + 데이터가 바뀔 때마다 대응 중인 알림·체크리스트를 다시 받음 (useLiveReload)
     · 새 알림이 생기면 (화재 > 경보 > 주의 중 높은 것 하나)
+      같은 설비에 경보·화재가 진행 중이면 그 설비의 주의는 새 알림으로 안 봄 (stores/alert.js visibleAlarms, 2026-11-22 2중 알림)
+      → 경보가 끝난 뒤에도 그 주의가 '발생 중'이면 그때 주의 알림 창이 뜸
       공장 담당자: 주의 알림 창 / 경보·화재 대응 창을 바로 띄움 (경보·화재는 열려 있던 창 위로)
       본사 관리자: 알림 띠 ('위치 보기', 화재는 '화재 현황 보기'로 닫을 때까지)
     · 담당자가 체크리스트를 모두 마치면: 알림 띠 '확인하기' → 체크리스트 진행 창
-    · 대응 중 알림이 있으면 화면 가장자리 테두리가 숨쉬듯 (설계안 #vig: 주의 주황 1.6초, 경보·화재 빨강 0.8초)
+    · 대응 중 알림이 있으면 화면 가장자리 테두리가 숨쉬듯 (설계안 #vig: 주의 주황 1.6초, 경보 빨강 0.8초, 화재 0.6초)
       탭 제목 앞에 [주의] / [경보] / [화재]
 -->
 <script setup>
@@ -16,6 +18,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AlarmResponseModal from './AlarmResponseModal.vue'
 import { placeOf, siteNameOf } from './alarmPlace'
+import { hazardLabelOf } from './alarmView'
 import ChecklistProgressModal from './ChecklistProgressModal.vue'
 import WarnDetailModal from './WarnDetailModal.vue'
 import WarnNoticeModal from './WarnNoticeModal.vue'
@@ -52,6 +55,8 @@ let closeFireToast = null
 /** 본사 관리자 알림 띠 (설계안 onState() hq: 주의 · 경보 · 화재) */
 async function notifyHq(a) {
   const at = await where(a)
+  // 유형 문구 '가스 ' · '화재 ' (창 문구와 같게)
+  const kind = hazardLabelOf(a) ? `${hazardLabelOf(a)} ` : ''
   if (a.level === LEVEL.FIRE) {
     const site = [await siteNameOf(a.siteId), placeOf(a).factoryName].filter(Boolean).join(' ')
     closeFireToast = toast(`${site}에서 화재가 감지되었습니다.`, {
@@ -61,14 +66,32 @@ async function notifyHq(a) {
       onAction: () => router.push({ name: 'site-select' }),
     })
   } else if (a.level === LEVEL.ALARM) {
-    toast(`${at} ${placeOf(a).equipmentName}에서 경보가 발생했습니다.`, { type: 'err', ms: 6000, action: '위치 보기', onAction: () => goProcess(a) })
+    toast(`${at} ${placeOf(a).equipmentName}에서 ${kind}경보가 발생했습니다.`, { type: 'err', ms: 6000, action: '위치 보기', onAction: () => goProcess(a) })
   } else {
-    toast(`${at}에서 주의가 발생했습니다.`, { type: 'warn', action: '위치 보기', onAction: () => goProcess(a) })
+    toast(`${at}에서 ${kind}주의가 발생했습니다.`, { type: 'warn', action: '위치 보기', onAction: () => goProcess(a) })
+  }
+}
+
+/**
+ * 열려 있는 주의 창이 지금 알림 상태와 안 맞으면 정리 (2026-11-19 전수조사)
+ * - 주의 알림 창(길게 눌러 확인): 그 알림이 더는 '발생 중'이 아니면 닫음. 다른 사람이 먼저 확인했으면 주의 상세로 넘어감
+ *   (닫지 않으면 잠긴 창이 다른 알림 내용으로 바뀌어 남음 — 예: 가스 주의 창이 경보 직전에 '화재 주의'로 바뀜)
+ * - 주의 상세 창: 그 알림이 대응 목록에서 빠졌으면(종료 · 초기화) 닫음
+ */
+function closeStale(list) {
+  const m = alert.modal
+  if (!m) return
+  const a = list.find((x) => x.id === m.alarmId)
+  if (m.type === 'warn' && a?.status !== 'OPEN') {
+    if (a?.status === 'ACKED' && alert.canAct) alert.open('detail', { alarmId: a.id })
+    else alert.close()
+  } else if (m.type === 'detail' && !a) {
+    alert.close()
   }
 }
 
 watch(
-  () => alert.activeAlarms,
+  () => alert.visibleAlarms,
   (list) => {
     const first = !known
     const before = known ?? {}
@@ -78,6 +101,7 @@ watch(
       closeFireToast()
       closeFireToast = null
     }
+    closeStale(alert.activeAlarms) // 창 정리는 숨긴 주의까지 포함한 전체 목록으로
     // 새로 '발생 중(OPEN)'이 된 알림 (처음이면 지금 OPEN 인 것 전부)
     const fresh = list.filter((a) => a.status === 'OPEN' && before[a.id] !== 'OPEN')
     if (!fresh.length) return
@@ -100,11 +124,14 @@ watch(
   () => alert.checklists,
   (list) => {
     const done = list.filter((c) => c.status === 'REPORTED')
+    // 경보·화재 대응 중에는 '확인하기' 알림 띠를 미룸 (누르면 잠긴 경보·화재 창이 체크리스트 창으로 바뀌어 버림 — 2026-11-19 전수조사)
+    // 경보·화재가 끝난 뒤 다시 받을 때 띄움
+    const emergency = alert.activeAlarms.some(isEmergency)
     for (const c of done) {
-      if (reportedIds.has(c.id)) continue
+      if (reportedIds.has(c.id) || emergency) continue
       reportedIds.add(c.id)
       if (alert.canAct && alert.modal?.type !== 'checklist') {
-        toast(`${c.assignee.name} 님이 체크리스트 ${c.items.length}개 항목을 모두 마쳤습니다.`, {
+        toast(`${c.assignee.name} 님이 체크리스트 ${c.totalCount}개 항목을 모두 마쳤습니다.`, {
           ms: 6000,
           action: '확인하기',
           onAction: () => alert.open('checklist', { alarmId: c.alarmId, checklistId: c.id }),
@@ -155,7 +182,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* 화면 가장자리 테두리 (설계안 #vig.warn: 안쪽 5px 주황, 1.6초 숨쉬기) */
+/* 화면 가장자리 테두리 (설계안 #vig.warn: 안쪽 5px 주황, 1.6초 숨쉬기)
+   - keyframes 이름이 blink- 로 시작 → 지도·카드 점멸과 같은 박자 (utils/blink.js) */
 .vignette {
   position: fixed;
   inset: 0;
@@ -165,25 +193,25 @@ onBeforeUnmount(() => {
 
 .vignette.warn {
   box-shadow: inset 0 0 0 5px rgba(249, 115, 22, 0.95);
-  animation: vig-warn var(--m-pulse-warn) ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-warn) ease-in-out infinite;
 }
 
 .vignette.alarm {
   box-shadow:
     inset 0 0 0 7px var(--color-level-alarm),
     inset 0 0 90px rgba(220, 38, 38, 0.28);
-  animation: vig-warn var(--m-pulse-alarm) ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-alarm) ease-in-out infinite;
 }
 
-/* 화재: 더 굵고 진하게, 0.7초 (설계안 #vig.fire) */
+/* 화재: 더 굵고 진하게, 0.6초 (2026-11-20 다른 화재 점멸과 같은 --m-pulse-fire 로 맞춤) */
 .vignette.fire {
   box-shadow:
     inset 0 0 0 9px #b91c1c,
     inset 0 0 160px rgba(220, 38, 38, 0.42);
-  animation: vig-warn 0.7s ease-in-out infinite;
+  animation: blink-vig var(--m-pulse-fire) ease-in-out infinite;
 }
 
-@keyframes vig-warn {
+@keyframes blink-vig {
   0%,
   100% {
     opacity: 1;

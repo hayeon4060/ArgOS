@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue'
-import { PAINT_EQUIPMENT } from './paintLayout'
+import { shapeOf } from './paintLayout'
 import LevelBadge from '@/components/LevelBadge.vue'
 import { SENSOR_TYPES } from '@/types/codes'
 
@@ -22,7 +22,7 @@ const PART_NAME = { 'fan-': '배기팬', 'burner-': '버너실', 'ir-': '열화�
 
 /** 묶인 부품: '배기팬 · 버너실 포함' (부품이 없으면 '') */
 const parts = computed(() => {
-  const ids = PAINT_EQUIPMENT[props.equipment.key]?.ids ?? []
+  const ids = shapeOf(props.equipment.shape ?? props.equipment.key)?.ids ?? [] // 추가한 설비는 그림 이름(shape)으로
   const names = ids.map((id) => Object.entries(PART_NAME).find(([head]) => id.startsWith(head))?.[1]).filter(Boolean)
   return names.length ? `${names.join(' · ')} 포함` : ''
 })

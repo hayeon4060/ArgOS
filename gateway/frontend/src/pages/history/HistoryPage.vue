@@ -13,13 +13,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
 import { exportStats, getStatsAlarms, getStatsByProcess, getStatsSummary, getStatsTrend } from '@/api/stats'
 import { useAuthStore } from '@/stores/auth'
 import { ROLE } from '@/types/codes'
 import { saveFile } from '@/utils/saveFile'
 import { toast } from '@/utils/toast'
 import { useLiveReload } from '@/utils/useLiveReload'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import AlarmDetailPanel from '@/features/history/AlarmDetailPanel.vue'
 import AlarmHistoryTable from '@/features/history/AlarmHistoryTable.vue'
 import FilterBar from '@/features/history/FilterBar.vue'
@@ -54,6 +55,9 @@ const data = reactive({ summary: null, trend: null, byProcess: null })
 const busy = ref(false)
 let seq = 0 // 늦게 온 이전 조회 결과는 버림
 
+/** 처음 조회(카드 + 알림 이력 표)가 끝났는지 — 끝나기 전에는 화면 대신 뼈대 (실패해도 끝난 것으로) */
+const ready = ref(false)
+
 async function query({ silent = false } = {}) {
   const my = ++seq
   if (!silent) busy.value = true
@@ -71,7 +75,8 @@ async function query({ silent = false } = {}) {
   if (my !== seq) return
   // 새 조건이면 표는 1쪽부터 (쪽이 바뀌면 아래 watch 가 표를 불러옴)
   if (!silent && table.page !== 1) table.page = 1
-  else loadTable()
+  else await loadTable()
+  ready.value = true
 }
 
 /* ───────── 알림 이력 표 (유형·탭·쪽은 표만 다시 불러옴) ───────── */
@@ -164,9 +169,9 @@ function applyQuery() {
 /* ───────── 처음 불러오기 ───────── */
 onMounted(async () => {
   try {
-    const tree = await getSiteTree(siteId.value)
-    const mine = auth.user?.scope?.factoryIds ?? []
-    factories.value = lockFactory.value ? tree.factories.filter((f) => mine.includes(f.id)) : tree.factories
+    // 공장 담당자는 담당 공장만 옴 (getScopeTree — 실서버 /tree 는 본사 관리자 전용)
+    const tree = await getScopeTree(siteId.value)
+    factories.value = tree.factories
     // 공장 담당자: 담당 공장 / 본사 관리자: 5공장(설계안 처음 값), 없으면 전체 공장
     const first = lockFactory.value ? factories.value[0] : factories.value.find((f) => f.id === 5)
     filter.factoryId = first ? String(first.id) : ''
@@ -182,7 +187,10 @@ useLiveReload(() => query({ silent: true }))
 </script>
 
 <template>
-  <div class="history-page">
+  <!-- 처음 들어올 때만 뼈대 (다시 조회할 때는 아래 카드를 흐리게, 조용히 다시 받을 때는 그대로) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="history" />
+
+  <div v-else class="history-page">
     <FilterBar
       :filter="filter"
       :factories="factories"
@@ -213,7 +221,7 @@ useLiveReload(() => query({ silent: true }))
         <!-- 오른쪽: 일별 추이 · 공정별 알림, 상세 패널이 그 위를 덮음 -->
         <div class="side">
           <TrendCard :trend="trendView" :sub="trendSub" :show-shift="!filter.shift" />
-          <ProcessCard :rows="data.byProcess" :sub="`센서 종류별 · ${periodLabel} 합계`" />
+          <ProcessCard :rows="data.byProcess" :sub="`${periodLabel} 합계`" />
           <Transition name="panel">
             <AlarmDetailPanel
               v-if="selectedId"
@@ -226,7 +234,7 @@ useLiveReload(() => query({ silent: true }))
         </div>
       </div>
     </div>
-    <MonthlyReportModal :open="reportOpen" :factory-id="filter.factoryId" @close="reportOpen = false" />
+    <MonthlyReportModal :open="reportOpen" @close="reportOpen = false" />
   </div>
 </template>
 
@@ -235,13 +243,22 @@ useLiveReload(() => query({ silent: true }))
  * 배치 (설계안 1920 기준): 왼쪽 1180 | 오른쪽 684 — 같은 비율로 화면 폭에 맞춰 줄어듦
  * 1400px 이하는 한 줄에 하나씩
  */
+/*
+ * 한 화면에 맞춤 (2026-11-20 재원님 요청: 전체 화면이 스크롤되지 않게)
+ * - 페이지 높이 = 화면 − 상단 바 − 본문 위아래 여백 40px. 너무 낮은 창에서는 640px 아래로 줄이지 않고 스크롤
+ * - 조건 줄 · 요약 카드는 제 높이, 남는 높이는 아래 줄(.main)이 가져감
+ *   → 알림 이력 표는 줄 높이를 줄여 14행을 맞추고(AlarmHistoryTable), 오른쪽 그래프 2개는 높이를 반씩 나눔
+ */
 .history-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: max(640px, calc(var(--screen-h) - var(--topbar-height) - 40px));
 }
 
 .cards {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -258,6 +275,9 @@ useLiveReload(() => query({ silent: true }))
   grid-template-columns: minmax(0, 1180fr) minmax(0, 684fr);
   gap: 16px;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .side {
@@ -265,6 +285,12 @@ useLiveReload(() => query({ silent: true }))
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+}
+
+/* 오른쪽 그래프 카드 2개가 높이를 반씩 */
+.side > :deep(.base-card) {
+  flex: 1;
 }
 
 .detail {
@@ -285,9 +311,24 @@ useLiveReload(() => query({ silent: true }))
   transform: translateX(24px);
 }
 
+/* 한 열로 쌓이는 좁은 화면: 한 화면에 맞추지 않고 내용 높이대로 (표는 14행 높이 고정) */
 @media (max-width: 1400px) {
+  .history-page {
+    height: auto;
+  }
+
   .main {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .main > :deep(.history-card) {
+    height: 730px;
+  }
+
+  .side > :deep(.base-card) {
+    flex: none;
+    height: 376px;
   }
 }
 </style>

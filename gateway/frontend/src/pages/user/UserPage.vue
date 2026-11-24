@@ -9,12 +9,13 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getSiteTree } from '@/api/sites'
+import { getScopeTree } from '@/api/sites'
 import { getUsers } from '@/api/users'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/utils/toast'
 import AppIcon from '@/components/AppIcon.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import PageSkeleton from '@/components/skeleton/PageSkeleton.vue'
 import SegButtons from '@/components/SegButtons.vue'
 import RoleMatrixCard from '@/features/user/RoleMatrixCard.vue'
 import RoleSummaryCard from '@/features/user/RoleSummaryCard.vue'
@@ -38,6 +39,9 @@ const filter = reactive({ role: '', factoryId: '', q: '', page: 1 })
 const list = reactive({ rows: null, total: 0, counts: null, inactiveCount: 0, busy: false })
 let seq = 0
 
+/** 처음 목록을 받았는지 — 받기 전에는 화면 대신 뼈대 (실패해도 받은 것으로) */
+const ready = ref(false)
+
 async function loadList() {
   const my = ++seq
   list.busy = true
@@ -48,7 +52,10 @@ async function loadList() {
   } catch (error) {
     if (my === seq) toast(error.message, { type: 'err' })
   } finally {
-    if (my === seq) list.busy = false
+    if (my === seq) {
+      list.busy = false
+      ready.value = true
+    }
   }
 }
 watch(() => [filter.role, filter.factoryId, filter.page], loadList)
@@ -125,9 +132,9 @@ const tab = computed({
 /* ───────── 처음 ───────── */
 onMounted(async () => {
   try {
-    const tree = await getSiteTree(route.params.siteId || 1)
-    const mine = actor.value?.scope?.factoryIds ?? []
-    factories.value = (isHq.value ? tree.factories : tree.factories.filter((f) => mine.includes(f.id))).map((f) => ({
+    // 공장 담당자는 담당 공장만 옴 (getScopeTree — 실서버 /tree 는 본사 관리자 전용)
+    const tree = await getScopeTree(route.params.siteId || 1)
+    factories.value = tree.factories.map((f) => ({
       id: f.id,
       name: f.name,
       processes: f.processes.map((p) => ({ id: p.id, name: p.name })),
@@ -142,11 +149,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="user-page">
+  <!-- 처음 들어올 때만 뼈대 (거르기 · 쪽 이동은 목록 카드가 스스로 표시) -->
+  <PageSkeleton v-if="!ready" shape="table" layout="user" />
+
+  <div v-else class="user-page">
     <!-- 탭 줄 -->
     <div class="mtab">
       <SegButtons v-model="tab" :options="TABS" />
-      <span class="desc">사용자를 조회 · 등록 · 수정 · 삭제</span>
+      <span class="desc">사용자 조회 · 등록 · 수정 · 삭제</span>
       <label class="search">
         <AppIcon name="search" :size="16" />
         <input type="search" placeholder="이름, 아이디 검색" aria-label="사용자 검색" @input="onSearch" />
@@ -250,7 +260,7 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 380fr) minmax(0, 1020fr) minmax(0, 448fr);
   gap: 16px;
   align-items: stretch;
-  height: max(760px, calc(100vh - var(--topbar-height) - 110px));
+  height: max(760px, calc(var(--screen-h) - var(--topbar-height) - 110px));
 }
 
 .left {
@@ -259,6 +269,11 @@ onMounted(async () => {
   gap: 16px;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* 권한별 요약 카드는 줄지 않음 → 남는 높이는 권한별 사용 범위 카드가 받고, 모자라면 그 표만 스크롤 */
+.left > :first-child {
+  flex: none;
 }
 
 @media (max-width: 1600px) {

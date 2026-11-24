@@ -36,8 +36,10 @@ const emit = defineEmits(['select-process'])
       <span class="legend"><i class="camera" />열화상 카메라</span>
     </template>
 
-    <div class="map-area">
-      <PlantMap :processes="processes" :cameras="cameras" @select="emit('select-process', $event)" />
+    <div class="map-frame">
+      <div class="map-area">
+        <PlantMap :processes="processes" :cameras="cameras" @select="emit('select-process', $event)" />
+      </div>
       <div class="hint"><AppIcon name="zoomin" :size="15" />공정을 누르면 설비 배치도로 들어갑니다</div>
     </div>
   </BaseCard>
@@ -64,6 +66,24 @@ const emit = defineEmits(['select-process'])
   height: 11px;
   border: none;
   background: #db2777;
+}
+
+/*
+ * 카드가 화면 높이에 맞춰 늘어날 때 (페이지가 남는 높이를 이 카드에 나눠 줌)
+ * - 지도는 비율 그대로 두고 남는 높이의 가운데에 둠 (.map-frame)
+ * - 안내 문구(.hint)는 지도 아래가 아니라 카드 왼쪽 아래 구석에 붙음
+ */
+.base-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .map-area {

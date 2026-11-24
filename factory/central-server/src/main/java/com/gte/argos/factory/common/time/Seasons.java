@@ -12,6 +12,8 @@ import java.time.LocalDate;
 public final class Seasons {
 
     public static final String ALL = "ALL";
+    /** ALL 을 뺀 계절 (화면 계절 탭 순서) */
+    public static final java.util.List<String> SEASONS = java.util.List.of("SPRING_FALL", "SUMMER", "WINTER");
 
     private Seasons() {
     }
@@ -31,7 +33,7 @@ public final class Seasons {
         return ALL.equals(season) || "SPRING_FALL".equals(season) || "SUMMER".equals(season) || "WINTER".equals(season);
     }
 
-    /** 시연 시계 기준 지금 계절 */
+    /** 서버 시계 기준 지금 계절 */
     public static String current(DemoClock clock) {
         return of(clock.nowOffset().toLocalDate());
     }

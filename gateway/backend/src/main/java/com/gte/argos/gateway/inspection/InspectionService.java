@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
  * 점검 관리 · 수기 서류 등록 (명세서 E1) 과 오늘 점검 (B3).
  * 서류를 올리면 파일을 저장하고 202 를 돌려준 뒤, 뒤에서 글자 인식(OCR)을 해 status 를 REVIEW 로 바꾼다.
  * CLOVA OCR 설정(argos.ocr.clova.url · secret)이 없으면 시연용 인식기가 그럴듯한 값을 채운다.
+ * CLOVA 는 템플릿이 있는 양식(argos.ocr.clova.forms, 기본 F02)에만 쓰고, 나머지 양식은 시연용 인식기로 읽는다.
  */
 @Service
 public class InspectionService {
@@ -47,7 +49,11 @@ public class InspectionService {
     private final ActivityLogger activity;
     private final ObjectMapper mapper;
     private final SimTime time;
-    private final OcrEngine ocr;
+    private final OcrEngine sampleOcr;
+    /** CLOVA 설정이 없으면 null */
+    private final OcrEngine clovaOcr;
+    private final Set<String> clovaForms;
+    private final InspectionScheduleService schedules;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ocr");
         t.setDaemon(true);
@@ -56,8 +62,10 @@ public class InspectionService {
 
     public InspectionService(NamedParameterJdbcTemplate jdbc, CurrentUser currentUser, MasterCache masterCache,
                              FileStore files, ActivityLogger activity, ObjectMapper mapper, SimTime time,
+                             InspectionScheduleService schedules,
                              @Value("${argos.ocr.clova.url:}") String clovaUrl,
-                             @Value("${argos.ocr.clova.secret:}") String clovaSecret) {
+                             @Value("${argos.ocr.clova.secret:}") String clovaSecret,
+                             @Value("${argos.ocr.clova.forms:F02}") String clovaForms) {
         this.jdbc = jdbc;
         this.currentUser = currentUser;
         this.masterCache = masterCache;
@@ -65,9 +73,28 @@ public class InspectionService {
         this.activity = activity;
         this.mapper = mapper;
         this.time = time;
-        this.ocr = clovaUrl.isBlank() || clovaSecret.isBlank()
-                ? new SampleOcrEngine(LocalDate.now().toString()) : new ClovaOcrEngine(clovaUrl, clovaSecret);
-        log.info("서류 인식기: {}", ocr.name());
+        this.schedules = schedules;
+        this.sampleOcr = new SampleOcrEngine(LocalDate.now().toString());
+        this.clovaOcr = clovaUrl.isBlank() || clovaSecret.isBlank() ? null : new ClovaOcrEngine(clovaUrl, clovaSecret);
+        this.clovaForms = parseForms(clovaForms);
+        log.info("서류 인식기: {}", clovaOcr == null ? "SAMPLE" : "CLOVA(" + this.clovaForms + ") · 나머지 SAMPLE");
+    }
+
+    /** "F02, f03" → {F02, F03} */
+    static Set<String> parseForms(String csv) {
+        Set<String> out = new java.util.LinkedHashSet<>();
+        for (String s : (csv == null ? "" : csv).split(",")) {
+            if (!s.isBlank()) {
+                out.add(s.strip().toUpperCase());
+            }
+        }
+        return out;
+    }
+
+    /** 이 양식을 읽을 인식기. CLOVA 가 있고 템플릿이 있는 양식이면 CLOVA */
+    private OcrEngine engineFor(Object formType) {
+        return clovaOcr != null && formType != null && clovaForms.contains(String.valueOf(formType).toUpperCase())
+                ? clovaOcr : sampleOcr;
     }
 
     // ---------------------------------------------------------------- 오늘 점검 (B3)
@@ -103,6 +130,53 @@ public class InspectionService {
         out.put("doneCount", done);
         out.put("totalCount", rows.size());
         out.put("items", items);
+        return out;
+    }
+
+    /**
+     * GET /inspections/schedule?date= — 달력 날짜를 눌렀을 때 그날 점검 목록 (명세서에 없음, backend-notes 13장).
+     * 담당 범위 안 공정만. 시각순.
+     */
+    public List<Map<String, Object>> daySchedule(java.time.LocalDate date, Long factoryId) {
+        UserScope scope = admin();
+        if (factoryId != null) {
+            currentUser.checkFactory(scope, factoryId);
+        }
+        OffsetDateTime now = time.now();
+        MasterCache.Snapshot m = masterCache.get();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> r : jdbc.queryForList("""
+                SELECT s.*, u.name AS assignee, d.name AS form_name, du.name AS done_by_name
+                FROM inspection_schedule s
+                LEFT JOIN app_user u ON u.user_id = s.assignee_id
+                LEFT JOIN app_user du ON du.user_id = s.done_by
+                LEFT JOIN doc_form d ON d.form_type = s.form_type
+                WHERE s.planned_at = :day ORDER BY s.planned_time NULLS LAST, s.schedule_id
+                """, new MapSqlParameterSource("day", date))) {
+            Long pid = r.get("process_id") == null ? null : ((Number) r.get("process_id")).longValue();
+            if (!inScope(scope, pid, factoryId, m)) {
+                continue;
+            }
+            CentralDto.Equipment eq = m.equipment(((Number) r.get("equipment_id")).longValue());
+            CentralDto.Process p = pid == null ? null : m.process(pid);
+            CentralDto.Factory f = p == null ? null : m.factory(p.factoryId());
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("scheduleId", r.get("schedule_id"));
+            v.put("date", date.toString());
+            v.put("time", r.get("planned_time") == null ? null : r.get("planned_time").toString().substring(0, 5));
+            v.put("title", r.get("title"));
+            v.put("formType", r.get("form_type"));
+            v.put("formName", r.get("form_name"));
+            v.put("processId", pid);
+            v.put("processName", (f == null ? "" : f.name() + " ") + (p == null ? "" : p.name()));
+            v.put("equipmentId", eq == null ? null : eq.id());
+            v.put("equipmentName", eq == null ? null : eq.name());
+            v.put("assignee", r.get("assignee"));
+            v.put("status", scheduleStatus(r, now));
+            v.put("doneAt", r.get("done_at"));
+            v.put("doneBy", r.get("done_by_name"));
+            out.add(v);
+        }
         return out;
     }
 
@@ -181,6 +255,7 @@ public class InspectionService {
         cal.forEach((d, c) -> calendar.add(Map.of("date", d, "done", c[0], "planned", c[1], "delayed", c[2])));
         int total = done + planned + delayed;
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("month", ym.toString());
         out.put("rate", total == 0 ? 0 : Math.round(done * 100.0 / total));
         out.put("done", done);
         out.put("planned", planned);
@@ -249,19 +324,14 @@ public class InspectionService {
     }
 
     public Map<String, Object> ocrResult(long id) {
-        admin();
+        UserScope scope = admin();
         Map<String, Object> r = row(id);
         String status = String.valueOf(r.get("status"));
         if ("FAILED".equals(status)) {
             throw new ApiException(HttpStatus.valueOf(422), "OCR_FAILED", "글자를 읽지 못했습니다. 다시 스캔하거나 직접 입력하세요.");
         }
         List<Map<String, Object>> fields = fields(r);
-        int need = 0;
-        for (Map<String, Object> f : fields) {
-            if (Boolean.TRUE.equals(f.get("needCheck"))) {
-                need++;
-            }
-        }
+        int need = needCheckCount(fields);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", id);
         out.put("status", status);
@@ -270,7 +340,10 @@ public class InspectionService {
         out.put("pageCount", 1);
         out.put("fields", fields);
         out.put("needCheckCount", need);
-        out.put("engine", ocr.name());
+        out.put("engine", engineFor(r.get("form_type")).name());
+        // 이 스캔본에 맞는 점검 건 추천 (점검 관리 개편 3-7). 이미 이어졌으면 그 건, 없으면 null
+        out.put("scheduleId", "REVIEW".equals(status) || "DONE".equals(status) ? schedules.recommend(r, fields, scope)
+                : r.get("schedule_id"));
         return out;
     }
 
@@ -286,6 +359,16 @@ public class InspectionService {
 
     /** PUT /inspections/{id}: REVIEW(임시 저장) | DONE(검수 완료) */
     public Map<String, Object> save(long id, String status, List<Map<String, Object>> changes) {
+        return save(id, status, changes, false, null);
+    }
+
+    /**
+     * @param link       scheduleId 를 보냈는지 (3-7). 보냈으면 검수 완료 때 그 건(숫자) 또는 새 건(null)에 잇는다
+     * @param scheduleId 이을 점검 건
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> save(long id, String status, List<Map<String, Object>> changes, boolean link,
+                                    Long scheduleId) {
         UserScope scope = admin();
         Map<String, Object> r = row(id);
         if (!"REVIEW".equals(status) && !"DONE".equals(status)) {
@@ -293,6 +376,7 @@ public class InspectionService {
         }
         Map<String, Object> form = form(String.valueOf(r.get("form_type")));
         List<Map<String, Object>> fields = merge(fields(r), changes == null ? List.of() : changes);
+        normalizeChoices(fields, form);
         List<String> bad = validate(fields, form);
         if (!bad.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "날짜·숫자 형식을 확인하세요.",
@@ -313,12 +397,12 @@ public class InspectionService {
                 WHERE ocr_id = :id
                 """, new MapSqlParameterSource("fields", write(fields)).addValue("status", status)
                 .addValue("by", scope.userId()).addValue("now", now).addValue("id", id));
-        Long scheduleId = r.get("schedule_id") == null ? null : ((Number) r.get("schedule_id")).longValue();
+        Long linked = r.get("schedule_id") == null ? null : ((Number) r.get("schedule_id")).longValue();
         String reviewer = null;
         if ("DONE".equals(status)) {
-            if (scheduleId != null) {
-                jdbc.update("UPDATE inspection_schedule SET status = 'DONE', done_at = :now, done_by = :by WHERE schedule_id = :id",
-                        new MapSqlParameterSource("now", now).addValue("by", scope.userId()).addValue("id", scheduleId));
+            if (link || linked != null) {
+                // 점검 건을 완료 · 수기로, 결과는 인식 값에 '불량'이 있으면 NG (연결 안 함이면 새 건)
+                linked = schedules.linkScan(id, r, fields, link ? scheduleId : linked, scope);
             }
             reviewer = jdbc.queryForObject("SELECT name FROM app_user WHERE user_id = :id",
                     new MapSqlParameterSource("id", scope.userId()), String.class);
@@ -331,7 +415,7 @@ public class InspectionService {
         out.put("status", status);
         out.put("reviewedBy", reviewer);
         out.put("reviewedAt", "DONE".equals(status) ? now : null);
-        out.put("scheduleId", scheduleId);
+        out.put("scheduleId", linked);
         return out;
     }
 
@@ -367,7 +451,7 @@ public class InspectionService {
         }
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 SELECT o.ocr_id, o.form_type, d.name AS form_name, f.orig_name, o.process_id, u.name AS uploaded_by,
-                       o.uploaded_at, o.status
+                       o.uploaded_at, o.status, o.fields, o.reviewed_at
                 FROM ocr_result o JOIN file_asset f ON f.file_id = o.file_id
                 LEFT JOIN doc_form d ON d.form_type = o.form_type
                 LEFT JOIN app_user u ON u.user_id = o.uploaded_by""" + where + " ORDER BY o.uploaded_at DESC, o.ocr_id DESC", p);
@@ -388,6 +472,11 @@ public class InspectionService {
             v.put("uploadedBy", r.get("uploaded_by"));
             v.put("uploadedAt", zoned(r.get("uploaded_at")));
             v.put("status", r.get("status"));
+            // 목록에서도 확인 필요 칸 수 · 진행 · 저장 시각 (GET /inspections/{id}/ocr 와 같은 값, frontend-api-audit-1120 6장)
+            String st = String.valueOf(r.get("status"));
+            v.put("needCheckCount", needCheckCount(fields(r)));
+            v.put("progress", "RECOGNIZING".equals(st) || "UPLOADED".equals(st) ? 50 : 100);
+            v.put("reviewedAt", zoned(r.get("reviewed_at")));
             visible.add(v);
         }
         int fromIdx = Math.min(visible.size(), page * size);
@@ -411,7 +500,7 @@ public class InspectionService {
             Map<String, Object> form = form(String.valueOf(r.get("form_type")));
             FileStore.Stored f = files.find(((Number) r.get("file_id")).longValue());
             @SuppressWarnings("unchecked")
-            OcrEngine.Result res = ocr.recognize(files.read(f), f.mime(), f.name(), new OcrEngine.Form(
+            OcrEngine.Result res = engineFor(r.get("form_type")).recognize(files.read(f), f.mime(), f.name(), new OcrEngine.Form(
                     String.valueOf(form.get("formType")), String.valueOf(form.get("name")),
                     (List<Map<String, Object>>) form.get("fields")));
             jdbc.update("""
@@ -459,6 +548,16 @@ public class InspectionService {
         return out;
     }
 
+    static int needCheckCount(List<Map<String, Object>> fields) {
+        int need = 0;
+        for (Map<String, Object> f : fields) {
+            if (Boolean.TRUE.equals(f.get("needCheck"))) {
+                need++;
+            }
+        }
+        return need;
+    }
+
     private List<Map<String, Object>> fields(Map<String, Object> r) {
         Object v = json(r.get("fields"));
         if (v instanceof List<?> l) {
@@ -476,10 +575,15 @@ public class InspectionService {
             Map<String, Object> copy = new LinkedHashMap<>(f);
             for (Map<String, Object> c : changes) {
                 if (String.valueOf(f.get("key")).equals(String.valueOf(c.get("key")))) {
+                    boolean edited = false;
                     if (c.containsKey("value")) {
-                        copy.put("value", c.get("value") == null ? "" : String.valueOf(c.get("value")));
+                        String before = f.get("value") == null ? "" : String.valueOf(f.get("value")).strip();
+                        String after = c.get("value") == null ? "" : String.valueOf(c.get("value"));
+                        copy.put("value", after);
+                        edited = !before.equals(after.strip());
                     }
-                    if (Boolean.TRUE.equals(c.get("checked"))) {
+                    // '확인' 단추(checked) 또는 사람이 값을 직접 고친 칸은 확인 필요를 푼다 (화면 기준과 같게)
+                    if (edited || Boolean.TRUE.equals(c.get("checked"))) {
                         copy.put("needCheck", false);
                         copy.remove("reason");
                     }
@@ -490,12 +594,40 @@ public class InspectionService {
         return out;
     }
 
+    /** 선택 칸(choice)은 띄어쓰기를 무시하고 선택지와 같으면 그 선택지로 바꾼다 (예: 해당없음 → 해당 없음) */
+    @SuppressWarnings("unchecked")
+    static void normalizeChoices(List<Map<String, Object>> fields, Map<String, Object> form) {
+        Map<String, List<String>> options = new LinkedHashMap<>();
+        for (Map<String, Object> d : (List<Map<String, Object>>) form.get("fields")) {
+            if ("choice".equals(String.valueOf(d.get("type"))) && d.get("options") instanceof List<?> o) {
+                options.put(String.valueOf(d.get("key")), o.stream().map(String::valueOf).toList());
+            }
+        }
+        for (Map<String, Object> f : fields) {
+            List<String> opts = options.get(String.valueOf(f.get("key")));
+            if (opts == null || f.get("value") == null) {
+                continue;
+            }
+            String v = String.valueOf(f.get("value")).replaceAll("\\s+", "");
+            for (String o : opts) {
+                if (o.replaceAll("\\s+", "").equals(v)) {
+                    f.put("value", o);
+                    break;
+                }
+            }
+        }
+    }
+
     /** 날짜·숫자 칸 형식이 틀린 칸 key 목록 (빈 값은 통과) */
     @SuppressWarnings("unchecked")
     static List<String> validate(List<Map<String, Object>> fields, Map<String, Object> form) {
         Map<String, String> types = new LinkedHashMap<>();
+        Map<String, List<String>> options = new LinkedHashMap<>();
         for (Map<String, Object> d : (List<Map<String, Object>>) form.get("fields")) {
             types.put(String.valueOf(d.get("key")), String.valueOf(d.get("type")));
+            if (d.get("options") instanceof List<?> o) {
+                options.put(String.valueOf(d.get("key")), o.stream().map(String::valueOf).toList());
+            }
         }
         List<String> bad = new ArrayList<>();
         for (Map<String, Object> f : fields) {
@@ -508,6 +640,10 @@ public class InspectionService {
             if ("number".equals(t) && !v.matches("-?\\d+(\\.\\d+)?")) {
                 bad.add(key);
             } else if ("date".equals(t) && !v.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                bad.add(key);
+            } else if ("time".equals(t) && !v.matches("\\d{1,2}:\\d{2}")) {
+                bad.add(key);
+            } else if ("choice".equals(t) && options.containsKey(key) && !options.get(key).contains(v)) {
                 bad.add(key);
             }
         }

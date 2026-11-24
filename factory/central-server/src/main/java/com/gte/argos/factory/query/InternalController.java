@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * GET  /api/v1/internal/feed?after=&limit=         실시간 변화 (연계 서버가 1초마다 가져가 SSE 로 전달)
  * </pre>
  *
- * 시각 파라미터는 ISO 8601 (2026-11-16T09:00:00+09:00). 비우면 시연 시계 기준 오늘 0시 ~ 지금.
+ * 시각 파라미터는 ISO 8601 (2026-11-16T09:00:00+09:00). 비우면 서버 시계 기준 오늘 0시 ~ 지금.
  */
 @RestController
 @RequestMapping("/api/v1/internal")
@@ -110,11 +110,12 @@ public class InternalController {
             @RequestParam(required = false) Long processId,
             @RequestParam(required = false) Long factoryId,
             @RequestParam(required = false) Long plantId,
+            @RequestParam(required = false) String hazard,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Range r = range(from, to);
         return ApiResponse.ok(repo.alarms(new AlarmFilter(r.from(), r.to(), status, minStage, unitId, processId,
-                factoryId, plantId, Math.max(0, page), clamp(size, 1, 500))));
+                factoryId, plantId, Math.max(0, page), clamp(size, 1, 500), hazard)));
     }
 
     @GetMapping("/alarms/{alarmId}")
@@ -124,6 +125,16 @@ public class InternalController {
             throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
         }
         return ApiResponse.ok(alarm);
+    }
+
+    /** 알림 상세 그래프: 관제 단위 센서 전부의 값 (30분 이하 5초, 넘으면 1분 평균) */
+    @GetMapping("/alarms/{alarmId}/series")
+    public ApiResponse<InternalDto.AlarmSeries> alarmSeries(@PathVariable long alarmId) {
+        Alarm alarm = repo.alarm(alarmId);
+        if (alarm == null) {
+            throw ApiException.notFound("ALARM_NOT_FOUND", "없는 알림입니다.");
+        }
+        return ApiResponse.ok(repo.alarmSeries(alarm));
     }
 
     @PostMapping("/alarms/{alarmId}/ack")
@@ -155,7 +166,7 @@ public class InternalController {
         return body == null ? null : body.userId();
     }
 
-    /** 비우면 시연 시계 기준 오늘 0시 ~ 지금(+1초) */
+    /** 비우면 서버 시계 기준 오늘 0시 ~ 지금(+1초) */
     private Range range(OffsetDateTime from, OffsetDateTime to) {
         Instant t = to != null ? to.toInstant() : clock.now().plusSeconds(1);
         Instant f = from != null ? from.toInstant()

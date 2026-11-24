@@ -187,7 +187,7 @@ public class ChatService {
 
     private long peerLastRead(UserScope scope, long roomId) {
         Long v = jdbc.queryForObject("""
-                SELECT COALESCE(MAX(cr.last_msg_id), 0) FROM chat_read cr
+                SELECT COALESCE(MAX(cr.last_read_msg_id), 0) FROM chat_read cr
                 JOIN app_user u ON u.user_id = cr.user_id JOIN role r ON r.role_id = u.role_id
                 WHERE cr.plant_id = :room AND cr.user_id <> :me AND r.code <> 'WORKER'
                 """, new MapSqlParameterSource("room", roomId).addValue("me", scope.userId()), Long.class);
@@ -195,24 +195,38 @@ public class ChatService {
     }
 
     private long lastRead(long userId, long roomId) {
-        List<Long> v = jdbc.queryForList("SELECT last_msg_id FROM chat_read WHERE user_id = :u AND plant_id = :room",
+        List<Long> v = jdbc.queryForList("SELECT last_read_msg_id FROM chat_read WHERE user_id = :u AND plant_id = :room",
                 new MapSqlParameterSource("u", userId).addValue("room", roomId), Long.class);
         return v.isEmpty() ? 0 : v.get(0);
+    }
+
+    /** 상단 바 채팅 숫자: 내가 볼 수 있는 대화방(사업장)의 안 읽은 글 합계 */
+    public int unreadTotal(UserScope scope) {
+        if (scope.isWorker()) {
+            return 0; // 공정 담당자는 채팅을 쓰지 않음
+        }
+        int n = 0;
+        for (CentralDto.Plant p : masterCache.get().plants()) {
+            if (scope.canSite(p.id(), masterCache.get())) {
+                n += unread(scope.userId(), p.id());
+            }
+        }
+        return n;
     }
 
     private int unread(long userId, long roomId) {
         Integer n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM chat_message WHERE plant_id = :room AND sender_id <> :u
-                  AND msg_id > COALESCE((SELECT last_msg_id FROM chat_read WHERE user_id = :u AND plant_id = :room), 0)
+                  AND msg_id > COALESCE((SELECT last_read_msg_id FROM chat_read WHERE user_id = :u AND plant_id = :room), 0)
                 """, new MapSqlParameterSource("u", userId).addValue("room", roomId), Integer.class);
         return n == null ? 0 : n;
     }
 
     private void markRead(long userId, long roomId, long msgId, OffsetDateTime at) {
         jdbc.update("""
-                INSERT INTO chat_read (user_id, plant_id, last_msg_id, read_at) VALUES (:u, :room, :id, :at)
+                INSERT INTO chat_read (user_id, plant_id, last_read_msg_id, updated_at) VALUES (:u, :room, :id, :at)
                 ON CONFLICT (user_id, plant_id)
-                DO UPDATE SET last_msg_id = GREATEST(chat_read.last_msg_id, EXCLUDED.last_msg_id), read_at = EXCLUDED.read_at
+                DO UPDATE SET last_read_msg_id = GREATEST(chat_read.last_read_msg_id, EXCLUDED.last_read_msg_id), updated_at = EXCLUDED.updated_at
                 """, new MapSqlParameterSource("u", userId).addValue("room", roomId).addValue("id", msgId)
                 .addValue("at", at));
     }
@@ -228,9 +242,19 @@ public class ChatService {
             card.put("title", sensor + Codes.stageName(a.stage()) + " 기준 초과");
             CentralDto.Equipment eq = a.equipmentId() == null ? null : masterCache.get().equipment(a.equipmentId());
             card.put("equipmentName", eq == null ? a.unitName() : eq.name());
+            card.put("level", Codes.level(a.stage()));
+            card.put("hazard", a.hazard());
+            card.put("sensorTag", e == null ? null : e.tag());
+            card.put("value", e == null ? null : e.peak());
+            card.put("unit", e == null ? null : e.unit());
         } catch (RuntimeException ex) {
             card.put("title", "알림 #" + alarmId);
             card.put("equipmentName", null);
+            card.put("level", null);
+            card.put("hazard", null);
+            card.put("sensorTag", null);
+            card.put("value", null);
+            card.put("unit", null);
         }
         return card;
     }

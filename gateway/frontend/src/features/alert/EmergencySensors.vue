@@ -3,6 +3,8 @@
   - 기준을 넘은 센서는 상자 테두리가 단계 색
   - 값이 바뀌면(셧다운 단계마다 내려감) 게이지가 400ms 로 움직임
   - 설계안의 최근 추이 작은 선(스파크라인)은 아직 안 넣음
+  - 받는 sensors 는 AlarmResponseModal 이 고른 것 (alarmSensors.js): 경보가 난 관제 단위의 전류 · 온도 · CO 만,
+    level 은 서버 단계와 지금 값 단계 중 높은 쪽 → 배지 · 게이지 색 · 테두리가 모두 이 level 을 씀
 -->
 <script setup>
 import AppIcon from '@/components/AppIcon.vue'
@@ -11,7 +13,7 @@ import { gaugeOption } from '@/features/equipment/gaugeOption'
 import { LEVEL, LEVEL_META, sensorTypeOf } from '@/types/codes'
 
 defineProps({
-  /** GET /alarms/{id}/response 의 sensors */
+  /** GET /alarms/{id}/response 의 sensors 중 보여 줄 것 (alarmSensors.js pickAlarmSensors) */
   sensors: { type: Array, required: true },
 })
 

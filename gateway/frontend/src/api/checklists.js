@@ -41,6 +41,8 @@ export function getProcessWorkers(processId) {
  */
 export function sendChecklist({ alarmId, templateId, assigneeId, items, sentBy }) {
   if (USE_MOCK) {
+    // 예시 데이터는 상도 건조로 알림(1042)만 체크리스트를 보낼 수 있음 ('주의 1건 추가'로 넣은 1043 은 창 확인용)
+    if (Number(alarmId) !== 1042) return mockFail({ code: 'MOCK_ONLY', message: '예시 데이터에서는 상도 건조로 알림만 체크리스트를 보낼 수 있습니다.', status: 400 })
     if (activeChecklist()) return mockFail({ code: 'CHECKLIST_EXISTS', message: '이 알림에 이미 진행 중인 체크리스트가 있습니다.', status: 409 })
     const c = mockSend({ items, assigneeId, sentBy })
     return mockOk({ id: c.id, status: 'SENT', push: 'SENT', sentAt: c.sentAt })
@@ -48,7 +50,12 @@ export function sendChecklist({ alarmId, templateId, assigneeId, items, sentBy }
   return http.post('/checklists', { alarmId, templateId, assigneeId, items })
 }
 
-/** 진행 중 체크리스트 목록 (상단 바) */
+/**
+ * 진행 중 체크리스트 목록 (상단 바 · 공정 화면 칩)
+ * - 서버 줄 모양: { id, alarmId, status, level, equipmentName, sensorTag, assignee: { id, name }, doneCount, totalCount, sentAt }
+ *   항목(items)과 설비 번호(equipmentId)는 없음 → 화면은 doneCount · totalCount 를 쓰고, 설비는 알림 목록에서 찾음 (stores/alert.js)
+ * - TODO(백엔드): 줄에 equipmentId · processId 추가 요청 → docs/api/frontend-api-audit-1120.md 3장
+ */
 export function getActiveChecklists({ factoryId } = {}) {
   if (USE_MOCK) {
     const c = activeChecklist()

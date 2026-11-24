@@ -226,6 +226,7 @@ function stopTick() {
 /** 상황을 통째로 바꾸고 화면에 알림 (경보·화재 상황도 이 함수로) */
 export function replace(next, event) {
   stopTick()
+  scenario.extra = null // 상황을 바꾸면 '주의 1건 추가'로 넣은 알림도 지움
   Object.assign(scenario, next)
   emitLive(event)
 }
@@ -266,6 +267,16 @@ export function raiseGasWarn() {
   )
 }
 
+/**
+ * 다른 설비 주의 1건 추가 (2026-11-19 — 상단 바 상태 띠의 '여러 건 목록' 시연용)
+ * - 중도 건조로 버너실 CO-12 22 ppm 가스 주의 (알림 1043). 지금 상황은 그대로 두고 알림만 하나 더함
+ * - 예시라서 알림 목록·주의 창·주의 상세까지만 됨 (지도·센서 값은 안 바뀌고, 체크리스트 전송은 상도 건조로만)
+ */
+export function addExtraWarn() {
+  scenario.extra = { id: 1043, status: 'OPEN', raisedAt: scenarioNow(), ackedAt: null, ackedBy: null }
+  emitLive('alarm.created')
+}
+
 /** 처음 상황으로 (주의 · 조치 중 2/5) */
 export function resetScenario() {
   replace(initial(), 'level.changed')
@@ -274,11 +285,13 @@ export function resetScenario() {
 /* ───────── 주의 대응 (API 흉내가 부름) ───────── */
 
 /** 주의 확인 (2초 길게 누르기) */
-export function ackAlarm(by) {
-  if (!scenario.alarm || scenario.alarm.status !== 'OPEN') return false
-  scenario.alarm.status = 'ACKED'
-  scenario.alarm.ackedAt = scenarioNow()
-  scenario.alarm.ackedBy = by
+export function ackAlarm(by, alarmId) {
+  // 추가한 알림(1043)이면 그 알림을, 아니면 상도 건조로 알림을 확인함으로
+  const a = Number(alarmId) === scenario.extra?.id ? scenario.extra : scenario.alarm
+  if (!a || a.status !== 'OPEN') return false
+  a.status = 'ACKED'
+  a.ackedAt = scenarioNow()
+  a.ackedBy = by
   emitLive('alarm.updated')
   return true
 }

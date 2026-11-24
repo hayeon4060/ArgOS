@@ -30,6 +30,21 @@ class ThresholdSimulationTest {
     }
 
     @Test
+    void 알림마다_그래프_점_peaks_를_준다() {
+        List<ThresholdService.Minute> m = new ArrayList<>();
+        add(m, 0, 3, 140, 152);
+        add(m, 3, 2, 140, 141);
+        add(m, 5, 3, 140, 165);
+        ThresholdRule rule = new ThresholdRule(1, 150.0, 160.0, null, null, 24, 6);
+
+        ThresholdService.Count c = ThresholdService.count(m, rule, 5);
+
+        assertThat(c.peaks()).hasSize(2);
+        assertThat(c.peaks().get(0)).containsEntry("value", 152.0).containsEntry("at", T0);
+        assertThat(c.peaks().get(1)).containsEntry("value", 165.0).containsEntry("at", T0.plusMinutes(5));
+    }
+
+    @Test
     void 기준을_낮추면_건수가_늘고_경보_범위가_있으면_경보로_센다() {
         List<ThresholdService.Minute> m = new ArrayList<>();
         add(m, 0, 3, 140, 152);

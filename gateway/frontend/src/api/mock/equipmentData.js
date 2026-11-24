@@ -6,6 +6,7 @@
  *   (주의: CT-17 22.4 A, TE-15 146 ℃, CO-13 9 ppm / 정상: 18.1 A, 142 ℃, 6 ppm)
  * - 게이지 눈금 끝(max)·평소 값(usual)은 화면설계안 js/v-dash.js EQD 값
  */
+import { addedLayout } from './addedScope'
 import { EQUIPMENT, equipmentLevel, sensorsNow } from './processData'
 import { SCENARIO_TIME, todayIso } from './equipmentSeries'
 import { activeChecklist, designAt, scenario, workerName } from './scenario'
@@ -42,10 +43,24 @@ const TYPE_LABEL = { CURRENT: '전류', TEMP: '온도', CO: 'CO' }
 /** 상도 건조로 (예시 상황이 걸린 설비) */
 export const TOP_OVEN_ID = 31
 
+/**
+ * 공장 관리에서 도장 공정에 추가한 설비의 상세 (2026-11-20) — 센서 · 열화상 · 체크리스트가 아직 없는 빈 설비
+ * (없는 id 면 null → 404)
+ */
+function mockAddedEquipment(equipmentId) {
+  const e = addedLayout(12).equipment.find((x) => x.id === Number(equipmentId))
+  if (!e) return null
+  return {
+    id: e.id, code: e.code, name: e.name, type: e.type, processId: 12, seq: null,
+    path: ['울산공장', '5공장', '도장 공정'],
+    level: LEVEL.NORMAL, runState: 'RUNNING', sensors: [], cameraId: null, activeChecklist: null,
+  }
+}
+
 /** 설비 상세: GET /equipment/{id} (지금 상황). 없는 설비면 null */
 export function mockEquipment(equipmentId) {
   const e = EQUIPMENT.find((x) => x.id === Number(equipmentId))
-  if (!e) return null
+  if (!e) return mockAddedEquipment(equipmentId)
   const sensors = sensorsNow()
   const c = e.id === TOP_OVEN_ID ? activeChecklist() : null
   return {
@@ -171,14 +186,25 @@ export const THERMAL_BY_STATE = {
   [LEVEL.FIRE]: { image: irFire, max: 486, min: 24.0, avg: 131, point: { x: 0.84, y: 0.62 }, scale: { min: 20, max: 500 } },
 }
 
+/**
+ * VMS 실시간 영상 주소 예시 (백엔드가 알려 준 실제 모양: GET /thermal/331/latest → streamUrl)
+ * - VMS 는 3단계(경보 · 화재)일 때만 영상을 줌 → 예시 데이터도 3단계일 때만 채움
+ * - mock 모드에서는 보통 이 주소에 닿지 않음 → 화면이 7초 뒤 사진으로 되돌아가는 모습을 볼 수 있음
+ */
+export const SAMPLE_STREAM_URL = 'http://192.168.0.16:9000/stream/IR-301'
+const isStage3 = (level) => level === LEVEL.ALARM || level === LEVEL.FIRE
+
 export function thermalOf(cameraId, equipmentId) {
   const top = Number(equipmentId) === TOP_OVEN_ID
   // 상도 건조로 구역만 상황에 따라 바뀜 (다른 설비는 공정 전체 정상 그림, 최고·최저 없음)
-  const t = THERMAL_BY_STATE[top ? scenario.state : LEVEL.NORMAL]
+  const level = top ? scenario.state : LEVEL.NORMAL
+  const t = THERMAL_BY_STATE[level]
   return {
     cameraId,
     tag: 'IR-01',
+    level,
     imageUrl: t.image,
+    streamUrl: isStage3(level) ? SAMPLE_STREAM_URL : null, // 3단계만 영상
     capturedAt: todayIso(designAt(SCENARIO_TIME)),
     max: top ? t.max : null,
     min: top ? t.min : null,

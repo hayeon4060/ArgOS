@@ -6,7 +6,7 @@
  * - 조치       CHECKLIST(주의 확인 · 체크리스트 전송·확인·담당자 변경) · FAN(배기팬 조작) — 백엔드 ActivityLogger 코드
  * - 셧다운     SHUTDOWN · FIRE_CLEAR (설계안 '경보 해제 · 비밀번호 확인'이 셧다운 칸)
  * - 기준값 변경 THRESHOLD
- * - 설비 수정   LAYOUT (공장 관리)
+ * - 설비 수정   LAYOUT · FACTORY (공장 관리)
  * - 사용자     USER
  * - 서류 등록   INSPECTION
  * - 내려받기   EXPORT
@@ -18,7 +18,7 @@ export const LOG_GROUPS = [
   { key: 'act', label: '조치', chip: 'info', color: '#2563EB', types: ['CHECKLIST', 'FAN'] },
   { key: 'shut', label: '셧다운', chip: 'alarm', color: '#DC2626', types: ['SHUTDOWN', 'FIRE_CLEAR'] },
   { key: 'th', label: '기준값 변경', chip: 'warn', color: '#F97316', types: ['THRESHOLD'] },
-  { key: 'eq', label: '설비 수정', chip: 'sky', color: '#0EA5E9', types: ['LAYOUT'] },
+  { key: 'eq', label: '설비 수정', chip: 'sky', color: '#0EA5E9', types: ['LAYOUT', 'FACTORY'] }, // FACTORY = 사업장 · 공장 · 공정 추가, 배치도 올리기 (백엔드 FactoryAdminService) — 2차 검증에서 추가
   { key: 'user', label: '사용자', chip: 'ok', color: '#16A34A', types: ['USER'] },
   { key: 'doc', label: '서류 등록', chip: 'gray', color: '#94A3B8', types: ['INSPECTION'] },
   { key: 'rep', label: '내려받기', chip: 'gray', color: '#94A3B8', types: ['EXPORT'] },
@@ -29,7 +29,7 @@ export const groupOfType = (type) => LOG_GROUPS.find((g) => g.types.includes(typ
 
 /** 기간 (설계안: 오늘 / 7일 / 30일, 처음 7일) */
 export const PERIODS = [
-  { value: 'today', label: '오늘', days: 1, sub: '오늘' },
+  { value: 'today', label: '금일', days: 1, sub: '금일' },
   { value: '7d', label: '7일', days: 7, sub: '최근 7일' },
   { value: '30d', label: '30일', days: 30, sub: '최근 30일' },
 ]

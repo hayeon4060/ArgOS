@@ -26,6 +26,17 @@ public class ThermalController {
         this.service = service;
     }
 
+    /** VMS 열화상 사진 (단계가 오를 때 찍은 것). 로그인 필요 */
+    @GetMapping("/thermal/images/{fileId}")
+    public org.springframework.http.ResponseEntity<byte[]> image(@PathVariable long fileId) {
+        org.springframework.http.ResponseEntity<byte[]> r = service.image(fileId);
+        return org.springframework.http.ResponseEntity.ok()
+                .contentType(r.getHeaders().getContentType() == null
+                        ? org.springframework.http.MediaType.IMAGE_JPEG : r.getHeaders().getContentType())
+                .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                .body(r.getBody());
+    }
+
     @GetMapping("/thermal/{cameraId}/latest")
     public ApiResponse<Map<String, Object>> latest(@PathVariable long cameraId,
                                                    @RequestParam(required = false) Long equipmentId) {
