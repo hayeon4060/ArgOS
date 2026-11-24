@@ -9,7 +9,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { sensorSeriesOption } from './historyCharts'
-import { SENSOR_ICON, SENSOR_LABEL, hazardDisplayOf, placeOf } from './historyFilter'
+import { HAZARD_META, SENSOR_ICON, SENSOR_LABEL, placeOf } from './historyFilter'
 import { sensorCsvBlob, sensorCsvName } from './sensorCsv'
 import { getStatsAlarmDetail } from '@/api/stats'
 import { useThermalSrc } from '@/features/equipment/useThermalSrc'
@@ -55,7 +55,7 @@ const LEVEL_NAME = { WARN: '주의', ALARM: '경보' }
 const place = computed(() => placeOf(detail.value?.location))
 // 열화상 사진 (서버 사진은 로그인이 필요해 blob: 주소로 받아 씀, 없거나 실패하면 '열화상 없음')
 const thermalSrc = useThermalSrc(() => detail.value?.thermal?.imageUrl)
-const hazard = computed(() => hazardDisplayOf(detail.value))
+const hazard = computed(() => HAZARD_META[detail.value?.hazard] ?? null)
 const active = computed(() => detail.value && detail.value.status !== 'CLOSED')
 const cause = computed(() => {
   const d = detail.value

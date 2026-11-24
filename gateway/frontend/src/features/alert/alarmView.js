@@ -2,11 +2,19 @@
  * 알림 한 줄을 화면에 보일 때 쓰는 값 (GET /alarms 의 items 하나 → 아이콘 · 색 · 진행 상태 칩)
  * - 오늘 알림 내역 카드(features/dashboard/AlarmRow.vue)와 상단 알림 종 목록(components/AppBellMenu.vue)이 같이 씀
  */
-import { hazardDisplayOf } from '@/features/history/historyFilter'
+import { HAZARD_META, hazardOf } from '@/features/history/historyFilter'
 import { ALARM_STATUS_LABEL, LEVEL_META, SENSOR_TYPES } from '@/types/codes'
 
-/** 목록과 주의·경보 창에 사용하는 유형 문구 */
-export const hazardLabelOf = (alarm) => hazardDisplayOf(alarm)?.label ?? ''
+/**
+ * 알림 유형 이름 '가스' · '화재' — 주의·경보 창 문구에 붙임 ('가스 주의', '화재 경보', 2026-11-19 재원님 요청)
+ * - 통계·이력의 유형과 같은 규칙: 응답의 hazard(GAS · FIRE), 없으면 센서 종류로 (CO → 가스, 전류·온도 → 화재)
+ * - 종류를 알 수 없으면 '' (그때는 그냥 '주의' · '경보')
+ * @param {{ hazard?: string, sensorType?: string }} alarm
+ */
+export function hazardLabelOf(alarm) {
+  if (!alarm?.hazard && !alarm?.sensorType) return ''
+  return HAZARD_META[hazardOf(alarm)]?.label ?? ''
+}
 
 /** 조치가 끝나지 않은 알림인지 (왼쪽 색 띠 · 옅은 배경을 보일지) */
 export const isActiveAlarm = (alarm) => alarm.status !== 'CLOSED'
