@@ -267,6 +267,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("cause", cause);
@@ -356,9 +357,11 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        String hazardLabel = AlarmViews.hazardLabel(a);
+        out.put("hazardLabel", hazardLabel);
         out.put("fireId", fireIds.byAlarm(a.alarmId()));
-        // 유형 넣기 (docs/api/alarm-modal-hazard.md): '상도 건조로에서 가스 경보가 발생했습니다'
-        out.put("title", a.unitName() + "에서 " + hazardPrefix(a.hazard()) + Codes.stageName(a.stage()) + "가 발생했습니다");
+        String hazardPrefix = hazardLabel.isEmpty() ? "" : hazardLabel + " ";
+        out.put("title", a.unitName() + "에서 " + hazardPrefix + Codes.stageName(a.stage()) + "가 발생했습니다");
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("reason", String.join(", ", reasons));
@@ -398,6 +401,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
         out.put("location", row.get("location"));
         out.put("factoryId", a.factoryId());
         out.put("processId", a.processId());
@@ -560,11 +564,6 @@ public class AlarmService {
             thermal.put("imageUrl", ThermalService.imageUrl(a.thermalFileId()));
         }
         return thermal;
-    }
-
-    /** GAS → '가스 ', FIRE → '화재 ', 없으면 빈 글자 */
-    static String hazardPrefix(String hazard) {
-        return "GAS".equals(hazard) ? "가스 " : "FIRE".equals(hazard) ? "화재 " : "";
     }
 
     /** 조치 이력 단계 → 상세 패널 단계 (RAISED ACK CHECKLIST REPORTED SHUTDOWN CLOSED). 나머지는 빼지 않고 그대로 */

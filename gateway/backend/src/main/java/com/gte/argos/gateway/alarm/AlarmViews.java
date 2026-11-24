@@ -24,6 +24,21 @@ public final class AlarmViews {
         return Codes.sensorName(e.type()) + " " + Codes.stageName(a.stage()) + " 기준 " + (e.lowSide() ? "미달" : "초과");
     }
 
+    /** 경보에 연결된 이벤트가 전류 이상뿐이면 화재·가스 양쪽 가능성을 표시한다. */
+    public static String hazardLabel(Alarm alarm) {
+        if (alarm.events() != null && !alarm.events().isEmpty()
+                && alarm.events().stream().allMatch(event -> "IT".equals(event.type()))) {
+            return "화재 또는 가스";
+        }
+        if ("FIRE".equals(alarm.hazard())) {
+            return "화재";
+        }
+        if ("GAS".equals(alarm.hazard())) {
+            return "가스";
+        }
+        return "";
+    }
+
     /** "5공장 · 도장 공정 · 상도 건조로 배기팬" */
     public static String location(Alarm a, MasterCache.Snapshot m) {
         Event e = a.mainEvent();
@@ -60,6 +75,7 @@ public final class AlarmViews {
         row.put("level", Codes.level(a.stage()));
         row.put("status", a.status());
         row.put("hazard", a.hazard());
+        row.put("hazardLabel", hazardLabel(a));
         row.put("title", title(a));
         row.put("location", location(a, m));
         row.put("unitId", a.unitId());

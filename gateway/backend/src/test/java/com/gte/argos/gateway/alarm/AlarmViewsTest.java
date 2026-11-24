@@ -30,6 +30,19 @@ class AlarmViewsTest {
         assertThat(AlarmViews.title(alarm(3, List.of(warn, alarm)))).isEqualTo("온도 경보 기준 초과");
     }
 
+    @Test
+    void 연결된_이벤트가_전류뿐일_때만_화재_또는_가스로_표시한다() {
+        CentralDto.Event current = event(313, "IT", 3, 30.0, 20.0, 10.0);
+        CentralDto.Event temperature = event(305, "TE", 2, 152.0, 150.0, null);
+        CentralDto.Event co = event(321, "AT", 2, 19.5, 15.0, null);
+
+        assertThat(AlarmViews.hazardLabel(alarm(3, "FIRE", List.of(current)))).isEqualTo("화재 또는 가스");
+        assertThat(AlarmViews.hazardLabel(alarm(3, "GAS", List.of(current)))).isEqualTo("화재 또는 가스");
+        assertThat(AlarmViews.hazardLabel(alarm(3, "FIRE", List.of(current, temperature)))).isEqualTo("화재");
+        assertThat(AlarmViews.hazardLabel(alarm(3, "GAS", List.of(current, co)))).isEqualTo("가스");
+        assertThat(AlarmViews.hazardLabel(alarm(3, "FIRE", List.of()))).isEqualTo("화재");
+    }
+
     private static CentralDto.Event event(long sensorId, String type, int stage, double peak, Double warn, Double lowWarn) {
         Double alarm = warn == null ? null : warn + 10;
         Double lowAlarm = lowWarn == null ? null : lowWarn - 5;
@@ -38,7 +51,11 @@ class AlarmViewsTest {
     }
 
     private static CentralDto.Alarm alarm(int stage, List<CentralDto.Event> events) {
-        return new CentralDto.Alarm(1, 5, "상도 건조로", 12, 41L, 5, 1, stage, "FIRE", "OPEN", T, null, null, null,
+        return alarm(stage, "FIRE", events);
+    }
+
+    private static CentralDto.Alarm alarm(int stage, String hazard, List<CentralDto.Event> events) {
+        return new CentralDto.Alarm(1, 5, "상도 건조로", 12, 41L, 5, 1, stage, hazard, "OPEN", T, null, null, null,
                 null, null, true, events);
     }
 }
