@@ -8,7 +8,7 @@
 <script setup>
 import { computed } from 'vue'
 import { serverNow } from '@/api/clock'
-import { HAZARDS, actionText, hazardDisplayOf, isActive, minutesOf, placeOf, shortTime } from './historyFilter'
+import { HAZARDS, HAZARD_META, actionText, hazardOf, isActive, minutesOf, placeOf, shortTime } from './historyFilter'
 import AppIcon from '@/components/AppIcon.vue'
 import BaseCard from '@/components/BaseCard.vue'
 import LevelBadge from '@/components/LevelBadge.vue'
@@ -65,7 +65,7 @@ const view = computed(() => {
       row: r,
       key: r.id,
       time: shortTime(r.raisedAt),
-      hazard: hazardDisplayOf(r),
+      hazard: HAZARD_META[hazardOf(r)],
       equipment: place.equipment,
       process: place.process,
       active,
@@ -112,7 +112,7 @@ const view = computed(() => {
           >
             <td class="mono t-time">{{ v.time }}</td>
             <td>
-              <span v-if="v.hazard" class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" :style="{ color: v.hazard.color }" />{{ v.hazard.label }}</span>
+              <span class="hz" :class="v.row.hazard"><AppIcon :name="v.hazard.icon" :size="14" :style="{ color: v.hazard.color }" />{{ v.hazard.label }}</span>
             </td>
             <td class="t-place"><b>{{ v.equipment }}</b> <span class="sub">{{ v.process }}</span></td>
             <td><LevelBadge :level="v.row.level" /></td>
@@ -189,7 +189,7 @@ const view = computed(() => {
 
 /* 열 너비 (공정·설비 열이 남는 폭을 가짐) */
 .c-time { width: 128px; }
-.c-hz { width: 126px; }
+.c-hz { width: 92px; }
 .c-lv { width: 92px; }
 .c-act { width: 140px; }
 .c-dur { width: 160px; }

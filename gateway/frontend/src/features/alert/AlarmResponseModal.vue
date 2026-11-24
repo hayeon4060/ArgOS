@@ -91,11 +91,7 @@ const place = computed(() => {
 })
 // 머리 위치 문구: 화재는 화재 응답, 경보는 응답 → 없으면 목록 줄 location
 // 유형 문구 '가스 경보' · '화재 경보': 응답의 hazard, 없으면 알림 목록 줄의 센서 종류로
-const hazardLabel = computed(() => hazardLabelOf({
-  hazard: row.value?.hazard ?? response.value?.hazard,
-  hazardLabel: row.value?.hazardLabel ?? response.value?.hazardLabel,
-  sensorType: row.value?.sensorType,
-}))
+const hazardLabel = computed(() => hazardLabelOf({ hazard: response.value?.hazard ?? row.value?.hazard, sensorType: row.value?.sensorType }))
 const location = computed(() => fire.value?.location ?? response.value?.location ?? row.value?.location ?? '')
 // 정지한 설비 이름: 셧다운한 설비들 (공정 전체면 '도장 공정 전체'), 모르면 알림 설비
 const stoppedName = computed(() => {
