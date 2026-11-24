@@ -169,39 +169,34 @@ final class AlarmCorrelator {
             this.unitId = unitId;
         }
 
-
-        Hazard decideHazard() { // 처음 경보가 들어오거나, 이미 열린 경보가 갱신될 경우
-            if (hazard == Hazard.FIRE) { // 이미 화재인경우 화재로 리턴 (제일 크리티컬)
+        /**
+         * 열려 있는 이벤트로 사고 종류를 정한다. 한 번 FIRE 가 되면 FIRE 로 유지한다.
+         * 온도·열화상 → FIRE, CO → GAS, 전류만 → 그 이벤트의 유형, 그것도 없으면 기존 유형. 정할 수 없으면 null
+         */
+        Hazard decideHazard() {
+            if (hazard == Hazard.FIRE) {
                 return Hazard.FIRE;
             }
-
-            boolean hasCoEvent = false;
-            Hazard currentSensorHazard = null; // 전류 센서 이벤트에서 얻은 경보 유형
-
-            for (EventRef event : active.values()) { // 모든 이벤트 검사
-                String sensorType = event.sensorType();
-
-                if ("TE".equals(sensorType) || "IR".equals(sensorType)) { // TE:온도, IR: 열화상 -> 화재로 리턴
+            boolean hasCo = false;
+            Hazard currentHazard = null;
+            for (EventRef event : active.values()) {
+                String type = event.sensorType();
+                if ("TE".equals(type) || "IR".equals(type)) {
                     return Hazard.FIRE;
                 }
-                if ("AT".equals(sensorType)) { // AT: CO (일산화탄소 농도)
-                    hasCoEvent = true;
-                } else if ("IT".equals(sensorType) && currentSensorHazard == null) { // 전류 센서 존재
-                    currentSensorHazard = event.hazard();
+                if ("AT".equals(type)) {
+                    hasCo = true;
+                } else if ("IT".equals(type) && currentHazard == null) {
+                    currentHazard = event.hazard();
                 }
             }
-            // 온도·열화상 이벤트가 없으면 CO, 전류, 기존 유형 순으로 확인한다.
-            if (hasCoEvent) {
+            if (hasCo) {
                 return Hazard.GAS;
             }
-            if (currentSensorHazard != null) {
-                return currentSensorHazard;
+            if (currentHazard != null) {
+                return currentHazard;
             }
-            if (hazard != null) {
-                return hazard;
-            }
-
-            return null; // 경보 유형을 결정 할 수 없을때
+            return hazard;
         }
 
         boolean refresh(JudgementListener listener, Instant at) {
