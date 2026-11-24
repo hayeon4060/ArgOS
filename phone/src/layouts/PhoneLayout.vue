@@ -1,5 +1,5 @@
 <!--
-  담당자 앱 레이아웃: 위 바(제목·이름·로그아웃) + 본문 + 아래 탭(공정 현황 / 체크리스트) + 알림 띠
+  담당자 앱 레이아웃: 위 바(제목·이름·로그아웃) + 본문 + 아래 탭(공정 현황 / 체크리스트 / 점검 관리) + 알림 띠
   - 휴대폰 폭 기준. PC 브라우저에서 열면 가운데 480px 로 보임
   - 600px 이상(폴드 펼친 화면·태블릿): 아래 탭 → 왼쪽 레일, 체크리스트는 목록 | 한 건 나란히 (1 : 2, 체크리스트를 크게)
   - 내 체크리스트를 처음 한 번 + 데이터가 바뀔 때마다 다시 받고(stores/myChecklists),
@@ -135,6 +135,9 @@ async function onLogout() {
         </span>
         체크리스트
       </RouterLink>
+      <RouterLink :to="{ name: 'inspections' }" class="tab" :class="{ on: route.meta.tab === 'inspections' }">
+        <AppIcon name="cal" :size="21" />점검 관리
+      </RouterLink>
     </nav>
 
     <PushBanner :push="push" @open="openPush" @close="push = null" />
@@ -244,7 +247,7 @@ h1 {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);

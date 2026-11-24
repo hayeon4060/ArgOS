@@ -7,6 +7,7 @@ Vue 3 + Vite 화면을 **Capacitor 8** 로 감싼 Android 앱입니다. 화면�
    단계·발생 시각, 센서 지금 값·기준·평소, 열화상(최고 온도 지점), 요청자 + '체크리스트 시작'
 2. **체크리스트**: 공장 담당자에게 받은 점검 항목을 차례로 체크 (결과: 이상 없음 · 조치함 · 부품 교체 예정 · 추가 점검 필요 + 메모)
 3. **완료 보고**: 모두 체크하면 한 줄 메모와 함께 보고 → 관제 웹에 '완료 · 확인 필요'
+3-1. **점검 관리**: 관제 웹 점검 관리 화면(`@/pages/inspection/InspectionPage.vue`)을 그대로 씀 — 점검 스케줄 달력 · 서류 등록 · 점검 이력. 휴대폰 폭에서는 위아래 한 줄로 (`src/pages/InspectionPage.vue`)
 
 관제 웹(`../gateway/frontend`)의 `src` 를 `@` 로 그대로 가져다 씁니다(예시 데이터 · API · 로그인 스토어 · 공통 부품). 이 폴더에는 앱 화면과 앱 전용 API만 있습니다. 관제 웹이 다른 곳에 있으면 `ARGOS_WEB=경로 npm run dev`.
 
@@ -113,7 +114,7 @@ phone/
 ├── public/sw.js            # 웹 푸시 서비스 워커: 알림 띄우기 · 누르면 그 체크리스트 열기
 └── src/
     ├── main.js             # 시작점 (웹 글꼴·토큰·스타일, 웹 로그인 스토어)
-    ├── router.js           # 해시 주소: #/login, #/ 공정 현황, #/equipment/:id 설비 상세, #/checklists, #/checklists/:id
+    ├── router.js           # 해시 주소: #/login, #/ 공정 현황, #/equipment/:id 설비 상세, #/checklists, #/checklists/:id, #/inspections 점검 관리
     ├── storage.js          # 로그인 저장 argos.phone.* (웹 argos.* 와 따로)
     ├── codes.js            # 체크리스트 상태 이름, 항목 결과 4가지
     ├── push.js             # 휴대폰 알림(FCM, 설치형 앱): 허용 묻기 · 토큰 등록(실제 서버 /me/push-token 또는 시연 PC 개발 서버) · 누르면 체크리스트로
@@ -122,7 +123,7 @@ phone/
     ├── stores/myChecklists.js
     ├── layouts/PhoneLayout.vue   # 위 바 + 아래 탭 + 알림 띠 + 진동(@capacitor/haptics)
     ├── components/         # PushBanner, EquipmentCard, ChecklistItem
-    └── pages/              # LoginPage, HomePage, EquipmentPage, ChecklistListPage, ChecklistPage
+    └── pages/              # LoginPage, HomePage, EquipmentPage, ChecklistListPage, ChecklistPage, InspectionPage
 ```
 
 ## 아직 안 한 것

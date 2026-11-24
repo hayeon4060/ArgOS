@@ -5,6 +5,7 @@
  *  로그인(#/login) → 공정 현황(#/) : 담당 공정 설비 상태 + 3D 설비 배치도
  *                  → 설비 상세(#/equipment/:id) : 주의 상세 · 열화상 · 체크리스트 시작
  *                → 체크리스트(#/checklists) : 공장 담당자에게 받은 목록 → 한 건(#/checklists/:id) 체크 · 완료 보고
+ *                → 점검 관리(#/inspections) : 관제 웹 점검 관리 화면 그대로 (점검 스케줄 · 서류 등록 · 점검 이력)
  *
  * - 해시 주소: Capacitor 로 감쌌을 때도 서버 설정 없이 동작
  * - 공정 담당자(WORKER)만. 관리자는 로그인 단계에서 막힘 (웹 api/auth.js, client: 'APP' → CLIENT_NOT_ALLOWED)
@@ -39,6 +40,12 @@ const routes = [
         name: 'checklist',
         component: () => import('./pages/ChecklistPage.vue'),
         meta: { tab: 'checklists', title: '설비 점검', back: 'checklists' },
+      },
+      {
+        path: 'inspections',
+        name: 'inspections',
+        component: () => import('./pages/InspectionPage.vue'),
+        meta: { tab: 'inspections', title: '점검 관리' },
       },
     ],
   },
