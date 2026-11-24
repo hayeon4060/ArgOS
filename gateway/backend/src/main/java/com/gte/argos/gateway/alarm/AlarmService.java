@@ -267,6 +267,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("cause", cause);
@@ -289,8 +290,7 @@ public class AlarmService {
     }
 
     /** GET /alarms/{alarmId}/response: 경보 창 (같은 공정의 센서 전부, 정지시킬 설비, 로그) */
-    // TODO(백엔드): sensors 를 detail() 처럼 관제 단위 구성 센서만 넣어 주세요. 지금은 공정 센서가 전부 가서 경보 창에
-    //   TE-301~305 등이 다 나옴 (프론트는 detail 로 먼저 거름). equipment 는 공정 전체 그대로. docs/api/alarm-sensor-scope.md
+    // sensors 는 공정 센서 전부를 준다 (관제 단위로 거르는 건 화면이 detail 로 함). equipment 도 공정 전체
     public Map<String, Object> response(long alarmId) {
         Alarm a = visibleAlarm(alarmId);
         MasterCache.Snapshot m = masterCache.get();
@@ -356,9 +356,11 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        String hazardLabel = AlarmViews.hazardLabel(a);
+        out.put("hazardLabel", hazardLabel);
         out.put("fireId", fireIds.byAlarm(a.alarmId()));
-        // 유형 넣기 (docs/api/alarm-modal-hazard.md): '상도 건조로에서 가스 경보가 발생했습니다'
-        out.put("title", a.unitName() + "에서 " + hazardPrefix(a.hazard()) + Codes.stageName(a.stage()) + "가 발생했습니다");
+        String hazardPrefix = hazardLabel.isEmpty() ? "" : hazardLabel + " ";
+        out.put("title", a.unitName() + "에서 " + hazardPrefix + Codes.stageName(a.stage()) + "가 발생했습니다");
         out.put("location", sitePrefix(a, m) + AlarmViews.location(a, m));
         out.put("raisedAt", a.raisedAt());
         out.put("reason", String.join(", ", reasons));
@@ -398,6 +400,7 @@ public class AlarmService {
         out.put("level", Codes.level(a.stage()));
         out.put("status", a.status());
         out.put("hazard", a.hazard());
+        out.put("hazardLabel", AlarmViews.hazardLabel(a));
         out.put("location", row.get("location"));
         out.put("factoryId", a.factoryId());
         out.put("processId", a.processId());
@@ -560,11 +563,6 @@ public class AlarmService {
             thermal.put("imageUrl", ThermalService.imageUrl(a.thermalFileId()));
         }
         return thermal;
-    }
-
-    /** GAS → '가스 ', FIRE → '화재 ', 없으면 빈 글자 */
-    static String hazardPrefix(String hazard) {
-        return "GAS".equals(hazard) ? "가스 " : "FIRE".equals(hazard) ? "화재 " : "";
     }
 
     /** 조치 이력 단계 → 상세 패널 단계 (RAISED ACK CHECKLIST REPORTED SHUTDOWN CLOSED). 나머지는 빼지 않고 그대로 */

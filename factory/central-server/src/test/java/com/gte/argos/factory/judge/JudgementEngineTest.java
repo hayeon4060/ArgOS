@@ -95,6 +95,33 @@ class JudgementEngineTest {
                 "event+ 323 WARN start=0 detect=23 backlog=24",
                 "link");
         assertThat(rec.lowSide).containsExactly(true, false);
+        assertThat(rec.alarmDetailsChanges).isEqualTo(1);
+    }
+
+    @Test
+    void 전류_상한_이벤트만으로_화재_유형_경보를_연다() {
+        engine = new JudgementEngine(List.of(it), rec, JudgementEngine.Options.live());
+
+        edge("IT-307", "current-high", EdgeStage.Phase.START, Stage.ALARM, "HI", 24.0, null, null);
+
+        assertThat(rec.log).filteredOn(line -> line.startsWith("alarm"))
+                .containsExactly("alarm+ unit=5 ALARM FIRE");
+    }
+
+    @Test
+    void 분류할_수_없는_센서_이벤트는_경보를_열지_않는다() {
+        SensorDef unknown = new SensorDef(399, "XX-399", "XX", 5,
+                new ThresholdRule(5, 150.0, 160.0, null, null, 24, 6),
+                List.of(new SensorDef.UnitMembership(5, Set.of(Hazard.FIRE))));
+        engine = new JudgementEngine(List.of(unknown, at), rec, JudgementEngine.Options.live());
+
+        edge("XX-399", "unknown", EdgeStage.Phase.START, Stage.WARN, "HI", 152.0, null, null);
+        assertThat(rec.log).contains("event+ 399 WARN start=0 detect=0 backlog=1");
+        assertThat(rec.log).noneMatch(line -> line.startsWith("alarm") || line.equals("link"));
+
+        edge("AT-303", "co", EdgeStage.Phase.START, Stage.WARN, "HI", 18.0, null, null);
+        assertThat(rec.log).filteredOn(line -> line.startsWith("alarm"))
+                .containsExactly("alarm+ unit=5 WARN GAS");
     }
 
     @Test
@@ -400,6 +427,7 @@ class JudgementEngineTest {
 
     private static final class Recorder implements JudgementListener {
         int readings;
+        int alarmDetailsChanges;
 
         @Override
         public void onReading(long sensorId, Instant ts, double value) {
@@ -458,6 +486,11 @@ class JudgementEngineTest {
         @Override
         public void onAlarmEventLinked(long alarmKey, long eventKey) {
             log.add("link");
+        }
+
+        @Override
+        public void onAlarmDetailsChanged(long alarmKey, Instant at) {
+            alarmDetailsChanges++;
         }
 
         @Override

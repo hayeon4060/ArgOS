@@ -479,3 +479,13 @@ DB: 중앙 서버 `V8__inspection_record.sql` — `inspection_schedule` 에 `sou
 - 수집 서버를 다시 켤 때 이미 값이 정상인데 열려 있던 경보(겹친 예전 경보 포함)도 자동 종료. 중앙 서버는 수집 서버 재시작을 알아채면
   경보가 닫혔는데 진행 중인 화재를 찾아 자동 해제
 - 사람이 먼저 종료 · 화재 해제하는 것도 그대로 된다
+
+## 경보 유형 표시 `hazardLabel` (2026-11-24)
+
+| 위치 | 내용 |
+| --- | --- |
+| `GET /alarms` 줄, `GET /alarms/{id}/detail`, `GET /alarms/{id}/response`, `GET /stats/alarms/{id}` | `hazardLabel` 추가: `화재` · `가스` · `화재 또는 가스` · `''` |
+| SSE `alarm.updated` | `hazardLabel` 추가. 중앙 피드 `ALARM_DETAILS_CHANGED` 를 받으면 `{ id, hazardLabel }` 만 보냄 |
+
+- 연결된 이벤트가 전류(IT)뿐이면 `화재 또는 가스` (과전류·전류 저하만으로는 원인을 단정할 수 없음). 필터·조치는 기존 `hazard` 그대로
+- 경보 창 제목도 이 문구를 씀: '상도 건조로에서 화재 또는 가스 경보가 발생했습니다'

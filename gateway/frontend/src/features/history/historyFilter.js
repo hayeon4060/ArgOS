@@ -49,6 +49,16 @@ export const HAZARD_META = {
 }
 export const hazardOf = (row) => row.hazard ?? (row.sensorType === 'CO' ? 'GAS' : 'FIRE')
 
+/** 표시 문구를 우선 사용하되 필터와 경보 조치는 기존 유형으로 처리한다. */
+export function hazardDisplayOf(row) {
+  if (!row?.hazardLabel && !row?.hazard && !row?.sensorType) return null
+  if (row.hazardLabel === '화재 또는 가스') {
+    return { label: row.hazardLabel, icon: 'zap', color: '#526073' }
+  }
+  const meta = HAZARD_META[hazardOf(row)]
+  return meta ? { ...meta, label: row.hazardLabel || meta.label } : null
+}
+
 /** 등급 (백엔드 level 값) */
 export const LEVELS = [
   { value: '', label: '전체' },

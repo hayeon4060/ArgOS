@@ -7,6 +7,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.LongSupplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 센서 이벤트를 관제 단위 경보로 묶는다.
  *
@@ -16,13 +19,15 @@ import java.util.function.LongSupplier;
  * - 사고 종류(hazard):
  *     온도(TE)·열화상(IR) 이벤트가 있으면 FIRE
  *     없고 CO(AT) 이벤트가 있으면 GAS
- *     전류(IT)만 있으면 과전류(상한) = FIRE(과열), 전류 저하(하한) = GAS(배기 약화)
- *   단, 그 단위에서 센서에 정해 둔 hazard 에 없는 값이면 정해 둔 값을 쓴다.
+ *     전류(IT)만 있으면 상한은 FIRE, 하한은 GAS로 분류하고 관제 단위의 허용 유형을 적용한다.
+ *     새 유형을 정할 수 없으면 기존 유형을 쓰고, 기존 유형도 없으면 경보를 저장하지 않는다.
  *   한 번 FIRE 가 된 경보는 GAS 로 내려가지 않는다.
  * - 붙은 이벤트가 모두 끝나면 onAlarmCleared. autoClose 면 경보도 닫고, 아니면 사람이 닫을 때까지 열어 둔다.
  * </pre>
  */
 final class AlarmCorrelator {
+
+    private static final Logger log = LoggerFactory.getLogger(AlarmCorrelator.class);
 
     private final JudgementListener listener;
     private final LongSupplier nextAlarmKey;
@@ -47,15 +52,24 @@ final class AlarmCorrelator {
                 alarm.linked.add(eventKey);
                 alarm.stage = stage;
                 alarm.hazard = alarm.decideHazard();
+                if (alarm.hazard == null) {
+                    log.warn("경보 유형을 결정할 수 없어 경보를 생성하지 않습니다. 관제 단위={}, 이벤트={}",
+                            unit.unitId(), eventKey);
+                    continue;
+                }
                 openByUnit.put(unit.unitId(), alarm);
                 listener.onAlarmOpened(alarm.key, unit.unitId(), alarm.stage, alarm.hazard, detectedAt);
                 listener.onAlarmEventLinked(alarm.key, eventKey);
                 continue;
             }
+            boolean displayMayChange = !"IT".equals(sensor.type())
+                    && alarm.active.values().stream().allMatch(event -> "IT".equals(event.sensorType()));
             alarm.active.put(eventKey, ref);
             alarm.linked.add(eventKey);
             listener.onAlarmEventLinked(alarm.key, eventKey);
-            alarm.refresh(listener, detectedAt);
+            if (!alarm.refresh(listener, detectedAt) && displayMayChange) {
+                listener.onAlarmDetailsChanged(alarm.key, detectedAt);
+            }
         }
     }
 
@@ -155,47 +169,54 @@ final class AlarmCorrelator {
             this.unitId = unitId;
         }
 
-        /** 열려 있는 이벤트로 사고 종류를 정한다. 한 번 FIRE 가 되면 FIRE 로 유지한다 */
+        /**
+         * 열려 있는 이벤트로 사고 종류를 정한다. 한 번 FIRE 가 되면 FIRE 로 유지한다.
+         * 온도·열화상 → FIRE, CO → GAS, 전류만 → 그 이벤트의 유형, 그것도 없으면 기존 유형. 정할 수 없으면 null
+         */
         Hazard decideHazard() {
             if (hazard == Hazard.FIRE) {
                 return Hazard.FIRE;
             }
-            boolean fireBySensor = false;
-            boolean gasBySensor = false;
-            Hazard currentOnly = null;
-            for (EventRef ref : active.values()) {
-                if ("TE".equals(ref.sensorType()) || "IR".equals(ref.sensorType())) {
-                    fireBySensor = true;
-                } else if ("AT".equals(ref.sensorType())) {
-                    gasBySensor = true;
-                } else if (currentOnly == null) {
-                    currentOnly = ref.hazard();
+            boolean hasCo = false;
+            Hazard currentHazard = null;
+            for (EventRef event : active.values()) {
+                String type = event.sensorType();
+                if ("TE".equals(type) || "IR".equals(type)) {
+                    return Hazard.FIRE;
+                }
+                if ("AT".equals(type)) {
+                    hasCo = true;
+                } else if ("IT".equals(type) && currentHazard == null) {
+                    currentHazard = event.hazard();
                 }
             }
-            if (fireBySensor) {
-                return Hazard.FIRE;
-            }
-            if (gasBySensor) {
+            if (hasCo) {
                 return Hazard.GAS;
             }
-            if (currentOnly != null) {
-                return currentOnly;
+            if (currentHazard != null) {
+                return currentHazard;
             }
-            return hazard == null ? Hazard.FIRE : hazard;
+            return hazard;
         }
 
-        void refresh(JudgementListener listener, Instant at) {
+        boolean refresh(JudgementListener listener, Instant at) {
             Stage newStage = stage;
             for (EventRef ref : active.values()) {
                 newStage = Stage.max(newStage, ref.stage());
             }
             Hazard newHazard = decideHazard();
+            if (newHazard == null) {
+                log.warn("경보 유형을 결정할 수 없어 경보를 갱신하지 않습니다. 관제 단위={}, 경보={}", unitId, key);
+                return false;
+            }
             // 경보 단계는 내려가지 않는다 (한 번 경보면 사람이 닫을 때까지 경보)
             if (newStage != stage || newHazard != hazard) {
                 stage = newStage;
                 hazard = newHazard;
                 listener.onAlarmUpdated(key, stage, hazard, at);
+                return true;
             }
+            return false;
         }
     }
 }

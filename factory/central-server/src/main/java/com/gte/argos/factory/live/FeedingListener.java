@@ -119,6 +119,14 @@ public class FeedingListener implements JudgementListener {
     }
 
     @Override
+    public void onAlarmDetailsChanged(long alarmKey, Instant at) {
+        Long alarmId = store.alarmId(alarmKey);
+        if (alarmId != null) {
+            feed.append("ALARM_DETAILS_CHANGED", odt(at), Map.of("alarmId", alarmId));
+        }
+    }
+
+    @Override
     public void onAlarmUpdated(long alarmKey, Stage stage, Hazard hazard, Instant at) {
         store.onAlarmUpdated(alarmKey, stage, hazard, at);
         gasChanged(alarmKey, unitByAlarmKey.get(alarmKey), stage, hazard);

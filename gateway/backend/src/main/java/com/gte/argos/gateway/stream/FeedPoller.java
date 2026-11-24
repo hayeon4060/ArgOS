@@ -3,6 +3,7 @@ package com.gte.argos.gateway.stream;
 import com.gte.argos.gateway.fire.FireService;
 
 import com.gte.argos.gateway.alarm.AlarmService;
+import com.gte.argos.gateway.alarm.AlarmViews;
 import com.gte.argos.gateway.central.CentralClient;
 import com.gte.argos.gateway.central.CentralDto;
 import com.gte.argos.gateway.central.CentralDto.FeedItem;
@@ -237,6 +238,11 @@ public class FeedPoller {
                             s -> s.scope().canProcess(a.processId(), masterCache.get()));
                 }
             }
+            case "ALARM_DETAILS_CHANGED" -> {
+                CentralDto.Alarm alarm = central.alarm(num(d.get("alarmId")));
+                Map<String, Object> view = Map.of("id", alarm.alarmId(), "hazardLabel", AlarmViews.hazardLabel(alarm));
+                hub.publish("alarm.updated", id, view, s -> s.scope().canProcess(alarm.processId(), masterCache.get()));
+            }
             case "ALARM_UPDATED", "ALARM_CLEARED", "ALARM_STATUS" -> {
                 long alarmId = num(d.get("alarmId"));
                 CentralDto.Alarm a = central.alarm(alarmId);
@@ -244,6 +250,7 @@ public class FeedPoller {
                 view.put("id", alarmId);
                 view.put("level", Codes.level(a.stage()));
                 view.put("hazard", a.hazard());
+                view.put("hazardLabel", AlarmViews.hazardLabel(a));
                 view.put("status", a.status());
                 view.put("valueStillOver", a.valueStillOver());
                 if (d.get("by") != null) {

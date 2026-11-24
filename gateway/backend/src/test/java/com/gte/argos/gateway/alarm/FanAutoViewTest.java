@@ -34,13 +34,6 @@ class FanAutoViewTest {
     }
 
     @Test
-    void 경보_창_제목에_유형() {
-        assertThat(AlarmService.hazardPrefix("GAS") + "경보").isEqualTo("가스 경보");
-        assertThat(AlarmService.hazardPrefix("FIRE") + "경보").isEqualTo("화재 경보");
-        assertThat(AlarmService.hazardPrefix(null)).isEmpty();
-    }
-
-    @Test
     void 주의_상세_추이는_전류_온도_CO_순서() {
         assertThat(AlarmService.trendOrder("IT")).isLessThan(AlarmService.trendOrder("TE"));
         assertThat(AlarmService.trendOrder("TE")).isLessThan(AlarmService.trendOrder("AT"));

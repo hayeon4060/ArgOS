@@ -154,7 +154,7 @@ com.gte.argos.factory
 바뀌면 피드 `MASTER_CHANGED` `{ what, id }`. 테이블 변경: `V3__process_layout.sql` (process.layout_version · floorplan_*, equipment.rot)
 
 피드 항목 `type`: `SENSOR_VALUES`(`values: [[sensorId, ts, value], ...]`), `EVENT_OPENED`, `EVENT_ESCALATED`,
-`EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `THRESHOLD_CHANGED`, `MASTER_CHANGED`, `RESET`.
+`EVENT_CLOSED`, `ALARM_OPENED`, `ALARM_UPDATED`, `ALARM_CLEARED`(이벤트가 모두 끝남), `ALARM_DETAILS_CHANGED`(유형·단계는 같고 붙은 이벤트 구성만 바뀜, `{ alarmId }`), `ALARM_STATUS`(확인·조치·종료), `COMMAND_RESULT`, `THRESHOLD_CHANGED`, `MASTER_CHANGED`, `RESET`.
 `bootId` 가 바뀌면 중앙 서버가 다시 켜진 것이므로 `after=0` 부터, `gap=true` 면 `status`·`alarms` 를 다시 조회합니다.
 
 ## ERD V6 반영 (`V4__erd_v6.sql`)
@@ -286,3 +286,9 @@ docker run -d --name argos-redis -p 6379:6379 redis:7.4-alpine
 
 실시간에서도 경보에 묶인 이벤트가 모두 끝나면 경보를 자동 종료한다 (`AUTO_RECOVERED`). 종료 때 승인 대기 배기팬 명령 취소, 배기팬 30Hz 복귀
 (`FanAutoService.onAlarmClosed`). 다시 켤 때 값이 이미 정상인 열린 경보와 겹친 예전 경보도 자동 종료하고 피드 `ALARM_CLEARED` 로 알린다.
+
+## 경보 유형 판정 정리 (2026-11-24)
+
+- 온도·열화상 이벤트가 있으면 FIRE, 없고 CO 가 있으면 GAS, 전류만 있으면 그 이벤트의 유형(상한 FIRE · 하한 GAS)
+- 유형을 정할 수 없는 이벤트(분류 안 된 센서 종류)만 있으면 경보를 만들지 않고 경고 로그만 남긴다
+- 전류 이상만 있던 경보에 다른 종류 이벤트가 붙었는데 유형·단계가 그대로면 피드 `ALARM_DETAILS_CHANGED`

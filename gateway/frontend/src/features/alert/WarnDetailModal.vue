@@ -82,7 +82,12 @@ const trends = computed(() => trendsOf(detail.value, hazard.value))
 
 /** 유형 문구 '가스 주의' · '화재 주의' (응답의 hazard, 없으면 알림 센서 종류로) */
 const kind = computed(() => {
-  const label = hazardLabelOf({ hazard: detail.value?.hazard, sensorType: sensorTypeOfDetail(detail.value) })
+  const row = alert.activeAlarms.find((alarm) => alarm.id === props.alarmId)
+  const label = hazardLabelOf({
+    hazard: row?.hazard ?? detail.value?.hazard,
+    hazardLabel: row?.hazardLabel ?? detail.value?.hazardLabel,
+    sensorType: sensorTypeOfDetail(detail.value),
+  })
   return [label, '주의'].filter(Boolean).join(' ')
 })
 
