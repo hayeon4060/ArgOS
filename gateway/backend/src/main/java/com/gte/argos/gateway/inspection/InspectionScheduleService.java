@@ -206,6 +206,23 @@ public class InspectionScheduleService {
         return n >= 1 && n <= list.size() ? list.get(n - 1) : null;
     }
 
+    /**
+     * 공정을 모르는 스캔본의 공정 고르기.
+     *
+     * @param no     설비번호 숫자 (EF-03 → 3), 없으면 null
+     * @param counts 담당 공정 → 번호 매긴 설비 수
+     * @return 그 번호의 설비가 있는 공정이 하나면 그 공정, 아니면 담당 공정이 하나뿐일 때 그 공정, 그 밖에는 null
+     */
+    static Long pickProcess(Integer no, Map<Long, Integer> counts) {
+        if (no != null && no >= 1) {
+            List<Long> hit = counts.entrySet().stream().filter(e -> e.getValue() >= no).map(Map.Entry::getKey).toList();
+            if (hit.size() == 1) {
+                return hit.get(0);
+            }
+        }
+        return counts.size() == 1 ? counts.keySet().iterator().next() : null;
+    }
+
     static Integer number(String no) {
         if (no == null) {
             return null;
@@ -429,6 +446,20 @@ public class InspectionScheduleService {
         // 연결 안 함: 인식 값으로 새 점검 건
         MasterCache.Snapshot m = masterCache.get();
         Long pid = lng(ocrRow.get("process_id"));
+        if (pid == null) {
+            // 화면이 공정을 안 보냈으면 담당 공정 중에서 설비번호가 맞는 공정을 찾는다 (없으면 점검 이력에 안 보임)
+            Map<Long, Integer> counts = new LinkedHashMap<>();
+            for (CentralDto.Plant pl : m.plants()) {
+                for (CentralDto.Factory fac : m.factoriesOf(pl.id())) {
+                    for (CentralDto.Process pr : m.processesOf(fac.id())) {
+                        if (scope.canProcess(pr.id(), m)) {
+                            counts.put(pr.id(), numbered(pr.id(), m).size());
+                        }
+                    }
+                }
+            }
+            pid = pickProcess(number(str(values.get("equipmentNo"))), counts);
+        }
         CentralDto.Equipment eq = pid == null ? null : byNo(str(values.get("equipmentNo")), pid, m);
         if (eq != null) {
             pid = eq.processId();

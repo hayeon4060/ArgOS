@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
  * 점검 관리 · 수기 서류 등록 (명세서 E1) 과 오늘 점검 (B3).
  * 서류를 올리면 파일을 저장하고 202 를 돌려준 뒤, 뒤에서 글자 인식(OCR)을 해 status 를 REVIEW 로 바꾼다.
  * CLOVA OCR 설정(argos.ocr.clova.url · secret)이 없으면 시연용 인식기가 그럴듯한 값을 채운다.
+ * CLOVA 는 템플릿이 있는 양식(argos.ocr.clova.forms, 기본 F02)에만 쓰고, 나머지 양식은 시연용 인식기로 읽는다.
  */
 @Service
 public class InspectionService {
@@ -47,7 +49,10 @@ public class InspectionService {
     private final ActivityLogger activity;
     private final ObjectMapper mapper;
     private final SimTime time;
-    private final OcrEngine ocr;
+    private final OcrEngine sampleOcr;
+    /** CLOVA 설정이 없으면 null */
+    private final OcrEngine clovaOcr;
+    private final Set<String> clovaForms;
     private final InspectionScheduleService schedules;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ocr");
@@ -59,7 +64,8 @@ public class InspectionService {
                              FileStore files, ActivityLogger activity, ObjectMapper mapper, SimTime time,
                              InspectionScheduleService schedules,
                              @Value("${argos.ocr.clova.url:}") String clovaUrl,
-                             @Value("${argos.ocr.clova.secret:}") String clovaSecret) {
+                             @Value("${argos.ocr.clova.secret:}") String clovaSecret,
+                             @Value("${argos.ocr.clova.forms:F02}") String clovaForms) {
         this.jdbc = jdbc;
         this.currentUser = currentUser;
         this.masterCache = masterCache;
@@ -68,9 +74,27 @@ public class InspectionService {
         this.mapper = mapper;
         this.time = time;
         this.schedules = schedules;
-        this.ocr = clovaUrl.isBlank() || clovaSecret.isBlank()
-                ? new SampleOcrEngine(LocalDate.now().toString()) : new ClovaOcrEngine(clovaUrl, clovaSecret);
-        log.info("서류 인식기: {}", ocr.name());
+        this.sampleOcr = new SampleOcrEngine(LocalDate.now().toString());
+        this.clovaOcr = clovaUrl.isBlank() || clovaSecret.isBlank() ? null : new ClovaOcrEngine(clovaUrl, clovaSecret);
+        this.clovaForms = parseForms(clovaForms);
+        log.info("서류 인식기: {}", clovaOcr == null ? "SAMPLE" : "CLOVA(" + this.clovaForms + ") · 나머지 SAMPLE");
+    }
+
+    /** "F02, f03" → {F02, F03} */
+    static Set<String> parseForms(String csv) {
+        Set<String> out = new java.util.LinkedHashSet<>();
+        for (String s : (csv == null ? "" : csv).split(",")) {
+            if (!s.isBlank()) {
+                out.add(s.strip().toUpperCase());
+            }
+        }
+        return out;
+    }
+
+    /** 이 양식을 읽을 인식기. CLOVA 가 있고 템플릿이 있는 양식이면 CLOVA */
+    private OcrEngine engineFor(Object formType) {
+        return clovaOcr != null && formType != null && clovaForms.contains(String.valueOf(formType).toUpperCase())
+                ? clovaOcr : sampleOcr;
     }
 
     // ---------------------------------------------------------------- 오늘 점검 (B3)
@@ -316,7 +340,7 @@ public class InspectionService {
         out.put("pageCount", 1);
         out.put("fields", fields);
         out.put("needCheckCount", need);
-        out.put("engine", ocr.name());
+        out.put("engine", engineFor(r.get("form_type")).name());
         // 이 스캔본에 맞는 점검 건 추천 (점검 관리 개편 3-7). 이미 이어졌으면 그 건, 없으면 null
         out.put("scheduleId", "REVIEW".equals(status) || "DONE".equals(status) ? schedules.recommend(r, fields, scope)
                 : r.get("schedule_id"));
@@ -352,6 +376,7 @@ public class InspectionService {
         }
         Map<String, Object> form = form(String.valueOf(r.get("form_type")));
         List<Map<String, Object>> fields = merge(fields(r), changes == null ? List.of() : changes);
+        normalizeChoices(fields, form);
         List<String> bad = validate(fields, form);
         if (!bad.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "날짜·숫자 형식을 확인하세요.",
@@ -475,7 +500,7 @@ public class InspectionService {
             Map<String, Object> form = form(String.valueOf(r.get("form_type")));
             FileStore.Stored f = files.find(((Number) r.get("file_id")).longValue());
             @SuppressWarnings("unchecked")
-            OcrEngine.Result res = ocr.recognize(files.read(f), f.mime(), f.name(), new OcrEngine.Form(
+            OcrEngine.Result res = engineFor(r.get("form_type")).recognize(files.read(f), f.mime(), f.name(), new OcrEngine.Form(
                     String.valueOf(form.get("formType")), String.valueOf(form.get("name")),
                     (List<Map<String, Object>>) form.get("fields")));
             jdbc.update("""
@@ -550,10 +575,15 @@ public class InspectionService {
             Map<String, Object> copy = new LinkedHashMap<>(f);
             for (Map<String, Object> c : changes) {
                 if (String.valueOf(f.get("key")).equals(String.valueOf(c.get("key")))) {
+                    boolean edited = false;
                     if (c.containsKey("value")) {
-                        copy.put("value", c.get("value") == null ? "" : String.valueOf(c.get("value")));
+                        String before = f.get("value") == null ? "" : String.valueOf(f.get("value")).strip();
+                        String after = c.get("value") == null ? "" : String.valueOf(c.get("value"));
+                        copy.put("value", after);
+                        edited = !before.equals(after.strip());
                     }
-                    if (Boolean.TRUE.equals(c.get("checked"))) {
+                    // '확인' 단추(checked) 또는 사람이 값을 직접 고친 칸은 확인 필요를 푼다 (화면 기준과 같게)
+                    if (edited || Boolean.TRUE.equals(c.get("checked"))) {
                         copy.put("needCheck", false);
                         copy.remove("reason");
                     }
@@ -562,6 +592,30 @@ public class InspectionService {
             out.add(copy);
         }
         return out;
+    }
+
+    /** 선택 칸(choice)은 띄어쓰기를 무시하고 선택지와 같으면 그 선택지로 바꾼다 (예: 해당없음 → 해당 없음) */
+    @SuppressWarnings("unchecked")
+    static void normalizeChoices(List<Map<String, Object>> fields, Map<String, Object> form) {
+        Map<String, List<String>> options = new LinkedHashMap<>();
+        for (Map<String, Object> d : (List<Map<String, Object>>) form.get("fields")) {
+            if ("choice".equals(String.valueOf(d.get("type"))) && d.get("options") instanceof List<?> o) {
+                options.put(String.valueOf(d.get("key")), o.stream().map(String::valueOf).toList());
+            }
+        }
+        for (Map<String, Object> f : fields) {
+            List<String> opts = options.get(String.valueOf(f.get("key")));
+            if (opts == null || f.get("value") == null) {
+                continue;
+            }
+            String v = String.valueOf(f.get("value")).replaceAll("\\s+", "");
+            for (String o : opts) {
+                if (o.replaceAll("\\s+", "").equals(v)) {
+                    f.put("value", o);
+                    break;
+                }
+            }
+        }
     }
 
     /** 날짜·숫자 칸 형식이 틀린 칸 key 목록 (빈 값은 통과) */

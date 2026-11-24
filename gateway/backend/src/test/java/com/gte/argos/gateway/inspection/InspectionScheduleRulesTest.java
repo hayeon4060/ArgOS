@@ -63,4 +63,19 @@ class InspectionScheduleRulesTest {
         assertThat(InspectionScheduleService.inspectedTime(v)).isEqualTo(LocalTime.of(9, 10));
         assertThat(InspectionScheduleService.inspectedDate(Map.of("checkDate", "2026.11.18"))).isEqualTo(d("2026-11-18"));
     }
+
+    @Test
+    void 공정을_모르는_스캔본은_설비번호가_맞는_담당_공정으로() {
+        // 담당 공정 하나 (시연: 도장 12, 설비 8대) → 번호가 맞든 아니든 그 공정
+        assertThat(InspectionScheduleService.pickProcess(3, Map.of(12L, 8))).isEqualTo(12L);
+        assertThat(InspectionScheduleService.pickProcess(null, Map.of(12L, 8))).isEqualTo(12L);
+        // 여러 공정: EF-07 은 설비가 7대 이상인 공정이 하나뿐이면 그 공정
+        Map<Long, Integer> many = new java.util.LinkedHashMap<>();
+        many.put(11L, 4);
+        many.put(12L, 8);
+        assertThat(InspectionScheduleService.pickProcess(7, many)).isEqualTo(12L);
+        // 둘 다 맞으면 모름
+        assertThat(InspectionScheduleService.pickProcess(3, many)).isNull();
+        assertThat(InspectionScheduleService.pickProcess(3, Map.of())).isNull();
+    }
 }

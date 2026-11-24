@@ -33,6 +33,29 @@ class InspectionRulesTest {
     }
 
     @Test
+    void 값을_고친_칸도_확인_필요가_꺼지고_그대로면_남음() {
+        List<Map<String, Object>> fields = List.of(field("item01", "", true), field("co", "4", true));
+        List<Map<String, Object>> merged = InspectionService.merge(fields, List.of(
+                Map.of("key", "item01", "value", "양호", "checked", false),
+                Map.of("key", "co", "value", "4", "checked", false)));
+        assertThat(merged.get(0).get("needCheck")).isEqualTo(false);
+        assertThat(merged.get(1).get("needCheck")).isEqualTo(true);
+    }
+
+    @Test
+    void 선택_칸은_띄어쓰기를_무시하고_선택지로_바꿈() {
+        Map<String, Object> form = Map.of("fields", List.of(
+                Map.of("key", "item01", "type", "choice", "options", List.of("양호", "불량", "해당 없음")),
+                Map.of("key", "verdict", "type", "choice", "options", List.of("정상 운전", "조건부 운전", "운전 중지")),
+                Map.of("key", "item02", "type", "choice", "options", List.of("양호", "불량", "해당 없음"))));
+        List<Map<String, Object>> fields = List.of(field("item01", "해당없음", false),
+                field("verdict", " 정상운전 ", false), field("item02", "좋음", false));
+        InspectionService.normalizeChoices(fields, form);
+        assertThat(fields).extracting(f -> f.get("value")).containsExactly("해당 없음", "정상 운전", "좋음");
+        assertThat(InspectionService.validate(fields, form)).isEqualTo(List.of("item02"));
+    }
+
+    @Test
     void 날짜와_숫자_형식이_틀린_칸을_찾음() {
         Map<String, Object> form = Map.of("fields", List.of(
                 Map.of("key", "co", "type", "number"), Map.of("key", "workDate", "type", "date"),
