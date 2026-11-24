@@ -49,6 +49,10 @@ public interface JudgementListener {
     default void onAlarmEventLinked(long alarmKey, long eventKey) {
     }
 
+    /** 경보 유형·단계는 같지만 화면에 보여 줄 이벤트 구성이 바뀜 */
+    default void onAlarmDetailsChanged(long alarmKey, Instant at) {
+    }
+
     /** 경보 단계 또는 사고 종류가 바뀜 */
     default void onAlarmUpdated(long alarmKey, Stage stage, Hazard hazard, Instant at) {
     }
